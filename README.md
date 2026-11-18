@@ -54,7 +54,7 @@ token. Invitations are listed by `GET /api/v1/me`.
 
 ## Local development
 
-Requires Python 3.13, [uv](https://docs.astral.sh/uv/) and PostgreSQL 16+ (Docker or native).
+Requires Python 3.13, [uv](https://docs.astral.sh/uv/) and PostgreSQL 15+ (17 is what the project is tested on; Docker uses `postgres:17`).
 
 ```bash
 cd backend
@@ -130,6 +130,10 @@ UPDATE_OPENAPI_SNAPSHOT=1 uv run pytest tests/integration/test_schema.py
   until profile approvals exist (Phase 9).
 - **Applicants:** never deleted. They are removed with a reason, and can be reinstated with
   the same ID. `party_role` (borrower or guarantor) is separate from `on_title` (ownership).
+- **Financial values:** one current declared/broker value per item, measure, qualifier,
+  source and period. Correct a value by superseding it (`supersedes_observation_id`), and
+  withdraw items entered in error. Measure meanings never change. See
+  `GET /api/v1/financial/measures` for value types, qualifiers and deprecations.
 - **Financial data:** typed items (income sources, commitments with liable parties,
   expenditure) plus immutable `financial_observations`. Each observation's value type is
   fixed by `measure_definitions` and enforced by the database. Corrections supersede; they
