@@ -1,0 +1,46 @@
+# Local development stack. NOT a production deployment: passwords are fixed local values and
+# authentication uses the development token issuer.
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./backend/scripts/db/roles.sql:/docker-entrypoint-initdb.d/01-roles.sql:ro
+      - ./backend/scripts/db/database.sql:/docker-entrypoint-initdb.d/02-database.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d meip"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  migrate:
+    build: ./backend
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      MEIP_MIGRATIONS_DATABASE_URL: postgresql+asyncpg://meip_owner:meip_owner_local@postgres:5432/meip
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build: ./backend
+    environment:
+      MEIP_ENV: local
+      MEIP_AUTH_MODE: dev
+      MEIP_DATABASE_URL: postgresql+asyncpg://meip_app:meip_app_local@postgres:5432/meip
+      MEIP_DEV_AUTH_KEY_PATH: /app/.dev/dev_auth_key.pem
+    volumes:
+      # Shared with `meip-admin dev-token` on the host so locally minted tokens validate.
+      - ./backend/.dev:/app/.dev
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:
