@@ -125,8 +125,12 @@ async def test_case_history_is_ordered_attributed_and_redacted(firm: Firm) -> No
     events = resp.json()["items"]
     assert [e["action"] for e in events] == ["case.created", "applicant.added", "applicant.updated"]
     assert all(e["actor_type"] == "user" and e["actor_user_id"] for e in events)
-    assert events[0]["changes"]["loan_amount_minor"] == {"from": None, "to": 100}
+    # Amounts are erasable: marked in the permanent record, values held in details.
+    assert events[0]["changes"]["loan_amount_minor"] == {"changed": True}
+    assert events[0]["details"]["loan_amount_minor"] == {"from": None, "to": 100}
+    assert events[0]["changes"]["purpose"] == {"from": None, "to": "purchase"}
     assert events[2]["changes"] == {"first_name": {"changed": True}}
+    assert events[2]["details"] is None  # identifiers are not stored even as erasable values
     assert events[2]["request_id"] == "trace-123"
     assert "Distinctive" not in resp.text
     assert "Surname" not in resp.text
@@ -142,8 +146,9 @@ async def test_close_reason_recorded(firm: Firm) -> None:
     events = (await firm.request("GET", f"/api/v1/cases/{case['id']}/events")).json()["items"]
     assert events[-1]["changes"] == {
         "status": {"from": "draft", "to": "closed"},
-        "reason": "Client withdrew",
+        "reason": {"changed": True},
     }
+    assert events[-1]["details"] == {"reason": "Client withdrew"}
 
 
 async def test_invitation_acceptance_is_attributed_to_the_invitee(firm: Firm) -> None:
@@ -214,7 +219,8 @@ async def _tenant_events(firm: Firm) -> list[dict[str, Any]]:
     [
         "UPDATE audit_events SET action = 'tampered'",
         "DELETE FROM audit_events",
-        "TRUNCATE audit_events",
+        # CASCADE would also take audit_event_details; the immutability trigger must still win.
+        "TRUNCATE audit_events CASCADE",
     ],
 )
 async def test_audit_log_cannot_be_modified(firm: Firm, role: str, statement: str) -> None:

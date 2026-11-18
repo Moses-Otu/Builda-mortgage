@@ -23,7 +23,7 @@ class CaseOut(OutputModel):
     loan_amount: Money | None
     term_months: int | None
     applicant_count: int
-    created_by_user_id: uuid.UUID
+    created_by_user_id: uuid.UUID | None
     created_at: datetime
     updated_at: datetime
     status_changed_at: datetime

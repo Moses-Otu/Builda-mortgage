@@ -13,9 +13,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from meip.auth.provider import AuthProvider, Principal
 from meip.core.config import Settings
-from meip.core.db import set_tenant
 from meip.core.errors import ForbiddenError, UnauthorizedError
-from meip.tenancy.context import RequestContext
+from meip.tenancy.context import Actor, OperationContext, open_tenant_scope
 from meip.tenancy.permissions import Permission
 from meip.tenancy.service import resolve_membership
 
@@ -52,32 +51,23 @@ async def get_request_context(
     x_tenant_id: Annotated[
         uuid.UUID, Header(alias="X-Tenant-ID", description="The firm this request acts within")
     ],
-) -> AsyncIterator[RequestContext]:
-    async with sessionmaker() as session:
-        await session.begin()
-        await set_tenant(session, x_tenant_id)
-        membership = await resolve_membership(session, principal)
+) -> AsyncIterator[OperationContext]:
+    # Anything not explicitly committed by the endpoint is rolled back by the scope.
+    async with open_tenant_scope(sessionmaker, x_tenant_id) as scope:
+        membership = await resolve_membership(scope.session, principal)
         if membership is None:
             # Same response whether the tenant does not exist or the user is not a member.
             raise ForbiddenError("You do not have access to this firm")
         structlog.contextvars.bind_contextvars(
             tenant_id=str(x_tenant_id), user_id=str(membership.user_id)
         )
-        try:
-            yield RequestContext(
-                session=session,
-                tenant_id=x_tenant_id,
-                user_id=membership.user_id,
-                membership_id=membership.membership_id,
-                role=membership.role,
-            )
-        finally:
-            # Anything not explicitly committed by the endpoint is discarded.
-            if session.in_transaction():
-                await session.rollback()
+        yield OperationContext(
+            scope=scope,
+            actor=Actor.user(membership.user_id, membership.membership_id, membership.role),
+        )
 
 
-Context = Annotated[RequestContext, Depends(get_request_context)]
+Context = Annotated[OperationContext, Depends(get_request_context)]
 CurrentPrincipal = Annotated[Principal, Depends(get_principal)]
 
 
@@ -90,8 +80,8 @@ CurrentPrincipal = Annotated[Principal, Depends(get_principal)]
 # matrix test pins the resulting behaviour.
 
 
-def requires(permission: Permission) -> Callable[[RequestContext], Awaitable[RequestContext]]:
-    async def check(ctx: Context) -> RequestContext:
+def requires(permission: Permission) -> Callable[[OperationContext], Awaitable[OperationContext]]:
+    async def check(ctx: Context) -> OperationContext:
         ctx.require(permission)
         return ctx
 
@@ -99,11 +89,11 @@ def requires(permission: Permission) -> Callable[[RequestContext], Awaitable[Req
     return check
 
 
-CaseReadCtx = Annotated[RequestContext, Depends(requires(Permission.CASE_READ))]
-CaseCreateCtx = Annotated[RequestContext, Depends(requires(Permission.CASE_CREATE))]
-CaseUpdateCtx = Annotated[RequestContext, Depends(requires(Permission.CASE_UPDATE))]
-CaseTransitionCtx = Annotated[RequestContext, Depends(requires(Permission.CASE_TRANSITION))]
-ApplicantWriteCtx = Annotated[RequestContext, Depends(requires(Permission.APPLICANT_WRITE))]
-MemberReadCtx = Annotated[RequestContext, Depends(requires(Permission.MEMBER_READ))]
-MemberManageCtx = Annotated[RequestContext, Depends(requires(Permission.MEMBER_MANAGE))]
-AuditReadCtx = Annotated[RequestContext, Depends(requires(Permission.AUDIT_READ))]
+CaseReadCtx = Annotated[OperationContext, Depends(requires(Permission.CASE_READ))]
+CaseCreateCtx = Annotated[OperationContext, Depends(requires(Permission.CASE_CREATE))]
+CaseUpdateCtx = Annotated[OperationContext, Depends(requires(Permission.CASE_UPDATE))]
+CaseTransitionCtx = Annotated[OperationContext, Depends(requires(Permission.CASE_TRANSITION))]
+ApplicantWriteCtx = Annotated[OperationContext, Depends(requires(Permission.APPLICANT_WRITE))]
+MemberReadCtx = Annotated[OperationContext, Depends(requires(Permission.MEMBER_READ))]
+MemberManageCtx = Annotated[OperationContext, Depends(requires(Permission.MEMBER_MANAGE))]
+AuditReadCtx = Annotated[OperationContext, Depends(requires(Permission.AUDIT_READ))]

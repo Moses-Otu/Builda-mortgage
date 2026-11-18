@@ -22,7 +22,7 @@ from meip.core.errors import (
     VersionConflictError,
 )
 from meip.core.money import Money
-from meip.tenancy.context import RequestContext
+from meip.tenancy.context import OperationContext
 from meip.tenancy.models import Role
 from meip.tenancy.permissions import ADVISER_ELIGIBLE_ROLES, Permission
 from meip.tenancy.service import get_active_membership
@@ -38,7 +38,7 @@ AUDITED_FIELDS = (
 )
 
 
-async def _applicant_count(ctx: RequestContext, case_id: uuid.UUID) -> int:
+async def _applicant_count(ctx: OperationContext, case_id: uuid.UUID) -> int:
     count = await ctx.session.scalar(
         select(func.count()).select_from(Applicant).where(Applicant.case_id == case_id)
     )
@@ -64,7 +64,7 @@ def to_out(case: Case, applicant_count: int) -> CaseOut:
     )
 
 
-async def get_case(ctx: RequestContext, case_id: uuid.UUID, *, for_update: bool = False) -> Case:
+async def get_case(ctx: OperationContext, case_id: uuid.UUID, *, for_update: bool = False) -> Case:
     stmt = select(Case).where(Case.id == case_id, Case.tenant_id == ctx.tenant_id)
     if for_update:
         stmt = stmt.with_for_update()
@@ -74,13 +74,13 @@ async def get_case(ctx: RequestContext, case_id: uuid.UUID, *, for_update: bool 
     return case
 
 
-async def get_case_out(ctx: RequestContext, case_id: uuid.UUID) -> CaseOut:
+async def get_case_out(ctx: OperationContext, case_id: uuid.UUID) -> CaseOut:
     case = await get_case(ctx, case_id)
     return to_out(case, await _applicant_count(ctx, case.id))
 
 
 async def list_cases(
-    ctx: RequestContext,
+    ctx: OperationContext,
     *,
     status: CaseStatus | None,
     adviser_membership_id: uuid.UUID | None,
@@ -107,7 +107,7 @@ async def list_cases(
     return [to_out(case, int(n)) for case, n in rows], int(total or 0)
 
 
-async def _validate_adviser(ctx: RequestContext, membership_id: uuid.UUID) -> None:
+async def _validate_adviser(ctx: OperationContext, membership_id: uuid.UUID) -> None:
     ctx.require(Permission.CASE_ASSIGN_ADVISER)
     membership = await get_active_membership(ctx.session, ctx.tenant_id, membership_id)
     if membership is None or Role(membership.role) not in ADVISER_ELIGIBLE_ROLES:
@@ -123,7 +123,7 @@ def _validate_amounts(property_value_minor: int | None, loan_amount_minor: int |
         raise BusinessRuleError("Loan amount cannot exceed the property value")
 
 
-async def create_case(ctx: RequestContext, body: CaseCreate) -> CaseOut:
+async def create_case(ctx: OperationContext, body: CaseCreate) -> CaseOut:
     if body.adviser_membership_id is not None:
         await _validate_adviser(ctx, body.adviser_membership_id)
     property_value = body.property_value.amount_minor if body.property_value else None
@@ -139,19 +139,19 @@ async def create_case(ctx: RequestContext, body: CaseCreate) -> CaseOut:
         property_value_minor=property_value,
         loan_amount_minor=loan_amount,
         term_months=body.term_months,
-        created_by_user_id=ctx.user_id,
+        created_by_user_id=ctx.actor.user_id,
     )
     ctx.session.add(case)
     await ctx.session.flush()
     await audit.record(
         ctx.session,
         tenant_id=ctx.tenant_id,
-        actor_user_id=ctx.user_id,
+        actor=ctx.actor,
         action=AuditAction.CASE_CREATED,
         entity_type="case",
         entity_id=case.id,
         case_id=case.id,
-        changes=audit.creation(audit.snapshot(case, AUDITED_FIELDS)),
+        change_set=audit.creation(audit.snapshot(case, AUDITED_FIELDS)),
     )
     return to_out(case, 0)
 
@@ -161,7 +161,7 @@ def _require_editable(case: Case) -> None:
         raise ConflictError(f"A case in status '{case.status}' can no longer be edited")
 
 
-async def update_case(ctx: RequestContext, case_id: uuid.UUID, body: CaseUpdate) -> CaseOut:
+async def update_case(ctx: OperationContext, case_id: uuid.UUID, body: CaseUpdate) -> CaseOut:
     case = await get_case(ctx, case_id, for_update=True)
     if case.version != body.version:
         raise VersionConflictError()
@@ -211,17 +211,19 @@ async def update_case(ctx: RequestContext, case_id: uuid.UUID, body: CaseUpdate)
     await audit.record(
         ctx.session,
         tenant_id=ctx.tenant_id,
-        actor_user_id=ctx.user_id,
+        actor=ctx.actor,
         action=AuditAction.CASE_UPDATED,
         entity_type="case",
         entity_id=case.id,
         case_id=case.id,
-        changes=changes,
+        change_set=changes,
     )
     return to_out(case, await _applicant_count(ctx, case.id))
 
 
-async def transition_case(ctx: RequestContext, case_id: uuid.UUID, body: CaseTransition) -> CaseOut:
+async def transition_case(
+    ctx: OperationContext, case_id: uuid.UUID, body: CaseTransition
+) -> CaseOut:
     case = await get_case(ctx, case_id, for_update=True)
     if case.version != body.version:
         raise VersionConflictError()
@@ -246,18 +248,18 @@ async def transition_case(ctx: RequestContext, case_id: uuid.UUID, body: CaseTra
     case.status = target.value
     case.status_changed_at = utcnow()
     await ctx.session.flush()
-    changes: dict[str, Any] = {"status": {"from": current.value, "to": target.value}}
-    if body.reason:
-        changes["reason"] = body.reason
+    changes = audit.diff({"status": current.value}, {"status": target.value}).note(
+        "reason", body.reason
+    )
     await audit.record(
         ctx.session,
         tenant_id=ctx.tenant_id,
-        actor_user_id=ctx.user_id,
+        actor=ctx.actor,
         action=AuditAction.CASE_STATUS_CHANGED,
         entity_type="case",
         entity_id=case.id,
         case_id=case.id,
-        changes=changes,
+        change_set=changes,
     )
     return to_out(case, applicant_count)
 

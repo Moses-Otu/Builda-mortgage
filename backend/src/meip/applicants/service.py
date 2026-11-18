@@ -14,7 +14,7 @@ from meip.audit.service import AuditAction
 from meip.cases.service import get_case, require_editable
 from meip.core.errors import BusinessRuleError, NotFoundError, VersionConflictError
 from meip.core.money import Money
-from meip.tenancy.context import RequestContext
+from meip.tenancy.context import OperationContext
 
 AUDITED_FIELDS = (
     "position",
@@ -68,7 +68,7 @@ def _column_value(value: Any, is_money: bool) -> Any:
     return value.value if hasattr(value, "value") else value
 
 
-async def list_applicants(ctx: RequestContext, case_id: uuid.UUID) -> list[ApplicantOut]:
+async def list_applicants(ctx: OperationContext, case_id: uuid.UUID) -> list[ApplicantOut]:
     await get_case(ctx, case_id)
     rows = await ctx.session.scalars(
         select(Applicant)
@@ -79,7 +79,7 @@ async def list_applicants(ctx: RequestContext, case_id: uuid.UUID) -> list[Appli
 
 
 async def _get_applicant(
-    ctx: RequestContext, case_id: uuid.UUID, applicant_id: uuid.UUID
+    ctx: OperationContext, case_id: uuid.UUID, applicant_id: uuid.UUID
 ) -> Applicant:
     applicant: Applicant | None = await ctx.session.scalar(
         select(Applicant).where(
@@ -94,14 +94,14 @@ async def _get_applicant(
 
 
 async def get_applicant(
-    ctx: RequestContext, case_id: uuid.UUID, applicant_id: uuid.UUID
+    ctx: OperationContext, case_id: uuid.UUID, applicant_id: uuid.UUID
 ) -> ApplicantOut:
     await get_case(ctx, case_id)
     return to_out(await _get_applicant(ctx, case_id, applicant_id))
 
 
 async def add_applicant(
-    ctx: RequestContext, case_id: uuid.UUID, body: ApplicantCreate, max_applicants: int
+    ctx: OperationContext, case_id: uuid.UUID, body: ApplicantCreate, max_applicants: int
 ) -> ApplicantOut:
     # Lock the case row so concurrent adds cannot claim the same position.
     case = await get_case(ctx, case_id, for_update=True)
@@ -124,18 +124,18 @@ async def add_applicant(
     await audit.record(
         ctx.session,
         tenant_id=ctx.tenant_id,
-        actor_user_id=ctx.user_id,
+        actor=ctx.actor,
         action=AuditAction.APPLICANT_ADDED,
         entity_type="applicant",
         entity_id=applicant.id,
         case_id=case_id,
-        changes=audit.creation(audit.snapshot(applicant, AUDITED_FIELDS)),
+        change_set=audit.creation(audit.snapshot(applicant, AUDITED_FIELDS)),
     )
     return to_out(applicant)
 
 
 async def update_applicant(
-    ctx: RequestContext, case_id: uuid.UUID, applicant_id: uuid.UUID, body: ApplicantUpdate
+    ctx: OperationContext, case_id: uuid.UUID, applicant_id: uuid.UUID, body: ApplicantUpdate
 ) -> ApplicantOut:
     # Lock the case row: a concurrent status transition must not slip in between the
     # editability check and this write.
@@ -164,18 +164,18 @@ async def update_applicant(
     await audit.record(
         ctx.session,
         tenant_id=ctx.tenant_id,
-        actor_user_id=ctx.user_id,
+        actor=ctx.actor,
         action=AuditAction.APPLICANT_UPDATED,
         entity_type="applicant",
         entity_id=applicant.id,
         case_id=case_id,
-        changes=changes,
+        change_set=changes,
     )
     return to_out(applicant)
 
 
 async def remove_applicant(
-    ctx: RequestContext, case_id: uuid.UUID, applicant_id: uuid.UUID, version: int
+    ctx: OperationContext, case_id: uuid.UUID, applicant_id: uuid.UUID, version: int
 ) -> None:
     case = await get_case(ctx, case_id, for_update=True)
     applicant = await _get_applicant(ctx, case_id, applicant_id)
@@ -189,10 +189,10 @@ async def remove_applicant(
     await audit.record(
         ctx.session,
         tenant_id=ctx.tenant_id,
-        actor_user_id=ctx.user_id,
+        actor=ctx.actor,
         action=AuditAction.APPLICANT_REMOVED,
         entity_type="applicant",
         entity_id=applicant_id,
         case_id=case_id,
-        changes={"position": {"from": position, "to": None}},
+        change_set=audit.diff({"position": position}, {}),
     )

@@ -42,7 +42,7 @@ async def _table_count(engine: AsyncEngine) -> int:
 
 async def test_upgrade_downgrade_upgrade(scratch_engine: AsyncEngine) -> None:
     await run_alembic(scratch_engine, "upgrade", "head")
-    assert await _table_count(scratch_engine) == 6
+    assert await _table_count(scratch_engine) == len(Base.metadata.tables)
     await run_alembic(scratch_engine, "downgrade", "base")
     assert await _table_count(scratch_engine) == 0
     async with scratch_engine.connect() as conn:
@@ -54,7 +54,7 @@ async def test_upgrade_downgrade_upgrade(scratch_engine: AsyncEngine) -> None:
         )
     assert functions == 0
     await run_alembic(scratch_engine, "upgrade", "head")
-    assert await _table_count(scratch_engine) == 6
+    assert await _table_count(scratch_engine) == len(Base.metadata.tables)
 
 
 async def test_models_match_migrations(scratch_engine: AsyncEngine) -> None:

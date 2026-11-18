@@ -21,7 +21,7 @@ from meip.core.db import utcnow
 from meip.core.errors import BusinessRuleError, ConflictError, NotFoundError, VersionConflictError
 from meip.core.ids import uuid7
 from meip.core.request_context import request_id_var
-from meip.tenancy.context import RequestContext
+from meip.tenancy.context import Actor, OperationContext
 from meip.tenancy.models import Membership, MembershipStatus, Role, Tenant, TenantStatus, User
 from meip.tenancy.schemas import (
     InvitationOut,
@@ -139,7 +139,7 @@ def _member_out(membership: Membership) -> MemberOut:
     )
 
 
-async def list_members(ctx: RequestContext) -> list[MemberOut]:
+async def list_members(ctx: OperationContext) -> list[MemberOut]:
     rows = await ctx.session.scalars(
         select(Membership)
         .where(Membership.tenant_id == ctx.tenant_id)
@@ -149,7 +149,7 @@ async def list_members(ctx: RequestContext) -> list[MemberOut]:
 
 
 async def _get_member(
-    ctx: RequestContext, membership_id: uuid.UUID, *, for_update: bool = False
+    ctx: OperationContext, membership_id: uuid.UUID, *, for_update: bool = False
 ) -> Membership:
     stmt = select(Membership).where(
         Membership.id == membership_id, Membership.tenant_id == ctx.tenant_id
@@ -162,7 +162,7 @@ async def _get_member(
     return membership
 
 
-async def add_member(ctx: RequestContext, body: MemberCreate, issuer: str) -> MemberOut:
+async def add_member(ctx: OperationContext, body: MemberCreate, issuer: str) -> MemberOut:
     """Invite an identity to the firm.
 
     The response is built solely from what this firm supplied: it is identical whether or
@@ -194,18 +194,18 @@ async def add_member(ctx: RequestContext, body: MemberCreate, issuer: str) -> Me
     await audit.record(
         ctx.session,
         tenant_id=ctx.tenant_id,
-        actor_user_id=ctx.user_id,
+        actor=ctx.actor,
         action=AuditAction.MEMBER_ADDED,
         entity_type="membership",
         entity_id=membership.id,
-        changes=audit.creation(
+        change_set=audit.creation(
             {"user_id": user_id, **audit.snapshot(membership, _AUDITED_MEMBER_FIELDS)}
         ),
     )
     return _member_out(membership)
 
 
-async def _lock_active_admins(ctx: RequestContext) -> set[uuid.UUID]:
+async def _lock_active_admins(ctx: OperationContext) -> set[uuid.UUID]:
     """Lock and return the firm's active administrators.
 
     Taking row locks serialises concurrent admin changes: a second transaction waits, then
@@ -225,7 +225,7 @@ async def _lock_active_admins(ctx: RequestContext) -> set[uuid.UUID]:
 
 
 async def update_member(
-    ctx: RequestContext, membership_id: uuid.UUID, body: MemberUpdate
+    ctx: OperationContext, membership_id: uuid.UUID, body: MemberUpdate
 ) -> MemberOut:
     membership = await _get_member(ctx, membership_id)
     if membership.version != body.version:
@@ -266,11 +266,11 @@ async def update_member(
     await audit.record(
         ctx.session,
         tenant_id=ctx.tenant_id,
-        actor_user_id=ctx.user_id,
+        actor=ctx.actor,
         action=AuditAction.MEMBER_UPDATED,
         entity_type="membership",
         entity_id=membership.id,
-        changes=changes,
+        change_set=changes,
     )
     return _member_out(membership)
 
@@ -341,12 +341,11 @@ async def onboard_tenant(
     await audit.record(
         owner_session,
         tenant_id=tenant.id,
-        actor_user_id=None,
-        actor_ref=operator,
+        actor=Actor.operator(operator),
         action=AuditAction.TENANT_CREATED,
         entity_type="tenant",
         entity_id=tenant.id,
-        changes=audit.creation(
+        change_set=audit.creation(
             {"name": tenant.name, "fca_frn": fca_frn, "admin_membership_id": membership.id}
         ),
     )

@@ -311,7 +311,8 @@
             "enum": [
               "user",
               "operator",
-              "system"
+              "system",
+              "integration"
             ],
             "title": "Actor Type",
             "type": "string"
@@ -342,8 +343,33 @@
           },
           "changes": {
             "additionalProperties": true,
+            "description": "Permanent record. Personal values appear only as {'changed': true}.",
             "title": "Changes",
             "type": "object"
+          },
+          "correlation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation Id"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Erasable values for the changes. Null if none, or after retention erasure.",
+            "title": "Details"
           },
           "entity_id": {
             "format": "uuid",
@@ -364,6 +390,18 @@
             "title": "Occurred At",
             "type": "string"
           },
+          "on_behalf_of_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "On Behalf Of User Id"
+          },
           "request_id": {
             "anyOf": [
               {
@@ -382,11 +420,13 @@
           "actor_type",
           "actor_user_id",
           "actor_ref",
+          "on_behalf_of_user_id",
           "action",
           "entity_type",
           "entity_id",
           "case_id",
           "request_id",
+          "correlation_id",
           "changes"
         ],
         "title": "AuditEventOut",
@@ -489,9 +529,16 @@
             "type": "string"
           },
           "created_by_user_id": {
-            "format": "uuid",
-            "title": "Created By User Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By User Id"
           },
           "external_reference": {
             "anyOf": [

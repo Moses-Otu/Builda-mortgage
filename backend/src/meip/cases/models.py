@@ -64,7 +64,9 @@ class Case(Base):
     property_value_minor: Mapped[int | None] = mapped_column(BigInteger)
     loan_amount_minor: Mapped[int | None] = mapped_column(BigInteger)
     term_months: Mapped[int | None] = mapped_column(Integer)
-    created_by_user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    # Nullable: integrations may create cases. The audit log is the authoritative record of
+    # who performed an operation (D11).
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
     status_changed_at: Mapped[datetime] = mapped_column(default=utcnow)

@@ -128,23 +128,52 @@ class TestSettings:
 
 
 class TestAuditDiff:
-    def test_only_changed_fields(self) -> None:
-        assert diff({"a": 1, "b": 2}, {"a": 1, "b": 3}) == {"b": {"from": 2, "to": 3}}
+    def test_non_personal_codes_are_kept_in_the_permanent_record(self) -> None:
+        result = diff({"status": "draft"}, {"status": "closed"})
+        assert result.changes == {"status": {"from": "draft", "to": "closed"}}
+        assert result.details == {}
 
-    def test_identifiers_redacted(self) -> None:
-        changes = diff(
+    def test_amounts_and_unknown_fields_are_erasable(self) -> None:
+        result = diff(
+            {"loan_amount_minor": 1, "brand_new_field": "x"},
+            {"loan_amount_minor": 2, "brand_new_field": "y"},
+        )
+        assert result.changes == {
+            "brand_new_field": {"changed": True},
+            "loan_amount_minor": {"changed": True},
+        }
+        assert result.details == {
+            "brand_new_field": {"from": "x", "to": "y"},
+            "loan_amount_minor": {"from": 1, "to": 2},
+        }
+
+    def test_identifiers_are_stored_nowhere(self) -> None:
+        result = diff(
             {"first_name": "Sam", "date_of_birth": date(1990, 1, 1)},
             {"first_name": "Samuel", "date_of_birth": date(1990, 1, 2)},
         )
-        assert changes == {"first_name": {"changed": True}, "date_of_birth": {"changed": True}}
-        assert "Sam" not in str(changes)
+        assert result.changes == {
+            "first_name": {"changed": True},
+            "date_of_birth": {"changed": True},
+        }
+        assert result.details == {}
+        assert "Sam" not in str(result)
+
+    def test_unchanged_fields_omitted_and_empty_is_falsy(self) -> None:
+        assert not diff({"status": "draft"}, {"status": "draft"})
 
     def test_values_made_json_safe(self) -> None:
         ident = uuid.uuid4()
         when = datetime(2026, 1, 1, 12, 0, tzinfo=UTC)
-        changes = creation({"id": ident, "at": when, "on": date(2026, 1, 2), "n": None})
-        assert changes == {
-            "id": {"from": None, "to": str(ident)},
+        result = creation({"user_id": ident, "at": when, "on": date(2026, 1, 2), "n": None})
+        assert result.changes["user_id"] == {"from": None, "to": str(ident)}
+        assert result.details == {
             "at": {"from": None, "to": "2026-01-01T12:00:00+00:00"},
             "on": {"from": None, "to": "2026-01-02"},
         }
+
+    def test_notes_are_classified(self) -> None:
+        result = diff({}, {}).note("reason", "Client withdrew").note("closure_reason", "duplicate")
+        assert result.changes == {"reason": {"changed": True}, "closure_reason": "duplicate"}
+        assert result.details == {"reason": "Client withdrew"}
+        assert diff({}, {}).note("reason", None).changes == {}

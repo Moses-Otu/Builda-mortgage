@@ -32,6 +32,8 @@ TENANT_SCOPED: dict[str, frozenset[str]] = {
     "cases": frozenset({"SELECT", "INSERT", "UPDATE"}),
     "applicants": frozenset({"SELECT", "INSERT", "UPDATE", "DELETE"}),
     "audit_events": frozenset({"SELECT", "INSERT"}),
+    # Erasable audit values: append-only for the runtime role (retention deletes as owner).
+    "audit_event_details": frozenset({"SELECT", "INSERT"}),
 }
 
 # table -> (policy, runtime privileges)

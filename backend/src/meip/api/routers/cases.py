@@ -86,7 +86,10 @@ async def case_events(
     await service.get_case(ctx, case_id)
     events, total = await audit.list_for_case(ctx.session, case_id, limit=limit, offset=offset)
     return Page(
-        items=[AuditEventOut.model_validate(e) for e in events],
+        items=[
+            AuditEventOut.model_validate(event).model_copy(update={"details": details})
+            for event, details in events
+        ],
         total=total,
         limit=limit,
         offset=offset,
