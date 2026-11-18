@@ -39,6 +39,9 @@ AUDITED_ROUTES: dict[Route, str] = {
     ("PATCH", _F + "/commitments/{commitment_id}"): "financial_item.updated",
     ("POST", _F + "/expenditure"): "financial_item.added",
     ("PATCH", _F + "/expenditure/{expenditure_item_id}"): "financial_item.updated",
+    ("POST", _F + "/income-sources/{income_source_id}/withdrawal"): ("financial_item.withdrawn"),
+    ("POST", _F + "/commitments/{commitment_id}/withdrawal"): "financial_item.withdrawn",
+    ("POST", _F + "/expenditure/{expenditure_item_id}/withdrawal"): "financial_item.withdrawn",
     ("POST", _F + "/observations"): "observation.recorded",
     ("POST", _F + "/observations/{observation_id}/retirement"): "observation.retired",
 }
@@ -183,6 +186,24 @@ ACTIONS: dict[Route, Action] = {
         f"{s['base']}/expenditure/{s['spend']['id']}",
         if_match=1,
         json={"category": "insurance"},
+    ),
+    ("POST", _F + "/income-sources/{income_source_id}/withdrawal"): lambda f, s: f.request(
+        "POST",
+        f"{s['base']}/income-sources/{s['source']['id']}/withdrawal",
+        if_match=1,
+        json={"reason": "entered_in_error"},
+    ),
+    ("POST", _F + "/commitments/{commitment_id}/withdrawal"): lambda f, s: f.request(
+        "POST",
+        f"{s['base']}/commitments/{s['commitment']['id']}/withdrawal",
+        if_match=1,
+        json={"reason": "duplicate"},
+    ),
+    ("POST", _F + "/expenditure/{expenditure_item_id}/withdrawal"): lambda f, s: f.request(
+        "POST",
+        f"{s['base']}/expenditure/{s['spend']['id']}/withdrawal",
+        if_match=1,
+        json={"reason": "entered_in_error"},
     ),
     ("POST", _F + "/observations"): lambda f, s: f.request(
         "POST",

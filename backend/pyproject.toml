@@ -49,7 +49,7 @@ ignore = ["B008"]  # FastAPI Depends() in defaults is idiomatic
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S105", "S106"]
-"migrations/**" = ["E501"]
+"migrations/**" = ["E501", "S608"]  # SQL built from the migration's own constants
 
 [tool.mypy]
 strict = true

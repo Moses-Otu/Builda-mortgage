@@ -94,17 +94,41 @@ async def test_seeded_measures_match_the_code(owner_engine: AsyncEngine) -> None
         rows = (
             await conn.execute(
                 text(
-                    "SELECT code, subject_kind, value_type, temporal_kind, description "
-                    "FROM measure_definitions"
+                    "SELECT code, subject_kind, value_type, temporal_kind, description,"
+                    " qualifier_required FROM measure_definitions"
+                    # Tests add (append-only, undeletable) measures prefixed test_.
+                    " WHERE code NOT LIKE 'test!_%' ESCAPE '!'"
                 )
             )
         ).all()
     seeded = {tuple(r) for r in rows}
     expected = {
-        (m.code, m.subject_kind.value, m.value_type.value, m.temporal_kind.value, m.description)
+        (
+            m.code,
+            m.subject_kind.value,
+            m.value_type.value,
+            m.temporal_kind.value,
+            m.description,
+            m.qualifier_required,
+        )
         for m in MEASURES
     }
     assert seeded == expected
+
+    from meip.financial.measures import QUALIFIERS
+
+    async with owner_engine.connect() as conn:
+        qualifier_rows = (
+            await conn.execute(
+                text(
+                    "SELECT measure_code, subject_kind, qualifier, description "
+                    "FROM measure_qualifiers WHERE qualifier NOT LIKE 'test!_%' ESCAPE '!'"
+                )
+            )
+        ).all()
+    assert {tuple(r) for r in qualifier_rows} == {
+        (q.measure, q.subject_kind.value, q.code, q.description) for q in QUALIFIERS
+    }
 
 
 async def test_declared_figures_are_migrated_into_the_financial_model(
@@ -161,3 +185,133 @@ async def test_declared_figures_are_migrated_into_the_financial_model(
         ("monthly_payment", 45000, "monthly", "00000000-0000-7000-8000-000000000003")
     ]
     assert columns == 0
+
+
+async def _fresh(engine: AsyncEngine) -> None:
+    """Recreate the scratch database. Downgrading would be data-dependent: migration 0002's
+    downgrade cannot restore NOT NULL once a case exists without a creating user."""
+    await engine.dispose()
+    await create_database(MIGRATION_DB)
+
+
+async def _seed_case_with_income(conn_engine: AsyncEngine) -> None:
+    statements = (
+        "INSERT INTO tenants (id, name, status, created_at, updated_at) VALUES"
+        " ('00000000-0000-7000-8000-0000000000a1', 'Firm', 'active', now(), now())",
+        "INSERT INTO cases (id, tenant_id, purpose, status, created_at, updated_at,"
+        " status_changed_at, version) VALUES ('00000000-0000-7000-8000-0000000000a2',"
+        " '00000000-0000-7000-8000-0000000000a1', 'purchase', 'draft', now(), now(), now(), 1)",
+        "INSERT INTO applicants (id, tenant_id, case_id, display_order, party_role, is_primary,"
+        " status, first_name, last_name, created_at, updated_at, version) VALUES"
+        " ('00000000-0000-7000-8000-0000000000a3', '00000000-0000-7000-8000-0000000000a1',"
+        " '00000000-0000-7000-8000-0000000000a2', 1, 'borrower', true, 'active', 'A', 'B',"
+        " now(), now(), 1)",
+        "INSERT INTO income_sources (id, tenant_id, case_id, applicant_id, kind, is_primary,"
+        " created_at, updated_at, version) VALUES ('00000000-0000-7000-8000-0000000000a4',"
+        " '00000000-0000-7000-8000-0000000000a1', '00000000-0000-7000-8000-0000000000a2',"
+        " '00000000-0000-7000-8000-0000000000a3', 'employment', false, now(), now(), 1)",
+    )
+    async with conn_engine.begin() as conn:
+        for statement in statements:
+            await conn.execute(text(statement))
+
+
+_BONUS = (
+    "INSERT INTO financial_observations (id, tenant_id, case_id, income_source_id, measure,"
+    " value_type, temporal_kind, money_minor, currency, frequency, source_kind, recorded_at)"
+    " VALUES (gen_random_uuid(), '00000000-0000-7000-8000-0000000000a1',"
+    " '00000000-0000-7000-8000-0000000000a2', '00000000-0000-7000-8000-0000000000a4',"
+    " 'bonus', 'money', 'flow', 1, 'GBP', 'annual', 'declared', now())"
+)
+
+
+async def test_existing_bonus_values_are_backfilled_as_unspecified(
+    scratch_engine: AsyncEngine,
+) -> None:
+    await _fresh(scratch_engine)
+    await run_alembic(scratch_engine, "upgrade", "0007")
+    await _seed_case_with_income(scratch_engine)
+    async with scratch_engine.begin() as conn:
+        await conn.execute(text(_BONUS))
+    await run_alembic(scratch_engine, "upgrade", "head")
+    async with scratch_engine.connect() as conn:
+        row = (
+            await conn.execute(
+                text("SELECT qualifier, qualifier_required FROM financial_observations")
+            )
+        ).one()
+    assert tuple(row) == ("unspecified", True)
+
+
+async def test_migration_stops_on_duplicate_current_values(scratch_engine: AsyncEngine) -> None:
+    await _fresh(scratch_engine)
+    await run_alembic(scratch_engine, "upgrade", "0008")
+    await _seed_case_with_income(scratch_engine)
+    duplicate = _BONUS.replace("measure,", "measure, qualifier, qualifier_required,").replace(
+        "'bonus',", "'bonus', 'guaranteed', true,"
+    )
+    async with scratch_engine.begin() as conn:
+        await conn.execute(text(duplicate))
+        await conn.execute(text(duplicate))
+    with pytest.raises(Exception, match="Duplicate current financial values"):
+        await run_alembic(scratch_engine, "upgrade", "0009")
+    await _fresh(scratch_engine)
+
+
+async def _state(engine: AsyncEngine, query: str) -> tuple[object, object]:
+    """After a refused downgrade: the revision and the data it protected, unchanged."""
+    async with engine.connect() as conn:
+        revision = await conn.scalar(text("SELECT version_num FROM alembic_version"))
+        value = await conn.scalar(text(query))
+    return revision, value
+
+
+async def test_downgrade_refuses_to_reinstate_withdrawn_items(scratch_engine: AsyncEngine) -> None:
+    await _fresh(scratch_engine)
+    await run_alembic(scratch_engine, "upgrade", "head")
+    await _seed_case_with_income(scratch_engine)
+    async with scratch_engine.begin() as conn:
+        await conn.execute(
+            text("UPDATE income_sources SET withdrawn_at = now(), withdrawal_reason = 'duplicate'")
+        )
+    with pytest.raises(Exception, match="Withdrawn items exist"):
+        await run_alembic(scratch_engine, "downgrade", "0009")
+    assert await _state(scratch_engine, "SELECT withdrawal_reason FROM income_sources") == (
+        "0011",
+        "duplicate",
+    )
+    await _fresh(scratch_engine)
+
+
+async def test_downgrade_refuses_to_discard_qualifiers(scratch_engine: AsyncEngine) -> None:
+    await _fresh(scratch_engine)
+    await run_alembic(scratch_engine, "upgrade", "head")
+    await _seed_case_with_income(scratch_engine)
+    qualified = _BONUS.replace("measure,", "measure, qualifier, qualifier_required,").replace(
+        "'bonus',", "'bonus', 'guaranteed', true,"
+    )
+    async with scratch_engine.begin() as conn:
+        await conn.execute(text(qualified))
+    with pytest.raises(Exception, match="would discard qualifiers"):
+        await run_alembic(scratch_engine, "downgrade", "0007")
+    assert await _state(scratch_engine, "SELECT qualifier FROM financial_observations") == (
+        "0011",
+        "guaranteed",
+    )
+    await _fresh(scratch_engine)
+
+
+async def test_downgrade_keeps_working_without_lossy_data(scratch_engine: AsyncEngine) -> None:
+    """Unspecified qualifiers carry nothing the pre-0008 schema could not represent."""
+    await _fresh(scratch_engine)
+    await run_alembic(scratch_engine, "upgrade", "head")
+    await _seed_case_with_income(scratch_engine)
+    unspecified = _BONUS.replace("measure,", "measure, qualifier, qualifier_required,").replace(
+        "'bonus',", "'bonus', 'unspecified', true,"
+    )
+    async with scratch_engine.begin() as conn:
+        await conn.execute(text(unspecified))
+    await run_alembic(scratch_engine, "downgrade", "0007")
+    async with scratch_engine.connect() as conn:
+        assert await conn.scalar(text("SELECT count(*) FROM financial_observations")) == 1
+    await _fresh(scratch_engine)

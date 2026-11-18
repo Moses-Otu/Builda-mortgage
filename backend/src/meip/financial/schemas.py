@@ -23,6 +23,7 @@ from meip.financial.measures import (
     SubjectKind,
     TemporalKind,
     ValueType,
+    WithdrawalReason,
 )
 
 _FOUR_PLACES = Decimal("0.0001")
@@ -93,11 +94,18 @@ ObservationValue = Annotated[
 
 
 class MeasureOut(OutputModel):
+    """A measure's meaning never changes; deprecation only stops new values."""
+
     code: str
     subject_kind: SubjectKind
     value_type: ValueType
     temporal_kind: TemporalKind
     description: str
+    qualifier_required: bool
+    qualifiers: list[str] = Field(
+        description="Allowed qualifiers. A single label, not an exhaustive classification."
+    )
+    deprecated_at: datetime | None
 
 
 # --- income sources ----------------------------------------------------------------------
@@ -114,6 +122,10 @@ class IncomeSourceOut(OutputModel):
     start_date: date | None
     end_date: date | None
     ownership_share: Decimal | None
+    withdrawn_at: datetime | None = Field(
+        default=None, description="Set if the item was withdrawn (entered in error)"
+    )
+    withdrawal_reason: WithdrawalReason | None = None
     created_at: datetime
     updated_at: datetime
     version: int
@@ -171,6 +183,10 @@ class CommitmentOut(OutputModel):
     status: CommitmentStatus
     to_be_repaid_before_completion: bool | None
     parties: list[CommitmentParty] = Field(description="Who is legally liable")
+    withdrawn_at: datetime | None = Field(
+        default=None, description="Set if the item was withdrawn (entered in error)"
+    )
+    withdrawal_reason: WithdrawalReason | None = None
     created_at: datetime
     updated_at: datetime
     version: int
@@ -228,6 +244,10 @@ class ExpenditureOut(OutputModel):
     scope: ExpenditureScope
     description: str | None
     parties: list[ExpenditureParty]
+    withdrawn_at: datetime | None = Field(
+        default=None, description="Set if the item was withdrawn (entered in error)"
+    )
+    withdrawal_reason: WithdrawalReason | None = None
     created_at: datetime
     updated_at: datetime
     version: int
@@ -282,6 +302,7 @@ class ObservationOut(OutputModel):
     commitment_id: uuid.UUID | None
     expenditure_item_id: uuid.UUID | None
     measure: str
+    qualifier: str | None
     value: ObservationValue
     frequency: Frequency | None
     period_start: date | None
@@ -292,6 +313,9 @@ class ObservationOut(OutputModel):
     recorded_by_user_id: uuid.UUID | None
     recorded_at: datetime
     supersedes_observation_id: uuid.UUID | None
+    superseded_by_observation_id: uuid.UUID | None = Field(
+        default=None, description="The correction that replaced this value, if any"
+    )
     retired_at: datetime | None
     retired_reason: RetiredReason | None
 
@@ -304,6 +328,11 @@ class ObservationCreate(InputModel):
     commitment_id: uuid.UUID | None = None
     expenditure_item_id: uuid.UUID | None = None
     measure: str = Field(min_length=1, max_length=48, examples=["basic_pay"])
+    qualifier: str | None = Field(
+        default=None,
+        max_length=32,
+        description="Required for allowance and bonus (see GET /api/v1/financial/measures)",
+    )
     value: ObservationValue
     frequency: Frequency | None = Field(default=None, description="Required for flow measures")
     period_start: date | None = None
@@ -333,6 +362,13 @@ class ObservationCreate(InputModel):
         if self.commitment_id is not None:
             return SubjectKind.COMMITMENT
         return SubjectKind.EXPENDITURE
+
+
+class WithdrawalRequest(InputModel):
+    """Withdraw an item that should never have existed. Irreversible: to correct a
+    withdrawal, create a new item. Its active values are retired with it."""
+
+    reason: WithdrawalReason
 
 
 class ObservationRetirement(InputModel):

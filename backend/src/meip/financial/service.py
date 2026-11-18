@@ -25,7 +25,15 @@ from meip.audit.service import AuditAction
 from meip.cases.service import get_case, require_editable
 from meip.core.db import utcnow
 from meip.core.errors import BusinessRuleError, ConflictError, NotFoundError, VersionConflictError
-from meip.financial.measures import RetiredReason, SourceKind, TemporalKind, ValueType
+from meip.financial.measures import (
+    RetiredReason,
+    SourceKind,
+    SubjectKind,
+    TemporalKind,
+    ValueType,
+    WithdrawalReason,
+    ensure_applicable,
+)
 from meip.financial.models import (
     Commitment,
     CommitmentParty,
@@ -34,6 +42,7 @@ from meip.financial.models import (
     FinancialObservation,
     IncomeSource,
     MeasureDefinition,
+    MeasureQualifier,
 )
 from meip.financial.schemas import (
     CommitmentCreate,
@@ -55,6 +64,7 @@ from meip.financial.schemas import (
     ObservationRetirement,
     ObservationValue,
     PercentValue,
+    WithdrawalRequest,
 )
 from meip.financial.schemas import CommitmentParty as CommitmentPartyIn
 from meip.financial.schemas import ExpenditureParty as ExpenditurePartyIn
@@ -73,6 +83,59 @@ async def _editable_case(ctx: OperationContext, case_id: uuid.UUID) -> None:
 async def _applicants(ctx: OperationContext, case_id: uuid.UUID) -> dict[uuid.UUID, Applicant]:
     rows = await ctx.session.scalars(select(Applicant).where(Applicant.case_id == case_id))
     return {a.id: a for a in rows}
+
+
+Item = IncomeSource | Commitment | ExpenditureItem
+ITEM_MODELS: dict[SubjectKind, type[Item]] = {
+    SubjectKind.INCOME_SOURCE: IncomeSource,
+    SubjectKind.COMMITMENT: Commitment,
+    SubjectKind.EXPENDITURE: ExpenditureItem,
+}
+_OBSERVATION_SUBJECT = {
+    SubjectKind.INCOME_SOURCE: FinancialObservation.income_source_id,
+    SubjectKind.COMMITMENT: FinancialObservation.commitment_id,
+    SubjectKind.EXPENDITURE: FinancialObservation.expenditure_item_id,
+}
+_ENTITY_TYPE = {
+    SubjectKind.INCOME_SOURCE: "income_source",
+    SubjectKind.COMMITMENT: "commitment",
+    SubjectKind.EXPENDITURE: "expenditure_item",
+}
+
+
+def _item_kind(item: Item) -> str:
+    return item.category if isinstance(item, ExpenditureItem) else item.kind
+
+
+def _require_not_withdrawn(item: Item) -> None:
+    if item.withdrawn_at is not None:
+        raise ConflictError("The item has been withdrawn; create a new one instead")
+
+
+async def _active_observations(
+    ctx: OperationContext, subject_kind: SubjectKind, item_id: uuid.UUID
+) -> list[FinancialObservation]:
+    rows = await ctx.session.scalars(
+        select(FinancialObservation).where(
+            _OBSERVATION_SUBJECT[subject_kind] == item_id,
+            FinancialObservation.retired_at.is_(None),
+        )
+    )
+    return list(rows)
+
+
+async def _ensure_kind_change_applicable(
+    ctx: OperationContext, subject_kind: SubjectKind, item_id: uuid.UUID, new_kind: str
+) -> None:
+    """Changing an item's kind must not orphan its active values (applicability path)."""
+    for observation in await _active_observations(ctx, subject_kind, item_id):
+        try:
+            ensure_applicable(observation.measure, subject_kind, new_kind)
+        except BusinessRuleError as exc:
+            raise ConflictError(
+                f"Cannot change kind: active '{observation.measure}' values would no longer "
+                "apply; retire them first"
+            ) from exc
 
 
 def _require_active(applicants: dict[uuid.UUID, Applicant], applicant_id: uuid.UUID) -> None:
@@ -118,11 +181,38 @@ async def _record(
 # --- measures ----------------------------------------------------------------------------
 
 
-async def list_measures(ctx: OperationContext) -> list[MeasureOut]:
-    rows = await ctx.session.scalars(
-        select(MeasureDefinition).order_by(MeasureDefinition.subject_kind, MeasureDefinition.code)
+async def list_measures(
+    ctx: OperationContext, *, include_deprecated: bool = False
+) -> list[MeasureOut]:
+    stmt = select(MeasureDefinition)
+    if not include_deprecated:
+        stmt = stmt.where(MeasureDefinition.deprecated_at.is_(None))
+    definitions = list(
+        await ctx.session.scalars(
+            stmt.order_by(MeasureDefinition.subject_kind, MeasureDefinition.code)
+        )
     )
-    return [MeasureOut.model_validate(m) for m in rows]
+    qualifier_rows = await ctx.session.scalars(
+        select(MeasureQualifier)
+        .where(MeasureQualifier.deprecated_at.is_(None))
+        .order_by(MeasureQualifier.qualifier)
+    )
+    qualifiers: dict[tuple[str, str], list[str]] = {}
+    for q in qualifier_rows:
+        qualifiers.setdefault((q.measure_code, q.subject_kind), []).append(q.qualifier)
+    return [
+        MeasureOut(
+            code=m.code,
+            subject_kind=m.subject_kind,
+            value_type=m.value_type,
+            temporal_kind=m.temporal_kind,
+            description=m.description,
+            qualifier_required=m.qualifier_required,
+            qualifiers=qualifiers.get((m.code, m.subject_kind), []),
+            deprecated_at=m.deprecated_at,
+        )
+        for m in definitions
+    ]
 
 
 # --- income sources ----------------------------------------------------------------------
@@ -142,13 +232,14 @@ def _income_out(item: IncomeSource) -> IncomeSourceOut:
     return IncomeSourceOut.model_validate(item)
 
 
-async def list_income_sources(ctx: OperationContext, case_id: uuid.UUID) -> list[IncomeSourceOut]:
+async def list_income_sources(
+    ctx: OperationContext, case_id: uuid.UUID, *, include_withdrawn: bool = False
+) -> list[IncomeSourceOut]:
     await get_case(ctx, case_id)
-    rows = await ctx.session.scalars(
-        select(IncomeSource)
-        .where(IncomeSource.case_id == case_id)
-        .order_by(IncomeSource.created_at)
-    )
+    stmt = select(IncomeSource).where(IncomeSource.case_id == case_id)
+    if not include_withdrawn:
+        stmt = stmt.where(IncomeSource.withdrawn_at.is_(None))
+    rows = await ctx.session.scalars(stmt.order_by(IncomeSource.created_at))
     return [_income_out(i) for i in rows]
 
 
@@ -205,9 +296,15 @@ async def update_income_source(
     item = await _get_income_source(ctx, case_id, item_id)
     if item.version != expected_version:
         raise VersionConflictError()
+    _require_not_withdrawn(item)
     _require_active(await _applicants(ctx, case_id), item.applicant_id)
-    if "kind" in body.model_fields_set and body.kind is None:
-        raise BusinessRuleError("kind cannot be cleared")
+    if "kind" in body.model_fields_set:
+        if body.kind is None:
+            raise BusinessRuleError("kind cannot be cleared")
+        if body.kind.value != item.kind:
+            await _ensure_kind_change_applicable(
+                ctx, SubjectKind.INCOME_SOURCE, item.id, body.kind.value
+            )
     before = audit.snapshot(item, _INCOME_FIELDS)
     for field in body.model_fields_set:
         setattr(item, field, _enum(getattr(body, field)))
@@ -258,6 +355,8 @@ def _commitment_out(item: Commitment, parties: list[CommitmentParty]) -> Commitm
         status=item.status,
         to_be_repaid_before_completion=item.to_be_repaid_before_completion,
         parties=[CommitmentPartyIn.model_validate(p) for p in parties],
+        withdrawn_at=item.withdrawn_at,
+        withdrawal_reason=item.withdrawal_reason,
         created_at=item.created_at,
         updated_at=item.updated_at,
         version=item.version,
@@ -277,13 +376,14 @@ def _parties_snapshot(parties: Iterable[CommitmentPartyIn]) -> list[dict[str, An
     ]
 
 
-async def list_commitments(ctx: OperationContext, case_id: uuid.UUID) -> list[CommitmentOut]:
+async def list_commitments(
+    ctx: OperationContext, case_id: uuid.UUID, *, include_withdrawn: bool = False
+) -> list[CommitmentOut]:
     await get_case(ctx, case_id)
-    items = list(
-        await ctx.session.scalars(
-            select(Commitment).where(Commitment.case_id == case_id).order_by(Commitment.created_at)
-        )
-    )
+    stmt = select(Commitment).where(Commitment.case_id == case_id)
+    if not include_withdrawn:
+        stmt = stmt.where(Commitment.withdrawn_at.is_(None))
+    items = list(await ctx.session.scalars(stmt.order_by(Commitment.created_at)))
     parties = await _commitment_parties(ctx, [i.id for i in items])
     return [_commitment_out(i, parties[i.id]) for i in items]
 
@@ -342,10 +442,13 @@ async def update_commitment(
         raise NotFoundError("Commitment not found")
     if item.version != expected_version:
         raise VersionConflictError()
+    _require_not_withdrawn(item)
     provided = body.model_fields_set
     for required in ("kind", "status", "parties"):
         if required in provided and getattr(body, required) is None:
             raise BusinessRuleError(f"{required} cannot be cleared")
+    if body.kind is not None and body.kind.value != item.kind:
+        await _ensure_kind_change_applicable(ctx, SubjectKind.COMMITMENT, item.id, body.kind.value)
 
     current = (await _commitment_parties(ctx, [item.id]))[item.id]
     before = audit.snapshot(item, _COMMITMENT_FIELDS)
@@ -408,6 +511,8 @@ def _expenditure_out(item: ExpenditureItem, parties: list[ExpenditureParty]) -> 
         scope=item.scope,
         description=item.description,
         parties=[ExpenditurePartyIn.model_validate(p) for p in parties],
+        withdrawn_at=item.withdrawn_at,
+        withdrawal_reason=item.withdrawal_reason,
         created_at=item.created_at,
         updated_at=item.updated_at,
         version=item.version,
@@ -421,15 +526,14 @@ def _expenditure_snapshot(parties: Iterable[ExpenditurePartyIn]) -> list[dict[st
     ]
 
 
-async def list_expenditure(ctx: OperationContext, case_id: uuid.UUID) -> list[ExpenditureOut]:
+async def list_expenditure(
+    ctx: OperationContext, case_id: uuid.UUID, *, include_withdrawn: bool = False
+) -> list[ExpenditureOut]:
     await get_case(ctx, case_id)
-    items = list(
-        await ctx.session.scalars(
-            select(ExpenditureItem)
-            .where(ExpenditureItem.case_id == case_id)
-            .order_by(ExpenditureItem.created_at)
-        )
-    )
+    stmt = select(ExpenditureItem).where(ExpenditureItem.case_id == case_id)
+    if not include_withdrawn:
+        stmt = stmt.where(ExpenditureItem.withdrawn_at.is_(None))
+    items = list(await ctx.session.scalars(stmt.order_by(ExpenditureItem.created_at)))
     parties = await _expenditure_parties(ctx, [i.id for i in items])
     return [_expenditure_out(i, parties[i.id]) for i in items]
 
@@ -490,6 +594,7 @@ async def update_expenditure(
         raise NotFoundError("Expenditure item not found")
     if item.version != expected_version:
         raise VersionConflictError()
+    _require_not_withdrawn(item)
     if "category" in body.model_fields_set and body.category is None:
         raise BusinessRuleError("category cannot be cleared")
 
@@ -572,7 +677,9 @@ def _value_of(o: FinancialObservation) -> ObservationValue:
     return DateValue(type="date", date=o.date_value)
 
 
-def _observation_out(o: FinancialObservation) -> ObservationOut:
+def _observation_out(
+    o: FinancialObservation, superseded_by: uuid.UUID | None = None
+) -> ObservationOut:
     return ObservationOut(
         id=o.id,
         case_id=o.case_id,
@@ -581,6 +688,7 @@ def _observation_out(o: FinancialObservation) -> ObservationOut:
         commitment_id=o.commitment_id,
         expenditure_item_id=o.expenditure_item_id,
         measure=o.measure,
+        qualifier=o.qualifier,
         value=_value_of(o),
         frequency=o.frequency,
         period_start=o.period_start,
@@ -591,9 +699,22 @@ def _observation_out(o: FinancialObservation) -> ObservationOut:
         recorded_by_user_id=o.recorded_by_user_id,
         recorded_at=o.recorded_at,
         supersedes_observation_id=o.supersedes_observation_id,
+        superseded_by_observation_id=superseded_by,
         retired_at=o.retired_at,
         retired_reason=o.retired_reason,
     )
+
+
+async def _successors(ctx: OperationContext, ids: list[uuid.UUID]) -> dict[uuid.UUID, uuid.UUID]:
+    """Forward links of the supersession chain: predecessor id -> successor id."""
+    if not ids:
+        return {}
+    rows = await ctx.session.execute(
+        select(FinancialObservation.supersedes_observation_id, FinancialObservation.id).where(
+            FinancialObservation.supersedes_observation_id.in_(ids)
+        )
+    )
+    return {predecessor: successor for predecessor, successor in rows if predecessor}
 
 
 async def list_observations(
@@ -613,36 +734,31 @@ async def list_observations(
         )
     if not include_retired:
         stmt = stmt.where(FinancialObservation.retired_at.is_(None))
-    rows = await ctx.session.scalars(
-        stmt.order_by(FinancialObservation.recorded_at, FinancialObservation.id)
+    rows = list(
+        await ctx.session.scalars(
+            stmt.order_by(FinancialObservation.recorded_at, FinancialObservation.id)
+        )
     )
-    return [_observation_out(o) for o in rows]
+    successors = await _successors(ctx, [o.id for o in rows])
+    return [_observation_out(o, successors.get(o.id)) for o in rows]
 
 
-async def _check_subject(
-    ctx: OperationContext, case_id: uuid.UUID, body: ObservationCreate
-) -> None:
-    """The item must exist in this case; income needs its applicant still on the case."""
-    if body.income_source_id is not None:
-        source = await _get_income_source(ctx, case_id, body.income_source_id)
-        _require_active(await _applicants(ctx, case_id), source.applicant_id)
-    elif body.commitment_id is not None:
-        found = await ctx.session.scalar(
-            select(Commitment.id).where(
-                Commitment.id == body.commitment_id, Commitment.case_id == case_id
-            )
+async def _subject_item(ctx: OperationContext, case_id: uuid.UUID, body: ObservationCreate) -> Item:
+    """The item must exist in this case and not be withdrawn; income needs its applicant
+    still on the case."""
+    subject_kind = body.subject_kind
+    model = ITEM_MODELS[subject_kind]
+    item: Item | None = await ctx.session.scalar(
+        select(model).where(model.id == _subject_id(body), model.case_id == case_id)
+    )
+    if item is None:
+        raise NotFoundError(
+            f"{_ENTITY_TYPE[subject_kind].replace('_', ' ').capitalize()} not found"
         )
-        if found is None:
-            raise NotFoundError("Commitment not found")
-    else:
-        found = await ctx.session.scalar(
-            select(ExpenditureItem.id).where(
-                ExpenditureItem.id == body.expenditure_item_id,
-                ExpenditureItem.case_id == case_id,
-            )
-        )
-        if found is None:
-            raise NotFoundError("Expenditure item not found")
+    _require_not_withdrawn(item)
+    if isinstance(item, IncomeSource):
+        _require_active(await _applicants(ctx, case_id), item.applicant_id)
+    return item
 
 
 def _subject_id(o: FinancialObservation | ObservationCreate) -> uuid.UUID | None:
@@ -650,7 +766,8 @@ def _subject_id(o: FinancialObservation | ObservationCreate) -> uuid.UUID | None
 
 
 def _period_key(o: FinancialObservation) -> tuple[Any, ...]:
-    return (o.frequency, o.period_start, o.period_end, o.tax_year, o.as_of_date)
+    """What a value is *about*, beyond its item, measure and source."""
+    return (o.qualifier, o.frequency, o.period_start, o.period_end, o.tax_year, o.as_of_date)
 
 
 async def _superseded(
@@ -687,8 +804,12 @@ async def _superseded(
 async def record_observation(
     ctx: OperationContext, case_id: uuid.UUID, body: ObservationCreate
 ) -> ObservationOut:
+    """Record one typed value. All checks and writes happen under the case row lock, in one
+    transaction: the current-value check, retiring a superseded value, inserting the new one
+    and the audit record. The database enforces the same rules underneath (current-value
+    index, supersession triggers), so a lost race can only fail, never fork history."""
     await _editable_case(ctx, case_id)
-    await _check_subject(ctx, case_id, body)
+    item = await _subject_item(ctx, case_id, body)
 
     subject_kind = body.subject_kind
     definition: MeasureDefinition | None = await ctx.session.scalar(
@@ -699,10 +820,14 @@ async def record_observation(
     )
     if definition is None:
         raise BusinessRuleError(f"'{body.measure}' is not a measure for a {subject_kind.value}")
+    if definition.deprecated_at is not None:
+        raise BusinessRuleError(f"'{body.measure}' is deprecated; new values are not accepted")
     if body.value.type != definition.value_type:
         raise BusinessRuleError(
             f"'{body.measure}' takes a {definition.value_type} value, not {body.value.type}"
         )
+    await _check_qualifier(ctx, definition, subject_kind, body.qualifier)
+    ensure_applicable(body.measure, subject_kind, _item_kind(item))
 
     superseded = await _superseded(ctx, case_id, body)
 
@@ -725,19 +850,35 @@ async def record_observation(
     ):
         raise BusinessRuleError(f"'{body.measure}' is a fixed attribute: no period or dates")
 
+    new_key = (
+        body.qualifier,
+        _enum(body.frequency),
+        body.period_start,
+        body.period_end,
+        body.tax_year,
+        as_of,
+    )
     if superseded is not None:
-        new_key = (
-            _enum(body.frequency),
-            body.period_start,
-            body.period_end,
-            body.tax_year,
-            as_of,
-        )
         if _period_key(superseded) != new_key:
             raise BusinessRuleError(
-                "A correction must cover the same period; to record a different period, "
-                "record a new observation (and retire the old one if it was wrong)"
+                "A correction must cover the same qualifier and period; to record a different "
+                "one, record a new observation (and retire the old one if it was wrong)"
             )
+    else:
+        current = await _current_value(ctx, body, new_key)
+        if current is not None:
+            raise ConflictError(
+                "A current value already exists for this item, measure, source and period; "
+                "supersede it to correct it",
+                extra={"current_observation_id": current},
+            )
+
+    if superseded is not None:
+        # Retire first and flush: the current-value index and the supersession trigger both
+        # require the predecessor to be retired before its successor is inserted.
+        superseded.retired_at = utcnow()
+        superseded.retired_reason = RetiredReason.SUPERSEDED.value
+        await ctx.session.flush()
 
     observation = FinancialObservation(
         tenant_id=ctx.tenant_id,
@@ -746,6 +887,8 @@ async def record_observation(
         commitment_id=body.commitment_id,
         expenditure_item_id=body.expenditure_item_id,
         measure=body.measure,
+        qualifier=body.qualifier,
+        qualifier_required=definition.qualifier_required,
         value_type=definition.value_type,
         temporal_kind=definition.temporal_kind,
         frequency=_enum(body.frequency),
@@ -758,9 +901,6 @@ async def record_observation(
         supersedes_observation_id=body.supersedes_observation_id,
         **_value_columns(body.value),
     )
-    if superseded is not None:
-        superseded.retired_at = utcnow()
-        superseded.retired_reason = RetiredReason.SUPERSEDED.value
     ctx.session.add(observation)
     await ctx.session.flush()
 
@@ -768,6 +908,7 @@ async def record_observation(
         observation,
         (
             "measure",
+            "qualifier",
             "value_type",
             "source_kind",
             "frequency",
@@ -784,6 +925,59 @@ async def record_observation(
         ctx, AuditAction.OBSERVATION_RECORDED, "observation", observation.id, case_id, change_set
     )
     return _observation_out(observation)
+
+
+async def _check_qualifier(
+    ctx: OperationContext,
+    definition: MeasureDefinition,
+    subject_kind: SubjectKind,
+    qualifier: str | None,
+) -> None:
+    """Qualifiers come from the reference table, the source the database also checks, so a
+    deprecated qualifier is refused here as it is underneath."""
+    if definition.qualifier_required:
+        rows = await ctx.session.scalars(
+            select(MeasureQualifier).where(
+                MeasureQualifier.measure_code == definition.code,
+                MeasureQualifier.subject_kind == subject_kind.value,
+            )
+        )
+        known = {q.qualifier: q for q in rows}
+        allowed = sorted(code for code, q in known.items() if q.deprecated_at is None)
+        if qualifier is None:
+            raise BusinessRuleError(
+                f"'{definition.code}' needs a qualifier: one of {', '.join(allowed)}"
+            )
+        if qualifier not in known:
+            raise BusinessRuleError(f"Not a qualifier of '{definition.code}'")
+        if known[qualifier].deprecated_at is not None:
+            raise BusinessRuleError(
+                f"That qualifier of '{definition.code}' is deprecated; new values are not accepted"
+            )
+    elif qualifier is not None:
+        raise BusinessRuleError(f"'{definition.code}' does not take a qualifier")
+
+
+async def _current_value(
+    ctx: OperationContext, body: ObservationCreate, key: tuple[Any, ...]
+) -> str | None:
+    """The active value with the same current-value key, if any (declared/broker only)."""
+    qualifier, frequency, period_start, period_end, tax_year, as_of = key
+    found = await ctx.session.scalar(
+        select(FinancialObservation.id).where(
+            _OBSERVATION_SUBJECT[body.subject_kind] == _subject_id(body),
+            FinancialObservation.measure == body.measure,
+            FinancialObservation.source_kind == SourceKind(body.source_kind).value,
+            FinancialObservation.qualifier.is_not_distinct_from(qualifier),
+            FinancialObservation.frequency.is_not_distinct_from(frequency),
+            FinancialObservation.period_start.is_not_distinct_from(period_start),
+            FinancialObservation.period_end.is_not_distinct_from(period_end),
+            FinancialObservation.tax_year.is_not_distinct_from(tax_year),
+            FinancialObservation.as_of_date.is_not_distinct_from(as_of),
+            FinancialObservation.retired_at.is_(None),
+        )
+    )
+    return None if found is None else str(found)
 
 
 async def retire_observation(
@@ -814,3 +1008,100 @@ async def retire_observation(
         audit.diff({"retired_reason": None}, {"retired_reason": observation.retired_reason}),
     )
     return _observation_out(observation)
+
+
+# --- withdrawal ----------------------------------------------------------------------------
+
+
+async def withdraw_item(
+    ctx: OperationContext,
+    case_id: uuid.UUID,
+    subject_kind: SubjectKind,
+    item_id: uuid.UUID,
+    body: WithdrawalRequest,
+    expected_version: int,
+) -> Item:
+    """Withdraw an item that should never have existed. Irreversible.
+
+    Atomic: marking the item withdrawn, retiring its active values (``item_withdrawn``) and
+    the single audit record happen in one transaction under the case lock - all or nothing.
+    The database also freezes the row once withdrawn.
+    """
+    await _editable_case(ctx, case_id)
+    model = ITEM_MODELS[subject_kind]
+    item: Item | None = await ctx.session.scalar(
+        select(model).where(model.id == item_id, model.case_id == case_id)
+    )
+    if item is None:
+        raise NotFoundError(
+            f"{_ENTITY_TYPE[subject_kind].replace('_', ' ').capitalize()} not found"
+        )
+    if item.version != expected_version:
+        raise VersionConflictError()
+    if item.withdrawn_at is not None:
+        raise ConflictError("The item has already been withdrawn")
+
+    now = utcnow()
+    item.withdrawn_at = now
+    item.withdrawn_by_user_id = ctx.actor.user_id
+    item.withdrawal_reason = WithdrawalReason(body.reason).value
+    retired = await _active_observations(ctx, subject_kind, item.id)
+    for observation in retired:
+        observation.retired_at = now
+        observation.retired_reason = RetiredReason.ITEM_WITHDRAWN.value
+    await ctx.session.flush()
+
+    change_set = audit.diff(
+        {"withdrawal_reason": None}, {"withdrawal_reason": item.withdrawal_reason}
+    ).note("retired_observation_ids", sorted(str(o.id) for o in retired) or None)
+    await _record(
+        ctx,
+        AuditAction.FINANCIAL_ITEM_WITHDRAWN,
+        _ENTITY_TYPE[subject_kind],
+        item.id,
+        case_id,
+        change_set,
+    )
+    return item
+
+
+async def withdraw_income_source(
+    ctx: OperationContext,
+    case_id: uuid.UUID,
+    item_id: uuid.UUID,
+    body: WithdrawalRequest,
+    expected_version: int,
+) -> IncomeSourceOut:
+    item = await withdraw_item(
+        ctx, case_id, SubjectKind.INCOME_SOURCE, item_id, body, expected_version
+    )
+    assert isinstance(item, IncomeSource)  # noqa: S101
+    return _income_out(item)
+
+
+async def withdraw_commitment(
+    ctx: OperationContext,
+    case_id: uuid.UUID,
+    item_id: uuid.UUID,
+    body: WithdrawalRequest,
+    expected_version: int,
+) -> CommitmentOut:
+    item = await withdraw_item(
+        ctx, case_id, SubjectKind.COMMITMENT, item_id, body, expected_version
+    )
+    assert isinstance(item, Commitment)  # noqa: S101
+    return _commitment_out(item, (await _commitment_parties(ctx, [item.id]))[item.id])
+
+
+async def withdraw_expenditure(
+    ctx: OperationContext,
+    case_id: uuid.UUID,
+    item_id: uuid.UUID,
+    body: WithdrawalRequest,
+    expected_version: int,
+) -> ExpenditureOut:
+    item = await withdraw_item(
+        ctx, case_id, SubjectKind.EXPENDITURE, item_id, body, expected_version
+    )
+    assert isinstance(item, ExpenditureItem)  # noqa: S101
+    return _expenditure_out(item, (await _expenditure_parties(ctx, [item.id]))[item.id])

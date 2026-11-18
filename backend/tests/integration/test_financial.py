@@ -68,6 +68,7 @@ class TestTypedValues:
 
     async def test_each_value_type_round_trips(self, case: Case) -> None:
         source = await case.income()
+        business = await case.income(kind="self_employment")
         loan = await case.commitment(kind="personal_loan")
         cases = [
             {
@@ -79,7 +80,7 @@ class TestTypedValues:
                 "period_end": "2026-10-31",
             },
             {
-                "income_source_id": source["id"],
+                "income_source_id": business["id"],
                 "measure": "net_profit",
                 "value": money(-120_000, "signed_money"),
                 "frequency": "annual",
@@ -298,6 +299,7 @@ class TestCorrections:
         await case.observe(
             income_source_id=source["id"],
             measure="bonus",
+            qualifier="discretionary",
             value=money(777_777),
             frequency="annual",
         )
@@ -555,9 +557,10 @@ class TestDatabaseGuarantees:
         with pytest.raises((asyncpg.CheckViolationError, asyncpg.ForeignKeyViolationError)):
             await app_conn.execute(
                 "INSERT INTO financial_observations (id, tenant_id, case_id, commitment_id,"  # noqa: S608 - fixed test parameters
-                f" measure, value_type, temporal_kind, {sql_columns}, source_kind, recorded_at)"
-                f" VALUES (gen_random_uuid(), $1, $2, $3, 'interest_rate', $4, 'attribute',"
-                f" {sql_values}, 'declared', now())",
+                " measure, qualifier_required, value_type, temporal_kind,"
+                f" {sql_columns}, source_kind, recorded_at)"
+                " VALUES (gen_random_uuid(), $1, $2, $3, 'interest_rate', false, $4,"
+                f" 'attribute', {sql_values}, 'declared', now())",
                 case.firm.tenant_id,
                 uuid.UUID(case.id),
                 uuid.UUID(loan["id"]),
@@ -572,9 +575,10 @@ class TestDatabaseGuarantees:
         with pytest.raises(asyncpg.ForeignKeyViolationError):
             await app_conn.execute(
                 "INSERT INTO financial_observations (id, tenant_id, case_id, commitment_id,"
-                " measure, value_type, temporal_kind, money_minor, currency, as_of_date,"
-                " source_kind, recorded_at) VALUES (gen_random_uuid(), $1, $2, $3,"
-                " 'outstanding_balance', 'money', 'stock', 1, 'GBP', now(), 'declared', now())",
+                " measure, qualifier_required, value_type, temporal_kind, money_minor,"
+                " currency, as_of_date, source_kind, recorded_at) VALUES (gen_random_uuid(),"
+                " $1, $2, $3, 'outstanding_balance', false, 'money', 'stock', 1, 'GBP', now(),"
+                " 'declared', now())",
                 case.firm.tenant_id,
                 uuid.UUID(other["id"]),
                 uuid.UUID(loan["id"]),
@@ -712,17 +716,29 @@ class TestReviewFixes:
             await case.observe(
                 income_source_id=source["id"],
                 measure="bonus",
+                qualifier="guaranteed",
                 value=money(1),
                 frequency="annual",
             )
         ).json()
         insert = (
             "INSERT INTO financial_observations (id, tenant_id, case_id, income_source_id,"
-            " measure, value_type, temporal_kind, money_minor, currency, frequency, source_kind,"
-            " recorded_at, supersedes_observation_id) VALUES (gen_random_uuid(), $1, $2, $3,"
-            " 'bonus', 'money', 'flow', $4, 'GBP', 'annual', 'declared', now(), $5)"
+            " measure, qualifier, qualifier_required, value_type, temporal_kind, money_minor,"
+            " currency, frequency, source_kind, recorded_at, supersedes_observation_id)"
+            " VALUES (gen_random_uuid(), $1, $2, $3, 'bonus', 'guaranteed', true, 'money',"
+            " 'flow', $4, 'GBP', 'annual', 'declared', now(), $5)"
         )
         args = (case.firm.tenant_id, uuid.UUID(case.id), uuid.UUID(source["id"]))
-        await app_conn.execute(insert, *args, 2, uuid.UUID(first["id"]))
+
+        async def two_successors() -> None:
+            async with app_conn.transaction():
+                await app_conn.execute(
+                    "UPDATE financial_observations SET retired_at = now(),"
+                    " retired_reason = 'superseded' WHERE id = $1",
+                    uuid.UUID(first["id"]),
+                )
+                await app_conn.execute(insert, *args, 2, uuid.UUID(first["id"]))
+                await app_conn.execute(insert, *args, 3, uuid.UUID(first["id"]))
+
         with pytest.raises(asyncpg.UniqueViolationError):
-            await app_conn.execute(insert, *args, 3, uuid.UUID(first["id"]))
+            await two_successors()

@@ -210,6 +210,27 @@ PROBES: list[Probe] = [
         CASE_WORKERS,
         lambda s: {"if_match": 1, "json": {"category": "transport"}},
     ),
+    Probe(
+        "withdraw income source",
+        "POST",
+        _F + "/income-sources/{income_source_id}/withdrawal",
+        CASE_WORKERS,
+        lambda s: {"if_match": 1, "json": {"reason": "entered_in_error"}},
+    ),
+    Probe(
+        "withdraw commitment",
+        "POST",
+        _F + "/commitments/{commitment_id}/withdrawal",
+        CASE_WORKERS,
+        lambda s: {"if_match": 1, "json": {"reason": "duplicate"}},
+    ),
+    Probe(
+        "withdraw expenditure",
+        "POST",
+        _F + "/expenditure/{expenditure_item_id}/withdrawal",
+        CASE_WORKERS,
+        lambda s: {"if_match": 1, "json": {"reason": "entered_in_error"}},
+    ),
     Probe("list observations", "GET", _F + "/observations", EVERYONE),
     Probe(
         "record observation",

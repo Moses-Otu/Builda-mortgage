@@ -14,9 +14,18 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import CheckConstraint, ForeignKey, ForeignKeyConstraint, String, UniqueConstraint
+from sqlalchemy import (
+    CheckConstraint,
+    ForeignKey,
+    ForeignKeyConstraint,
+    String,
+    UniqueConstraint,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql.base import ischema_names
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.types import UserDefinedType
 
 from meip.core.db import Base, utcnow
 from meip.core.ids import uuid7
@@ -31,6 +40,19 @@ ACTOR_CONSISTENCY = (
     " OR (actor_type = 'system' AND actor_user_id IS NULL)"
     " OR (actor_type = 'integration' AND actor_user_id IS NULL AND actor_ref IS NOT NULL)"
 )
+
+
+class XID8(UserDefinedType[str]):
+    """PostgreSQL's 64-bit transaction id type."""
+
+    cache_ok = True
+
+    def get_col_spec(self, **kw: Any) -> str:
+        return "xid8"
+
+
+# Let reflection (Alembic's drift check) recognise the column type instead of skipping it.
+ischema_names["xid8"] = XID8
 
 
 class AuditEvent(Base):
@@ -60,6 +82,11 @@ class AuditEvent(Base):
     # Job ID for background work; HTTP requests are correlated by request_id.
     correlation_id: Mapped[str | None] = mapped_column(String(64))
     changes: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict)
+    # Set by the database (pg_current_xact_id()); the runtime role cannot supply it. Details
+    # may only be attached in the transaction that wrote the event.
+    txid: Mapped[str] = mapped_column(
+        XID8(), server_default=text("pg_current_xact_id()"), deferred=True
+    )
 
 
 class AuditEventDetail(Base):

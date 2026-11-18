@@ -79,6 +79,8 @@ NON_PERSONAL_FIELDS = frozenset(
         "expenditure_item_id",
         "supersedes_observation_id",
         "retired_reason",
+        "withdrawal_reason",
+        "retired_observation_ids",
         "currency",
         "to_be_repaid_before_completion",
         # No "name": it means a firm's name in one place and an employer or business in
@@ -106,6 +108,7 @@ class AuditAction(StrEnum):
     APPLICANT_REINSTATED = "applicant.reinstated"
     FINANCIAL_ITEM_ADDED = "financial_item.added"
     FINANCIAL_ITEM_UPDATED = "financial_item.updated"
+    FINANCIAL_ITEM_WITHDRAWN = "financial_item.withdrawn"
     OBSERVATION_RECORDED = "observation.recorded"
     OBSERVATION_RETIRED = "observation.retired"
 

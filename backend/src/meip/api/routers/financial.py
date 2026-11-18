@@ -27,6 +27,7 @@ from meip.financial.schemas import (
     ObservationCreate,
     ObservationOut,
     ObservationRetirement,
+    WithdrawalRequest,
 )
 
 router = APIRouter(prefix="/api/v1/cases/{case_id}/financial", tags=["financial"])
@@ -38,16 +39,27 @@ reference = APIRouter(prefix="/api/v1/financial", tags=["financial"])
     response_model=list[MeasureOut],
     summary="Measures and the value type each one takes",
 )
-async def list_measures(ctx: CaseReadCtx) -> list[MeasureOut]:
-    return await service.list_measures(ctx)
+async def list_measures(
+    ctx: CaseReadCtx,
+    include_deprecated: Annotated[
+        bool, Query(description="Also list deprecated measures (still valid for old values)")
+    ] = False,
+) -> list[MeasureOut]:
+    return await service.list_measures(ctx, include_deprecated=include_deprecated)
 
 
 # --- income sources ----------------------------------------------------------------------
 
 
 @router.get("/income-sources", response_model=list[IncomeSourceOut], summary="List income sources")
-async def list_income_sources(case_id: uuid.UUID, ctx: CaseReadCtx) -> list[IncomeSourceOut]:
-    return await service.list_income_sources(ctx, case_id)
+async def list_income_sources(
+    case_id: uuid.UUID,
+    ctx: CaseReadCtx,
+    include_withdrawn: Annotated[
+        bool, Query(description="Also list items withdrawn as entered in error")
+    ] = False,
+) -> list[IncomeSourceOut]:
+    return await service.list_income_sources(ctx, case_id, include_withdrawn=include_withdrawn)
 
 
 @router.post(
@@ -88,8 +100,14 @@ async def update_income_source(
 
 
 @router.get("/commitments", response_model=list[CommitmentOut], summary="List commitments")
-async def list_commitments(case_id: uuid.UUID, ctx: CaseReadCtx) -> list[CommitmentOut]:
-    return await service.list_commitments(ctx, case_id)
+async def list_commitments(
+    case_id: uuid.UUID,
+    ctx: CaseReadCtx,
+    include_withdrawn: Annotated[
+        bool, Query(description="Also list items withdrawn as entered in error")
+    ] = False,
+) -> list[CommitmentOut]:
+    return await service.list_commitments(ctx, case_id, include_withdrawn=include_withdrawn)
 
 
 @router.post(
@@ -130,8 +148,14 @@ async def update_commitment(
 
 
 @router.get("/expenditure", response_model=list[ExpenditureOut], summary="List expenditure")
-async def list_expenditure(case_id: uuid.UUID, ctx: CaseReadCtx) -> list[ExpenditureOut]:
-    return await service.list_expenditure(ctx, case_id)
+async def list_expenditure(
+    case_id: uuid.UUID,
+    ctx: CaseReadCtx,
+    include_withdrawn: Annotated[
+        bool, Query(description="Also list items withdrawn as entered in error")
+    ] = False,
+) -> list[ExpenditureOut]:
+    return await service.list_expenditure(ctx, case_id, include_withdrawn=include_withdrawn)
 
 
 @router.post(
@@ -220,4 +244,73 @@ async def retire_observation(
 ) -> ObservationOut:
     out = await service.retire_observation(ctx, case_id, observation_id, body)
     await ctx.commit()
+    return out
+
+
+@router.post(
+    "/income-sources/{income_source_id}/withdrawal",
+    response_model=IncomeSourceOut,
+    summary="Withdraw an income source entered in error (irreversible)",
+    description=(
+        "Marks the item as never having been true and retires its active values, atomically. "
+        "Nothing is deleted. To correct a withdrawal, create a new item."
+    ),
+)
+async def withdraw_income_source(
+    case_id: uuid.UUID,
+    income_source_id: uuid.UUID,
+    body: WithdrawalRequest,
+    ctx: FinancialWriteCtx,
+    version: IfMatch,
+    response: Response,
+) -> IncomeSourceOut:
+    out = await service.withdraw_income_source(ctx, case_id, income_source_id, body, version)
+    await ctx.commit()
+    response.headers["ETag"] = etag(out.version)
+    return out
+
+
+@router.post(
+    "/commitments/{commitment_id}/withdrawal",
+    response_model=CommitmentOut,
+    summary="Withdraw a commitment entered in error (irreversible)",
+    description=(
+        "Marks the item as never having been true and retires its active values, atomically. "
+        "Nothing is deleted. To correct a withdrawal, create a new item."
+    ),
+)
+async def withdraw_commitment(
+    case_id: uuid.UUID,
+    commitment_id: uuid.UUID,
+    body: WithdrawalRequest,
+    ctx: FinancialWriteCtx,
+    version: IfMatch,
+    response: Response,
+) -> CommitmentOut:
+    out = await service.withdraw_commitment(ctx, case_id, commitment_id, body, version)
+    await ctx.commit()
+    response.headers["ETag"] = etag(out.version)
+    return out
+
+
+@router.post(
+    "/expenditure/{expenditure_item_id}/withdrawal",
+    response_model=ExpenditureOut,
+    summary="Withdraw an expenditure item entered in error (irreversible)",
+    description=(
+        "Marks the item as never having been true and retires its active values, atomically. "
+        "Nothing is deleted. To correct a withdrawal, create a new item."
+    ),
+)
+async def withdraw_expenditure(
+    case_id: uuid.UUID,
+    expenditure_item_id: uuid.UUID,
+    body: WithdrawalRequest,
+    ctx: FinancialWriteCtx,
+    version: IfMatch,
+    response: Response,
+) -> ExpenditureOut:
+    out = await service.withdraw_expenditure(ctx, case_id, expenditure_item_id, body, version)
+    await ctx.commit()
+    response.headers["ETag"] = etag(out.version)
     return out

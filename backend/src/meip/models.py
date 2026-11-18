@@ -12,6 +12,7 @@ from meip.financial.models import (
     FinancialObservation,
     IncomeSource,
     MeasureDefinition,
+    MeasureQualifier,
 )
 from meip.firm.models import FirmSettings
 from meip.tenancy.models import Membership, Tenant, User
@@ -30,6 +31,7 @@ __all__ = [
     "FirmSettings",
     "IncomeSource",
     "MeasureDefinition",
+    "MeasureQualifier",
     "Membership",
     "Tenant",
     "User",

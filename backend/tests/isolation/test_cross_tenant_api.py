@@ -67,6 +67,21 @@ PROBES: list[tuple[str, str, dict[str, Any]]] = [
         _F + "/expenditure/{expenditure_item_id}",
         {"if_match": 1, "json": {"category": "transport"}},
     ),
+    (
+        "POST",
+        _F + "/income-sources/{income_source_id}/withdrawal",
+        {"if_match": 1, "json": {"reason": "entered_in_error"}},
+    ),
+    (
+        "POST",
+        _F + "/commitments/{commitment_id}/withdrawal",
+        {"if_match": 1, "json": {"reason": "entered_in_error"}},
+    ),
+    (
+        "POST",
+        _F + "/expenditure/{expenditure_item_id}/withdrawal",
+        {"if_match": 1, "json": {"reason": "entered_in_error"}},
+    ),
     ("GET", _F + "/observations", {}),
     (
         "POST",

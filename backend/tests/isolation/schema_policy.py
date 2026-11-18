@@ -32,7 +32,8 @@ TENANT_SCOPED: dict[str, frozenset[str]] = {
     "cases": frozenset({"SELECT", "INSERT", "UPDATE"}),
     # No DELETE: applicants are removed by status, never deleted by the application.
     "applicants": frozenset({"SELECT", "INSERT", "UPDATE"}),
-    "audit_events": frozenset({"SELECT", "INSERT"}),
+    # INSERT is column-level (every column except txid): see COLUMN_INSERTS.
+    "audit_events": frozenset({"SELECT"}),
     # Erasable audit values: append-only for the runtime role (retention deletes as owner).
     "audit_event_details": frozenset({"SELECT", "INSERT"}),
     "income_sources": frozenset({"SELECT", "INSERT", "UPDATE"}),
@@ -54,8 +55,53 @@ COLUMN_UPDATES: dict[str, frozenset[str]] = {
 
 # Platform reference data: no tenant_id, no RLS, read-only for the runtime role, changed
 # only by migrations.
+# table -> columns the runtime role may INSERT through column-level grants only.
+COLUMN_INSERTS: dict[str, frozenset[str]] = {
+    "audit_events": frozenset(
+        {
+            "id",
+            "tenant_id",
+            "occurred_at",
+            "actor_type",
+            "actor_user_id",
+            "actor_ref",
+            "on_behalf_of_user_id",
+            "action",
+            "entity_type",
+            "entity_id",
+            "case_id",
+            "request_id",
+            "correlation_id",
+            "changes",
+        }
+    ),
+}
+
 REFERENCE: dict[str, str] = {
     "measure_definitions": "Value-type definition of each financial measure.",
+    "measure_qualifiers": "Labels a qualified measure (allowance, bonus) may carry.",
+}
+
+# Integrity triggers that must exist and be enabled (name -> table).
+EXPECTED_TRIGGERS: dict[str, str] = {
+    "audit_events_immutable": "audit_events",
+    "audit_events_no_truncate": "audit_events",
+    "audit_event_details_same_transaction": "audit_event_details",
+    "financial_observations_retire_once": "financial_observations",
+    "financial_observations_supersession_check": "financial_observations",
+    "financial_observations_superseded_has_successor": "financial_observations",
+    "financial_observations_item_not_withdrawn": "financial_observations",
+    "financial_observations_not_deprecated": "financial_observations",
+    "income_sources_withdrawn_has_no_active_values": "income_sources",
+    "commitments_withdrawn_has_no_active_values": "commitments",
+    "expenditure_items_withdrawn_has_no_active_values": "expenditure_items",
+    "commitment_parties_frozen_after_withdrawal": "commitment_parties",
+    "expenditure_parties_frozen_after_withdrawal": "expenditure_parties",
+    "income_sources_frozen_after_withdrawal": "income_sources",
+    "commitments_frozen_after_withdrawal": "commitments",
+    "expenditure_items_frozen_after_withdrawal": "expenditure_items",
+    "measure_definitions_append_only": "measure_definitions",
+    "measure_qualifiers_append_only": "measure_qualifiers",
 }
 
 # table -> (policy, runtime privileges)

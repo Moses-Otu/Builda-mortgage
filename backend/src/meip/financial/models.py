@@ -52,6 +52,7 @@ from meip.financial.measures import (
     SubjectKind,
     TemporalKind,
     ValueType,
+    WithdrawalReason,
 )
 
 PERCENT_0_100 = "BETWEEN 0 AND 100"
@@ -73,11 +74,23 @@ def _case_fk(name: str) -> ForeignKeyConstraint:
 
 
 class MeasureDefinition(Base):
-    """Reference data (no tenant data): which value and time semantics each measure has."""
+    """Reference data (no tenant data): which value and time semantics each measure has.
+
+    Append-only in meaning: a database trigger rejects every UPDATE and DELETE except setting
+    ``deprecated_at`` once. See :mod:`meip.financial.measures`.
+    """
 
     __tablename__ = "measure_definitions"
     __table_args__ = (
-        UniqueConstraint("code", "subject_kind", "value_type", "temporal_kind"),
+        # Target of the observations' composite FK: the full signature of a measure.
+        UniqueConstraint(
+            "code",
+            "subject_kind",
+            "value_type",
+            "temporal_kind",
+            "qualifier_required",
+            name="uq_measure_definitions_signature",
+        ),
         CheckConstraint(check_in("subject_kind", SubjectKind), name="subject_kind"),
         CheckConstraint(check_in("value_type", ValueType), name="value_type"),
         CheckConstraint(check_in("temporal_kind", TemporalKind), name="temporal_kind"),
@@ -88,6 +101,31 @@ class MeasureDefinition(Base):
     value_type: Mapped[str] = mapped_column(String(16))
     temporal_kind: Mapped[str] = mapped_column(String(12))
     description: Mapped[str] = mapped_column(Text)
+    qualifier_required: Mapped[bool] = mapped_column(Boolean, default=False)
+    deprecated_at: Mapped[datetime | None] = mapped_column()
+
+
+class MeasureQualifier(Base):
+    """Reference data: the labels a qualified measure (allowance, bonus) may carry.
+
+    A single label per value, not a classification: labels may overlap conceptually.
+    Append-only in meaning, like measure definitions.
+    """
+
+    __tablename__ = "measure_qualifiers"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["measure_code", "subject_kind"],
+            ["measure_definitions.code", "measure_definitions.subject_kind"],
+            name="fk_measure_qualifiers_measure",
+        ),
+    )
+
+    measure_code: Mapped[str] = mapped_column(String(48), primary_key=True)
+    subject_kind: Mapped[str] = mapped_column(String(16), primary_key=True)
+    qualifier: Mapped[str] = mapped_column(String(32), primary_key=True)
+    description: Mapped[str] = mapped_column(Text)
+    deprecated_at: Mapped[datetime | None] = mapped_column()
 
 
 class IncomeSource(Base):
@@ -110,6 +148,13 @@ class IncomeSource(Base):
         CheckConstraint(
             f"ownership_share IS NULL OR ownership_share {PERCENT_0_100}", name="ownership_share"
         ),
+        CheckConstraint(
+            f"withdrawal_reason IS NULL OR {check_in('withdrawal_reason', WithdrawalReason)}",
+            name="withdrawal_reason",
+        ),
+        CheckConstraint(
+            "(withdrawn_at IS NULL) = (withdrawal_reason IS NULL)", name="withdrawal_consistency"
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
@@ -123,6 +168,11 @@ class IncomeSource(Base):
     start_date: Mapped[date | None] = mapped_column(Date)
     end_date: Mapped[date | None] = mapped_column(Date)
     ownership_share: Mapped[Decimal | None] = mapped_column(Numeric(7, 4))
+    # Withdrawal: the item should never have existed. Irreversible; the row is frozen by a
+    # database trigger once withdrawn. withdrawn_by is convenience only (audit is authoritative).
+    withdrawn_at: Mapped[datetime | None] = mapped_column()
+    withdrawn_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    withdrawal_reason: Mapped[str | None] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
     version: Mapped[int] = mapped_column(Integer, default=1)
@@ -143,6 +193,13 @@ class Commitment(Base):
             "account_ref_masked IS NULL OR account_ref_masked ~ '^[A-Za-z0-9]{1,4}$'",
             name="account_ref_masked",
         ),
+        CheckConstraint(
+            f"withdrawal_reason IS NULL OR {check_in('withdrawal_reason', WithdrawalReason)}",
+            name="withdrawal_reason",
+        ),
+        CheckConstraint(
+            "(withdrawn_at IS NULL) = (withdrawal_reason IS NULL)", name="withdrawal_consistency"
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
@@ -153,6 +210,11 @@ class Commitment(Base):
     account_ref_masked: Mapped[str | None] = mapped_column(String(4))
     status: Mapped[str] = mapped_column(String(16), default=CommitmentStatus.OPEN.value)
     to_be_repaid_before_completion: Mapped[bool | None] = mapped_column(Boolean)
+    # Withdrawal: the item should never have existed. Irreversible; the row is frozen by a
+    # database trigger once withdrawn. withdrawn_by is convenience only (audit is authoritative).
+    withdrawn_at: Mapped[datetime | None] = mapped_column()
+    withdrawn_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    withdrawal_reason: Mapped[str | None] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
     version: Mapped[int] = mapped_column(Integer, default=1)
@@ -202,6 +264,13 @@ class ExpenditureItem(Base):
         _case_fk("fk_expenditure_items_case"),
         CheckConstraint(check_in("category", ExpenditureCategory), name="category"),
         CheckConstraint(check_in("scope", ExpenditureScope), name="scope"),
+        CheckConstraint(
+            f"withdrawal_reason IS NULL OR {check_in('withdrawal_reason', WithdrawalReason)}",
+            name="withdrawal_reason",
+        ),
+        CheckConstraint(
+            "(withdrawn_at IS NULL) = (withdrawal_reason IS NULL)", name="withdrawal_consistency"
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
@@ -210,6 +279,11 @@ class ExpenditureItem(Base):
     category: Mapped[str] = mapped_column(String(32))
     scope: Mapped[str] = mapped_column(String(16))
     description: Mapped[str | None] = mapped_column(String(200))
+    # Withdrawal: the item should never have existed. Irreversible; the row is frozen by a
+    # database trigger once withdrawn. withdrawn_by is convenience only (audit is authoritative).
+    withdrawn_at: Mapped[datetime | None] = mapped_column()
+    withdrawn_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    withdrawal_reason: Mapped[str | None] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
     version: Mapped[int] = mapped_column(Integer, default=1)
@@ -281,6 +355,7 @@ VALUE_CHECKS: dict[str, str] = {
     "period": "period_end IS NULL OR period_start IS NULL OR period_end >= period_start",
     "tax_year": "tax_year IS NULL OR tax_year ~ '^[0-9]{4}-[0-9]{2}$'",
     "retirement": "(retired_at IS NULL) = (retired_reason IS NULL)",
+    "qualifier": "qualifier_required = (qualifier IS NOT NULL)",
 }
 
 
@@ -310,16 +385,28 @@ class FinancialObservation(Base):
             ["expenditure_items.tenant_id", "expenditure_items.case_id", "expenditure_items.id"],
             name="fk_financial_observations_expenditure_item",
         ),
-        # The measure fixes the subject, value type and temporal kind.
+        # The measure fixes the subject, value type, temporal kind and whether a qualifier
+        # is required.
         ForeignKeyConstraint(
-            ["measure", "subject_kind", "value_type", "temporal_kind"],
+            ["measure", "subject_kind", "value_type", "temporal_kind", "qualifier_required"],
             [
                 "measure_definitions.code",
                 "measure_definitions.subject_kind",
                 "measure_definitions.value_type",
                 "measure_definitions.temporal_kind",
+                "measure_definitions.qualifier_required",
             ],
             name="fk_financial_observations_measure",
+        ),
+        # A qualifier, when present, must be one listed for the measure.
+        ForeignKeyConstraint(
+            ["measure", "subject_kind", "qualifier"],
+            [
+                "measure_qualifiers.measure_code",
+                "measure_qualifiers.subject_kind",
+                "measure_qualifiers.qualifier",
+            ],
+            name="fk_financial_observations_qualifier",
         ),
         ForeignKeyConstraint(
             ["tenant_id", "case_id", "supersedes_observation_id"],
@@ -329,6 +416,27 @@ class FinancialObservation(Base):
                 "financial_observations.id",
             ],
             name="fk_financial_observations_supersedes",
+        ),
+        # Current-value rule: at most one active declared/broker value per key. NULLs are
+        # treated as equal, so "no period" collides with "no period".
+        Index(
+            "uq_financial_observations_current_value",
+            "income_source_id",
+            "commitment_id",
+            "expenditure_item_id",
+            "measure",
+            "qualifier",
+            "source_kind",
+            "frequency",
+            "period_start",
+            "period_end",
+            "tax_year",
+            "as_of_date",
+            unique=True,
+            postgresql_nulls_not_distinct=True,
+            postgresql_where=text(
+                "retired_at IS NULL AND source_kind IN ('declared', 'broker_entry')"
+            ),
         ),
         # A value can be corrected once: at most one observation supersedes any other.
         Index(
@@ -359,6 +467,8 @@ class FinancialObservation(Base):
         String(16), Computed(SUBJECT_KIND_EXPRESSION, persisted=True)
     )
     measure: Mapped[str] = mapped_column(String(48))
+    qualifier: Mapped[str | None] = mapped_column(String(32))
+    qualifier_required: Mapped[bool] = mapped_column(Boolean)
     value_type: Mapped[str] = mapped_column(String(16))
     temporal_kind: Mapped[str] = mapped_column(String(12))
     money_minor: Mapped[int | None] = mapped_column(BigInteger)

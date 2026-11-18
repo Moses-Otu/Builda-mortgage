@@ -1092,6 +1092,29 @@
           "version": {
             "title": "Version",
             "type": "integer"
+          },
+          "withdrawal_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WithdrawalReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "withdrawn_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set if the item was withdrawn (entered in error)",
+            "title": "Withdrawn At"
           }
         },
         "required": [
@@ -1455,6 +1478,29 @@
           "version": {
             "title": "Version",
             "type": "integer"
+          },
+          "withdrawal_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WithdrawalReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "withdrawn_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set if the item was withdrawn (entered in error)",
+            "title": "Withdrawn At"
           }
         },
         "required": [
@@ -1898,6 +1944,29 @@
           "version": {
             "title": "Version",
             "type": "integer"
+          },
+          "withdrawal_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WithdrawalReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "withdrawn_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set if the item was withdrawn (entered in error)",
+            "title": "Withdrawn At"
           }
         },
         "required": [
@@ -2125,14 +2194,39 @@
         "type": "object"
       },
       "MeasureOut": {
+        "description": "A measure's meaning never changes; deprecation only stops new values.",
         "properties": {
           "code": {
             "title": "Code",
             "type": "string"
           },
+          "deprecated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deprecated At"
+          },
           "description": {
             "title": "Description",
             "type": "string"
+          },
+          "qualifier_required": {
+            "title": "Qualifier Required",
+            "type": "boolean"
+          },
+          "qualifiers": {
+            "description": "Allowed qualifiers. A single label, not an exhaustive classification.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Qualifiers",
+            "type": "array"
           },
           "subject_kind": {
             "$ref": "#/components/schemas/SubjectKind"
@@ -2149,7 +2243,10 @@
           "subject_kind",
           "value_type",
           "temporal_kind",
-          "description"
+          "description",
+          "qualifier_required",
+          "qualifiers",
+          "deprecated_at"
         ],
         "title": "MeasureOut",
         "type": "object"
@@ -2470,6 +2567,19 @@
             ],
             "title": "Period Start"
           },
+          "qualifier": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required for allowance and bonus (see GET /api/v1/financial/measures)",
+            "title": "Qualifier"
+          },
           "source_kind": {
             "default": "declared",
             "enum": [
@@ -2644,6 +2754,17 @@
             ],
             "title": "Period Start"
           },
+          "qualifier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qualifier"
+          },
           "recorded_at": {
             "format": "date-time",
             "title": "Recorded At",
@@ -2688,6 +2809,19 @@
           },
           "subject_kind": {
             "$ref": "#/components/schemas/SubjectKind"
+          },
+          "superseded_by_observation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The correction that replaced this value, if any",
+            "title": "Superseded By Observation Id"
           },
           "supersedes_observation_id": {
             "anyOf": [
@@ -2753,6 +2887,7 @@
           "commitment_id",
           "expenditure_item_id",
           "measure",
+          "qualifier",
           "value",
           "frequency",
           "period_start",
@@ -2929,7 +3064,8 @@
       "RetiredReason": {
         "enum": [
           "superseded",
-          "entered_in_error"
+          "entered_in_error",
+          "item_withdrawn"
         ],
         "title": "RetiredReason",
         "type": "string"
@@ -3059,6 +3195,29 @@
         ],
         "title": "ValueType",
         "type": "string"
+      },
+      "WithdrawalReason": {
+        "description": "Why an item should never have existed. Ending (a settled loan, a past job) is not\nwithdrawal: those stay true records.",
+        "enum": [
+          "entered_in_error",
+          "duplicate"
+        ],
+        "title": "WithdrawalReason",
+        "type": "string"
+      },
+      "WithdrawalRequest": {
+        "additionalProperties": false,
+        "description": "Withdraw an item that should never have existed. Irreversible: to correct a\nwithdrawal, create a new item. Its active values are retired with it.",
+        "properties": {
+          "reason": {
+            "$ref": "#/components/schemas/WithdrawalReason"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "WithdrawalRequest",
+        "type": "object"
       }
     },
     "securitySchemes": {
@@ -3993,6 +4152,18 @@
             }
           },
           {
+            "description": "Also list items withdrawn as entered in error",
+            "in": "query",
+            "name": "include_withdrawn",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also list items withdrawn as entered in error",
+              "title": "Include Withdrawn",
+              "type": "boolean"
+            }
+          },
+          {
             "description": "The firm this request acts within",
             "in": "header",
             "name": "X-Tenant-ID",
@@ -4208,6 +4379,105 @@
         ]
       }
     },
+    "/api/v1/cases/{case_id}/financial/commitments/{commitment_id}/withdrawal": {
+      "post": {
+        "description": "Marks the item as never having been true and retires its active values, atomically. Nothing is deleted. To correct a withdrawal, create a new item.",
+        "operationId": "withdraw_commitment_api_v1_cases__case_id__financial_commitments__commitment_id__withdrawal_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "commitment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Commitment Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Current ETag of the resource, e.g. \"3\"",
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Current ETag of the resource, e.g. \"3\"",
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WithdrawalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitmentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Withdraw a commitment entered in error (irreversible)",
+        "tags": [
+          "financial"
+        ]
+      }
+    },
     "/api/v1/cases/{case_id}/financial/expenditure": {
       "get": {
         "operationId": "list_expenditure_api_v1_cases__case_id__financial_expenditure_get",
@@ -4220,6 +4490,18 @@
               "format": "uuid",
               "title": "Case Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Also list items withdrawn as entered in error",
+            "in": "query",
+            "name": "include_withdrawn",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also list items withdrawn as entered in error",
+              "title": "Include Withdrawn",
+              "type": "boolean"
             }
           },
           {
@@ -4438,6 +4720,105 @@
         ]
       }
     },
+    "/api/v1/cases/{case_id}/financial/expenditure/{expenditure_item_id}/withdrawal": {
+      "post": {
+        "description": "Marks the item as never having been true and retires its active values, atomically. Nothing is deleted. To correct a withdrawal, create a new item.",
+        "operationId": "withdraw_expenditure_api_v1_cases__case_id__financial_expenditure__expenditure_item_id__withdrawal_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "expenditure_item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Expenditure Item Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Current ETag of the resource, e.g. \"3\"",
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Current ETag of the resource, e.g. \"3\"",
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WithdrawalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenditureOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Withdraw an expenditure item entered in error (irreversible)",
+        "tags": [
+          "financial"
+        ]
+      }
+    },
     "/api/v1/cases/{case_id}/financial/income-sources": {
       "get": {
         "operationId": "list_income_sources_api_v1_cases__case_id__financial_income_sources_get",
@@ -4450,6 +4831,18 @@
               "format": "uuid",
               "title": "Case Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Also list items withdrawn as entered in error",
+            "in": "query",
+            "name": "include_withdrawn",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also list items withdrawn as entered in error",
+              "title": "Include Withdrawn",
+              "type": "boolean"
             }
           },
           {
@@ -4663,6 +5056,105 @@
           }
         ],
         "summary": "Update an income source",
+        "tags": [
+          "financial"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/financial/income-sources/{income_source_id}/withdrawal": {
+      "post": {
+        "description": "Marks the item as never having been true and retires its active values, atomically. Nothing is deleted. To correct a withdrawal, create a new item.",
+        "operationId": "withdraw_income_source_api_v1_cases__case_id__financial_income_sources__income_source_id__withdrawal_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "income_source_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Income Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Current ETag of the resource, e.g. \"3\"",
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Current ETag of the resource, e.g. \"3\"",
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WithdrawalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncomeSourceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Withdraw an income source entered in error (irreversible)",
         "tags": [
           "financial"
         ]
@@ -5005,6 +5497,18 @@
       "get": {
         "operationId": "list_measures_api_v1_financial_measures_get",
         "parameters": [
+          {
+            "description": "Also list deprecated measures (still valid for old values)",
+            "in": "query",
+            "name": "include_deprecated",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also list deprecated measures (still valid for old values)",
+              "title": "Include Deprecated",
+              "type": "boolean"
+            }
+          },
           {
             "description": "The firm this request acts within",
             "in": "header",

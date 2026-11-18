@@ -16,8 +16,10 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from tests.conftest import TEST_DB, db_url
 from tests.isolation.schema_policy import (
+    COLUMN_INSERTS,
     COLUMN_UPDATES,
     EXEMPT,
+    EXPECTED_TRIGGERS,
     EXPECTED_USERS_COLUMNS,
     REFERENCE,
     SPECIAL_POLICY,
@@ -273,3 +275,40 @@ async def test_constraint_names_follow_the_naming_convention(catalog: asyncpg.Co
         table, name = row["tbl"], row["conname"]
         assert name.startswith(f"ck_{table}_"), f"{name} on {table}"
         assert f"ck_{table}_ck_" not in name, f"doubled prefix: {name}"
+
+
+async def test_column_level_inserts_are_exactly_as_expected(catalog: asyncpg.Connection) -> None:
+    for table, columns in COLUMN_INSERTS.items():
+        assert "INSERT" not in await _app_privileges(catalog, table), table
+        rows = await catalog.fetch(
+            "SELECT column_name FROM information_schema.column_privileges "
+            "WHERE grantee = $1 AND table_name = $2 AND privilege_type = 'INSERT'",
+            APP_ROLE,
+            table,
+        )
+        assert {r["column_name"] for r in rows} == set(columns), table
+
+
+async def test_integrity_triggers_exist_and_are_enabled(catalog: asyncpg.Connection) -> None:
+    rows = await catalog.fetch(
+        "SELECT tgname, tgrelid::regclass::text AS tbl, tgenabled::text AS enabled "
+        "FROM pg_trigger WHERE NOT tgisinternal"
+    )
+    found = {r["tgname"]: (r["tbl"], r["enabled"]) for r in rows}
+    for name, table in EXPECTED_TRIGGERS.items():
+        assert name in found, f"missing trigger {name}"
+        assert found[name] == (table, "O"), f"{name}: {found[name]}"
+
+
+async def test_no_definer_function_writes_audit_details(catalog: asyncpg.Connection) -> None:
+    offenders = await catalog.fetch(
+        "SELECT proname FROM pg_proc WHERE pronamespace = 'public'::regnamespace "
+        "AND prosecdef AND prosrc ILIKE '%audit_event_details%'"
+    )
+    assert offenders == []
+
+
+async def test_runtime_role_cannot_disable_triggers(catalog: asyncpg.Connection) -> None:
+    assert not await catalog.fetchval(
+        "SELECT has_parameter_privilege($1, 'session_replication_role', 'SET')", APP_ROLE
+    )
