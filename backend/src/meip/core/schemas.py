@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field, StringConstraints
+from pydantic import BaseModel, ConfigDict, StringConstraints
 
 
 class InputModel(BaseModel):
@@ -27,4 +27,3 @@ class Page[T](BaseModel):
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=100)]
 ShortText = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 Reason = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
-Version = Annotated[int, Field(ge=1, description="Current version, for optimistic concurrency")]

@@ -30,10 +30,32 @@ class Policy:
 TENANT_SCOPED: dict[str, frozenset[str]] = {
     "memberships": frozenset({"SELECT", "INSERT", "UPDATE"}),
     "cases": frozenset({"SELECT", "INSERT", "UPDATE"}),
-    "applicants": frozenset({"SELECT", "INSERT", "UPDATE", "DELETE"}),
+    # No DELETE: applicants are removed by status, never deleted by the application.
+    "applicants": frozenset({"SELECT", "INSERT", "UPDATE"}),
     "audit_events": frozenset({"SELECT", "INSERT"}),
     # Erasable audit values: append-only for the runtime role (retention deletes as owner).
     "audit_event_details": frozenset({"SELECT", "INSERT"}),
+    "income_sources": frozenset({"SELECT", "INSERT", "UPDATE"}),
+    "commitments": frozenset({"SELECT", "INSERT", "UPDATE"}),
+    "expenditure_items": frozenset({"SELECT", "INSERT", "UPDATE"}),
+    # Party links are replaced as a set when the broker corrects who is liable.
+    "commitment_parties": frozenset({"SELECT", "INSERT", "DELETE"}),
+    "expenditure_parties": frozenset({"SELECT", "INSERT", "DELETE"}),
+    # Immutable values: INSERT only, plus column-level UPDATE of retirement (see below).
+    "financial_observations": frozenset({"SELECT", "INSERT"}),
+    # One row per firm, created at onboarding by the owner role.
+    "firm_settings": frozenset({"SELECT", "UPDATE"}),
+}
+
+# table -> columns the runtime role may UPDATE through column-level grants only.
+COLUMN_UPDATES: dict[str, frozenset[str]] = {
+    "financial_observations": frozenset({"retired_at", "retired_reason"}),
+}
+
+# Platform reference data: no tenant_id, no RLS, read-only for the runtime role, changed
+# only by migrations.
+REFERENCE: dict[str, str] = {
+    "measure_definitions": "Value-type definition of each financial measure.",
 }
 
 # table -> (policy, runtime privileges)

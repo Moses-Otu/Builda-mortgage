@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from meip import __version__
 from meip.api.errors import install_error_handlers
 from meip.api.middleware import RequestContextMiddleware
-from meip.api.routers import applicants, cases, health, me, members
+from meip.api.routers import applicants, cases, financial, firm, health, me, members
 from meip.auth.factory import build_auth_provider
 from meip.auth.provider import AuthProvider
 from meip.core.config import Settings, get_settings
@@ -64,6 +64,7 @@ def create_app(
 
     app.add_middleware(RequestContextMiddleware)
     install_error_handlers(app)
-    for module in (health, me, members, cases, applicants):
+    for module in (health, me, firm, members, cases, applicants, financial):
         app.include_router(module.router)
+    app.include_router(financial.reference)
     return app

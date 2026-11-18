@@ -31,9 +31,10 @@ async def test_applicant_cannot_reference_another_firms_case(
     case_b = await firm_b.create_case()
     with pytest.raises(asyncpg.ForeignKeyViolationError, match="fk_applicants_case"):
         await owner_conn.execute(
-            "INSERT INTO applicants (id, tenant_id, case_id, position, first_name, last_name,"
+            "INSERT INTO applicants (id, tenant_id, case_id, display_order, party_role,"
+            " is_primary, status, first_name, last_name,"
             " created_at, updated_at, version)"
-            " VALUES ($1, $2, $3, 1, 'X', 'Y', now(), now(), 1)",
+            " VALUES ($1, $2, $3, 1, 'borrower', false, 'active', 'X', 'Y', now(), now(), 1)",
             uuid.uuid4(),
             firm_a.tenant_id,
             uuid.UUID(case_b["id"]),

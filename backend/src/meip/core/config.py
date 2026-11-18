@@ -69,8 +69,6 @@ class Settings(BaseSettings):
     dev_auth_audience: str = "meip-api"
     dev_auth_key_path: Path = Path(".dev/dev_auth_key.pem")
 
-    max_applicants_per_case: int = Field(default=4, ge=1, le=8)
-
     @model_validator(mode="after")
     def _validate_auth(self) -> Settings:
         if self.auth_mode is AuthMode.DEV and self.env not in DEV_AUTH_ENVIRONMENTS:

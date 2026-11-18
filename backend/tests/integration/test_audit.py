@@ -13,18 +13,34 @@ from fastapi import FastAPI
 
 from tests.conftest import TEST_DB, CountAudit, Firm, db_url
 
+Route = tuple[str, str]
+Action = Callable[[Firm, dict[str, Any]], Awaitable[httpx.Response]]
+
+_C = "/api/v1/cases/{case_id}"
+_F = _C + "/financial"
+
 # Every mutating route, mapped to the action it must record. If a new mutating route is
-# added without a test here, test_every_mutating_route_is_covered fails.
-AUDITED_ROUTES = {
+# added without an entry here, test_every_mutating_route_is_covered fails.
+AUDITED_ROUTES: dict[Route, str] = {
     ("POST", "/api/v1/members"): "member.added",
     ("PATCH", "/api/v1/members/{membership_id}"): "member.updated",
     ("POST", "/api/v1/me/invitations/{membership_id}/accept"): "member.invitation_accepted",
+    ("PATCH", "/api/v1/firm/settings"): "firm_settings.updated",
     ("POST", "/api/v1/cases"): "case.created",
-    ("PATCH", "/api/v1/cases/{case_id}"): "case.updated",
-    ("POST", "/api/v1/cases/{case_id}/transitions"): "case.status_changed",
-    ("POST", "/api/v1/cases/{case_id}/applicants"): "applicant.added",
-    ("PATCH", "/api/v1/cases/{case_id}/applicants/{applicant_id}"): "applicant.updated",
-    ("DELETE", "/api/v1/cases/{case_id}/applicants/{applicant_id}"): "applicant.removed",
+    ("PATCH", _C): "case.updated",
+    ("POST", _C + "/transitions"): "case.status_changed",
+    ("POST", _C + "/applicants"): "applicant.added",
+    ("PATCH", _C + "/applicants/{applicant_id}"): "applicant.updated",
+    ("POST", _C + "/applicants/{applicant_id}/removal"): "applicant.removed",
+    ("POST", _C + "/applicants/{applicant_id}/reinstatement"): "applicant.reinstated",
+    ("POST", _F + "/income-sources"): "financial_item.added",
+    ("PATCH", _F + "/income-sources/{income_source_id}"): "financial_item.updated",
+    ("POST", _F + "/commitments"): "financial_item.added",
+    ("PATCH", _F + "/commitments/{commitment_id}"): "financial_item.updated",
+    ("POST", _F + "/expenditure"): "financial_item.added",
+    ("PATCH", _F + "/expenditure/{expenditure_item_id}"): "financial_item.updated",
+    ("POST", _F + "/observations"): "observation.recorded",
+    ("POST", _F + "/observations/{observation_id}/retirement"): "observation.retired",
 }
 
 
@@ -38,76 +54,178 @@ def test_every_mutating_route_is_covered(app: FastAPI) -> None:
     assert mutating == set(AUDITED_ROUTES)
 
 
-Action = Callable[[Firm, dict[str, Any]], Awaitable[httpx.Response]]
-
-
 async def _setup(firm: Firm) -> dict[str, Any]:
     case = await firm.create_case()
-    applicant = await firm.add_applicant(case["id"])
+    cid = case["id"]
+    applicant = await firm.add_applicant(cid)
+    second = await firm.add_applicant(cid)
+    gone = await firm.add_applicant(cid)
+    removed = await firm.request(
+        "POST",
+        f"/api/v1/cases/{cid}/applicants/{gone['id']}/removal",
+        if_match=1,
+        json={"removal_reason": "added_in_error"},
+    )
+    base = f"/api/v1/cases/{cid}/financial"
+    source = await firm.request(
+        "POST",
+        f"{base}/income-sources",
+        json={"applicant_id": applicant["id"], "kind": "employment"},
+    )
+    commitment = await firm.request(
+        "POST",
+        f"{base}/commitments",
+        json={"kind": "credit_card", "parties": [{"applicant_id": applicant["id"]}]},
+    )
+    spend = await firm.request(
+        "POST", f"{base}/expenditure", json={"category": "utilities", "scope": "household"}
+    )
+    observation = await firm.request(
+        "POST",
+        f"{base}/observations",
+        json={
+            "income_source_id": source.json()["id"],
+            "measure": "basic_pay",
+            "value": {"type": "money", "amount_minor": 300_000},
+            "frequency": "monthly",
+        },
+    )
     subject = await firm.add_member("adviser")
     invitee = await firm.add_member("read_only", accept=False)
     return {
         "case": case,
+        "base": base,
         "applicant": applicant,
+        "second": second,
+        "removed": removed.json(),
+        "source": source.json(),
+        "commitment": commitment.json(),
+        "spend": spend.json(),
+        "observation": observation.json(),
         "member_id": firm.members[subject],
         "invitee": invitee,
         "invitation_id": firm.members[invitee],
     }
 
 
-ACTIONS: dict[str, Action] = {
-    "member.added": lambda f, s: f.request(
+def _case(s: dict[str, Any]) -> str:
+    return f"/api/v1/cases/{s['case']['id']}"
+
+
+ACTIONS: dict[Route, Action] = {
+    ("POST", "/api/v1/members"): lambda f, s: f.request(
         "POST", "/api/v1/members", json={"idp_subject": "new-user", "role": "read_only"}
     ),
-    "member.updated": lambda f, s: f.request(
-        "PATCH", f"/api/v1/members/{s['member_id']}", json={"version": 2, "role": "read_only"}
+    ("PATCH", "/api/v1/members/{membership_id}"): lambda f, s: f.request(
+        "PATCH", f"/api/v1/members/{s['member_id']}", if_match=2, json={"role": "read_only"}
     ),
-    "member.invitation_accepted": lambda f, s: f.accept(s["invitee"], s["invitation_id"]),
-    "case.created": lambda f, s: f.request("POST", "/api/v1/cases", json={"purpose": "purchase"}),
-    "case.updated": lambda f, s: f.request(
-        "PATCH", f"/api/v1/cases/{s['case']['id']}", json={"version": 1, "term_months": 200}
+    ("POST", "/api/v1/me/invitations/{membership_id}/accept"): lambda f, s: f.accept(
+        s["invitee"], s["invitation_id"]
     ),
-    "case.status_changed": lambda f, s: f.request(
-        "POST",
-        f"/api/v1/cases/{s['case']['id']}/transitions",
-        json={"to_status": "collecting_evidence", "version": 1},
+    ("PATCH", "/api/v1/firm/settings"): lambda f, s: f.request(
+        "PATCH", "/api/v1/firm/settings", if_match=1, json={"max_applicants": 6}
     ),
-    "applicant.added": lambda f, s: f.request(
-        "POST",
-        f"/api/v1/cases/{s['case']['id']}/applicants",
-        json={"first_name": "B", "last_name": "C"},
+    ("POST", "/api/v1/cases"): lambda f, s: f.request(
+        "POST", "/api/v1/cases", json={"purpose": "purchase"}
     ),
-    "applicant.updated": lambda f, s: f.request(
+    ("PATCH", _C): lambda f, s: f.request("PATCH", _case(s), if_match=1, json={"term_months": 200}),
+    ("POST", _C + "/transitions"): lambda f, s: f.request(
+        "POST", f"{_case(s)}/transitions", if_match=1, json={"to_status": "collecting_evidence"}
+    ),
+    ("POST", _C + "/applicants"): lambda f, s: f.request(
+        "POST", f"{_case(s)}/applicants", json={"first_name": "B", "last_name": "C"}
+    ),
+    ("PATCH", _C + "/applicants/{applicant_id}"): lambda f, s: f.request(
         "PATCH",
-        f"/api/v1/cases/{s['case']['id']}/applicants/{s['applicant']['id']}",
-        json={"version": 1, "first_name": "Changed"},
+        f"{_case(s)}/applicants/{s['applicant']['id']}",
+        if_match=1,
+        json={"first_name": "Changed"},
     ),
-    "applicant.removed": lambda f, s: f.request(
-        "DELETE",
-        f"/api/v1/cases/{s['case']['id']}/applicants/{s['applicant']['id']}",
-        params={"version": 1},
+    ("POST", _C + "/applicants/{applicant_id}/removal"): lambda f, s: f.request(
+        "POST",
+        f"{_case(s)}/applicants/{s['second']['id']}/removal",
+        if_match=1,
+        json={"removal_reason": "replaced"},
+    ),
+    ("POST", _C + "/applicants/{applicant_id}/reinstatement"): lambda f, s: f.request(
+        "POST",
+        f"{_case(s)}/applicants/{s['removed']['id']}/reinstatement",
+        if_match=s["removed"]["version"],
+        json={"note": "Back"},
+    ),
+    ("POST", _F + "/income-sources"): lambda f, s: f.request(
+        "POST",
+        f"{s['base']}/income-sources",
+        json={"applicant_id": s["second"]["id"], "kind": "pension"},
+    ),
+    ("PATCH", _F + "/income-sources/{income_source_id}"): lambda f, s: f.request(
+        "PATCH",
+        f"{s['base']}/income-sources/{s['source']['id']}",
+        if_match=1,
+        json={"name": "Acme Ltd"},
+    ),
+    ("POST", _F + "/commitments"): lambda f, s: f.request(
+        "POST",
+        f"{s['base']}/commitments",
+        json={"kind": "car_finance", "parties": [{"applicant_id": s["second"]["id"]}]},
+    ),
+    ("PATCH", _F + "/commitments/{commitment_id}"): lambda f, s: f.request(
+        "PATCH",
+        f"{s['base']}/commitments/{s['commitment']['id']}",
+        if_match=1,
+        json={"status": "settled"},
+    ),
+    ("POST", _F + "/expenditure"): lambda f, s: f.request(
+        "POST", f"{s['base']}/expenditure", json={"category": "transport", "scope": "household"}
+    ),
+    ("PATCH", _F + "/expenditure/{expenditure_item_id}"): lambda f, s: f.request(
+        "PATCH",
+        f"{s['base']}/expenditure/{s['spend']['id']}",
+        if_match=1,
+        json={"category": "insurance"},
+    ),
+    ("POST", _F + "/observations"): lambda f, s: f.request(
+        "POST",
+        f"{s['base']}/observations",
+        json={
+            "commitment_id": s["commitment"]["id"],
+            "measure": "monthly_payment",
+            "value": {"type": "money", "amount_minor": 12_000},
+            "frequency": "monthly",
+        },
+    ),
+    ("POST", _F + "/observations/{observation_id}/retirement"): lambda f, s: f.request(
+        "POST",
+        f"{s['base']}/observations/{s['observation']['id']}/retirement",
+        json={"reason": "entered_in_error"},
     ),
 }
 
 
-@pytest.mark.parametrize("action", sorted(set(AUDITED_ROUTES.values())))
+def test_every_audited_route_has_an_action() -> None:
+    assert set(ACTIONS) == set(AUDITED_ROUTES)
+
+
+@pytest.mark.parametrize("route", sorted(AUDITED_ROUTES), ids=lambda r: f"{r[0]} {r[1]}")
 async def test_mutation_writes_exactly_one_event(
-    firm: Firm, audit_count: CountAudit, action: str
+    firm: Firm, audit_count: CountAudit, route: Route
 ) -> None:
     state = await _setup(firm)
     before = await audit_count(firm.tenant_id)
-    resp = await ACTIONS[action](firm, state)
+    resp = await ACTIONS[route](firm, state)
     assert resp.status_code in (200, 201, 204), resp.text
     assert await audit_count(firm.tenant_id) == before + 1
+    latest = (await _tenant_events(firm))[-1]
+    assert latest["action"] == AUDITED_ROUTES[route]
 
 
 async def test_failed_mutation_writes_no_event(firm: Firm, audit_count: CountAudit) -> None:
     case = await firm.create_case()
     before = await audit_count(firm.tenant_id)
     resp = await firm.request(
-        "PATCH", f"/api/v1/cases/{case['id']}", json={"version": 99, "term_months": 200}
+        "PATCH", f"/api/v1/cases/{case['id']}", if_match=99, json={"term_months": 200}
     )
-    assert resp.status_code == 409
+    assert resp.status_code == 412
     assert await audit_count(firm.tenant_id) == before
 
 
@@ -117,7 +235,8 @@ async def test_case_history_is_ordered_attributed_and_redacted(firm: Firm) -> No
     await firm.request(
         "PATCH",
         f"/api/v1/cases/{case['id']}/applicants/{applicant['id']}",
-        json={"version": 1, "first_name": "Different"},
+        if_match=1,
+        json={"first_name": "Different"},
         headers={"X-Request-ID": "trace-123"},
     )
     resp = await firm.request("GET", f"/api/v1/cases/{case['id']}/events")
@@ -141,14 +260,16 @@ async def test_close_reason_recorded(firm: Firm) -> None:
     await firm.request(
         "POST",
         f"/api/v1/cases/{case['id']}/transitions",
-        json={"to_status": "closed", "version": 1, "reason": "Client withdrew"},
+        if_match=1,
+        json={"to_status": "closed", "closure_reason": "not_proceeding", "note": "Client withdrew"},
     )
     events = (await firm.request("GET", f"/api/v1/cases/{case['id']}/events")).json()["items"]
     assert events[-1]["changes"] == {
         "status": {"from": "draft", "to": "closed"},
-        "reason": {"changed": True},
+        "closure_reason": {"from": None, "to": "not_proceeding"},
+        "note": {"changed": True},
     }
-    assert events[-1]["details"] == {"reason": "Client withdrew"}
+    assert events[-1]["details"] == {"note": "Client withdrew"}
 
 
 async def test_invitation_acceptance_is_attributed_to_the_invitee(firm: Firm) -> None:

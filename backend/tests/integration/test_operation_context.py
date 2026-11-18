@@ -48,7 +48,8 @@ async def test_system_actor_conditional_checks_use_its_capabilities(
             await cases.transition_case(
                 ctx,
                 uuid.UUID(case["id"]),
-                CaseTransition(to_status="closed", version=1, reason="x"),
+                CaseTransition(to_status="closed", closure_reason="not_proceeding"),
+                1,
             )
 
 

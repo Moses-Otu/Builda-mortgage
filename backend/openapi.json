@@ -3,6 +3,7 @@
     "schemas": {
       "ApplicantCreate": {
         "additionalProperties": false,
+        "description": "The first active borrower on a case becomes its primary applicant automatically.",
         "properties": {
           "date_of_birth": {
             "anyOf": [
@@ -15,36 +16,6 @@
               }
             ],
             "title": "Date Of Birth"
-          },
-          "declared_gross_annual_income": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Money"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "declared_monthly_commitments": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Money"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "employment_status": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/EmploymentStatus"
-              },
-              {
-                "type": "null"
-              }
-            ]
           },
           "first_name": {
             "maxLength": 100,
@@ -70,6 +41,21 @@
               }
             ],
             "title": "Middle Names"
+          },
+          "on_title": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "On Title"
+          },
+          "party_role": {
+            "$ref": "#/components/schemas/PartyRole",
+            "default": "borrower"
           }
         },
         "required": [
@@ -103,46 +89,25 @@
             ],
             "title": "Date Of Birth"
           },
-          "declared_gross_annual_income": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Money"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "As declared by the borrower. Not verified."
-          },
-          "declared_monthly_commitments": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Money"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "As declared by the borrower. Not verified."
-          },
-          "employment_status": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/EmploymentStatus"
-              },
-              {
-                "type": "null"
-              }
-            ]
+          "display_order": {
+            "description": "Presentation order among active applicants",
+            "title": "Display Order",
+            "type": "integer"
           },
           "first_name": {
             "title": "First Name",
             "type": "string"
           },
           "id": {
+            "description": "Stable for the life of the case; never reused",
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "is_primary": {
+            "description": "The case's primary (first-named) borrower",
+            "title": "Is Primary",
+            "type": "boolean"
           },
           "last_name": {
             "title": "Last Name",
@@ -159,10 +124,56 @@
             ],
             "title": "Middle Names"
           },
-          "position": {
-            "description": "1 = first applicant, 2 = second applicant, ...",
-            "title": "Position",
-            "type": "integer"
+          "on_title": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Will own the property. Null: not yet known.",
+            "title": "On Title"
+          },
+          "party_role": {
+            "$ref": "#/components/schemas/PartyRole"
+          },
+          "removal_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Removal Note"
+          },
+          "removal_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RemovalReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "removed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Removed At"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ApplicantStatus"
           },
           "updated_at": {
             "format": "date-time",
@@ -177,14 +188,18 @@
         "required": [
           "id",
           "case_id",
-          "position",
+          "display_order",
+          "party_role",
+          "on_title",
+          "is_primary",
+          "status",
+          "removed_at",
+          "removal_reason",
+          "removal_note",
           "first_name",
           "middle_names",
           "last_name",
           "date_of_birth",
-          "employment_status",
-          "declared_gross_annual_income",
-          "declared_monthly_commitments",
           "created_at",
           "updated_at",
           "version"
@@ -192,9 +207,76 @@
         "title": "ApplicantOut",
         "type": "object"
       },
+      "ApplicantReinstatement": {
+        "additionalProperties": false,
+        "description": "Return a removed applicant to the case. Send its ETag in ``If-Match``.",
+        "properties": {
+          "note": {
+            "description": "Why the applicant is being reinstated",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "ApplicantReinstatement",
+        "type": "object"
+      },
+      "ApplicantRemoval": {
+        "additionalProperties": false,
+        "description": "Remove an applicant from the case. Nothing is deleted; send its ETag in ``If-Match``.",
+        "properties": {
+          "new_primary_applicant_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required when removing the primary applicant while other active borrowers remain",
+            "title": "New Primary Applicant Id"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required when the reason is 'other'",
+            "title": "Note"
+          },
+          "removal_reason": {
+            "$ref": "#/components/schemas/RemovalReason"
+          }
+        },
+        "required": [
+          "removal_reason"
+        ],
+        "title": "ApplicantRemoval",
+        "type": "object"
+      },
+      "ApplicantStatus": {
+        "enum": [
+          "active",
+          "removed"
+        ],
+        "title": "ApplicantStatus",
+        "type": "string"
+      },
       "ApplicantUpdate": {
         "additionalProperties": false,
-        "description": "Partial update. Omitted fields are unchanged; explicit ``null`` clears a field.",
+        "description": "Partial update. Omitted fields are unchanged; explicit ``null`` clears a field.\n\nSend the applicant's current ETag in ``If-Match``. Setting ``is_primary: true`` moves the\nprimary flag to this applicant; it cannot be cleared directly.",
         "properties": {
           "date_of_birth": {
             "anyOf": [
@@ -208,36 +290,6 @@
             ],
             "title": "Date Of Birth"
           },
-          "declared_gross_annual_income": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Money"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "declared_monthly_commitments": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Money"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "employment_status": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/EmploymentStatus"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
           "first_name": {
             "anyOf": [
               {
@@ -250,6 +302,18 @@
               }
             ],
             "title": "First Name"
+          },
+          "is_primary": {
+            "anyOf": [
+              {
+                "const": true,
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Primary"
           },
           "last_name": {
             "anyOf": [
@@ -277,16 +341,28 @@
             ],
             "title": "Middle Names"
           },
-          "version": {
-            "description": "Current version, for optimistic concurrency",
-            "minimum": 1.0,
-            "title": "Version",
-            "type": "integer"
+          "on_title": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "On Title"
+          },
+          "party_role": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PartyRole"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
-        "required": [
-          "version"
-        ],
         "title": "ApplicantUpdate",
         "type": "object"
       },
@@ -469,6 +545,17 @@
               {
                 "type": "null"
               }
+            ],
+            "description": "Total borrowing sought. For a further advance: the total, not the increase."
+          },
+          "property_use": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PropertyUse"
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "property_value": {
@@ -487,9 +574,9 @@
           "term_months": {
             "anyOf": [
               {
-                "description": "Mortgage term in months",
-                "maximum": 480.0,
-                "minimum": 12.0,
+                "description": "Mortgage term in months (sanity range only)",
+                "maximum": 600.0,
+                "minimum": 1.0,
                 "type": "integer"
               },
               {
@@ -520,8 +607,30 @@
             "title": "Adviser Membership Id"
           },
           "applicant_count": {
+            "description": "Active applicants (removed ones excluded)",
             "title": "Applicant Count",
             "type": "integer"
+          },
+          "closure_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closure Note"
+          },
+          "closure_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClosureReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "created_at": {
             "format": "date-time",
@@ -538,6 +647,7 @@
                 "type": "null"
               }
             ],
+            "description": "Null when created by a non-user actor; see the audit history",
             "title": "Created By User Id"
           },
           "external_reference": {
@@ -560,6 +670,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/Money"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "property_use": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PropertyUse"
               },
               {
                 "type": "null"
@@ -606,18 +726,29 @@
           "version": {
             "title": "Version",
             "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/CaseWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
           }
         },
         "required": [
           "id",
           "purpose",
+          "property_use",
           "status",
+          "closure_reason",
+          "closure_note",
           "external_reference",
           "adviser_membership_id",
           "property_value",
           "loan_amount",
           "term_months",
           "applicant_count",
+          "warnings",
           "created_by_user_id",
           "created_at",
           "updated_at",
@@ -628,11 +759,13 @@
         "type": "object"
       },
       "CasePurpose": {
+        "description": "What the mortgage transaction is. Separate from how the property is used (D2).",
         "enum": [
           "purchase",
           "remortgage",
           "further_advance",
-          "product_transfer"
+          "product_transfer",
+          "porting"
         ],
         "title": "CasePurpose",
         "type": "string"
@@ -641,9 +774,8 @@
         "enum": [
           "draft",
           "collecting_evidence",
-          "processing",
           "in_review",
-          "approved",
+          "verified",
           "closed"
         ],
         "title": "CaseStatus",
@@ -651,8 +783,19 @@
       },
       "CaseTransition": {
         "additionalProperties": false,
+        "description": "Move a case through its lifecycle. Send the case's current ETag in ``If-Match``.\n\n* Closing requires ``closure_reason``; ``other`` also requires ``note``.\n* Reopening (from ``closed`` or ``verified``) requires ``note``.",
         "properties": {
-          "reason": {
+          "closure_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ClosureReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "note": {
             "anyOf": [
               {
                 "maxLength": 500,
@@ -663,29 +806,22 @@
                 "type": "null"
               }
             ],
-            "description": "Required when closing a case",
-            "title": "Reason"
+            "description": "Why; required when reopening",
+            "title": "Note"
           },
           "to_status": {
             "$ref": "#/components/schemas/CaseStatus"
-          },
-          "version": {
-            "description": "Current version, for optimistic concurrency",
-            "minimum": 1.0,
-            "title": "Version",
-            "type": "integer"
           }
         },
         "required": [
-          "to_status",
-          "version"
+          "to_status"
         ],
         "title": "CaseTransition",
         "type": "object"
       },
       "CaseUpdate": {
         "additionalProperties": false,
-        "description": "Partial update. Omitted fields are unchanged; explicit ``null`` clears a field.",
+        "description": "Partial update. Omitted fields are unchanged; explicit ``null`` clears a field.\n\nSend the case's current ETag in ``If-Match``.",
         "properties": {
           "adviser_membership_id": {
             "anyOf": [
@@ -722,6 +858,16 @@
               }
             ]
           },
+          "property_use": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PropertyUse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "property_value": {
             "anyOf": [
               {
@@ -745,9 +891,9 @@
           "term_months": {
             "anyOf": [
               {
-                "description": "Mortgage term in months",
-                "maximum": 480.0,
-                "minimum": 12.0,
+                "description": "Mortgage term in months (sanity range only)",
+                "maximum": 600.0,
+                "minimum": 1.0,
                 "type": "integer"
               },
               {
@@ -755,31 +901,773 @@
               }
             ],
             "title": "Term Months"
+          }
+        },
+        "title": "CaseUpdate",
+        "type": "object"
+      },
+      "CaseWarning": {
+        "description": "A data check that is advisory, not enforced (D7). Lender policy varies.",
+        "properties": {
+          "code": {
+            "enum": [
+              "loan_exceeds_property_value",
+              "term_outside_typical_range"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "CaseWarning",
+        "type": "object"
+      },
+      "ClosureReason": {
+        "enum": [
+          "completed",
+          "not_proceeding",
+          "declined_by_lender",
+          "withdrawn_by_firm",
+          "duplicate",
+          "other"
+        ],
+        "title": "ClosureReason",
+        "type": "string"
+      },
+      "CommitmentCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "account_ref_masked": {
+            "anyOf": [
+              {
+                "description": "Last 4 chars only",
+                "pattern": "^[A-Za-z0-9]{1,4}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Ref Masked"
+          },
+          "creditor": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Creditor"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CommitmentKind"
+          },
+          "parties": {
+            "items": {
+              "$ref": "#/components/schemas/CommitmentParty-Input"
+            },
+            "minItems": 1,
+            "title": "Parties",
+            "type": "array"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CommitmentStatus",
+            "default": "open"
+          },
+          "to_be_repaid_before_completion": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Be Repaid Before Completion"
+          }
+        },
+        "required": [
+          "kind",
+          "parties"
+        ],
+        "title": "CommitmentCreate",
+        "type": "object"
+      },
+      "CommitmentKind": {
+        "enum": [
+          "credit_card",
+          "personal_loan",
+          "car_finance",
+          "student_loan",
+          "mortgage",
+          "secured_loan",
+          "overdraft",
+          "buy_now_pay_later",
+          "maintenance_payable",
+          "other"
+        ],
+        "title": "CommitmentKind",
+        "type": "string"
+      },
+      "CommitmentOut": {
+        "properties": {
+          "account_ref_masked": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Ref Masked"
+          },
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "creditor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Creditor"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/CommitmentKind"
+          },
+          "parties": {
+            "description": "Who is legally liable",
+            "items": {
+              "$ref": "#/components/schemas/CommitmentParty-Output"
+            },
+            "title": "Parties",
+            "type": "array"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CommitmentStatus"
+          },
+          "to_be_repaid_before_completion": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Be Repaid Before Completion"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
           },
           "version": {
-            "description": "Current version, for optimistic concurrency",
-            "minimum": 1.0,
             "title": "Version",
             "type": "integer"
           }
         },
         "required": [
+          "id",
+          "case_id",
+          "kind",
+          "creditor",
+          "account_ref_masked",
+          "status",
+          "to_be_repaid_before_completion",
+          "parties",
+          "created_at",
+          "updated_at",
           "version"
         ],
-        "title": "CaseUpdate",
+        "title": "CommitmentOut",
         "type": "object"
       },
-      "EmploymentStatus": {
+      "CommitmentParty-Input": {
+        "properties": {
+          "applicant_id": {
+            "format": "uuid",
+            "title": "Applicant Id",
+            "type": "string"
+          },
+          "liability_role": {
+            "$ref": "#/components/schemas/LiabilityRole",
+            "default": "principal"
+          },
+          "responsibility_share": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who actually pays (an allocation, not liability)",
+            "title": "Responsibility Share"
+          },
+          "share_basis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShareBasis"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "applicant_id"
+        ],
+        "title": "CommitmentParty",
+        "type": "object"
+      },
+      "CommitmentParty-Output": {
+        "properties": {
+          "applicant_id": {
+            "format": "uuid",
+            "title": "Applicant Id",
+            "type": "string"
+          },
+          "liability_role": {
+            "$ref": "#/components/schemas/LiabilityRole",
+            "default": "principal"
+          },
+          "responsibility_share": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Who actually pays (an allocation, not liability)",
+            "title": "Responsibility Share"
+          },
+          "share_basis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShareBasis"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "applicant_id"
+        ],
+        "title": "CommitmentParty",
+        "type": "object"
+      },
+      "CommitmentStatus": {
         "enum": [
-          "employed",
-          "self_employed",
-          "company_director",
-          "contractor",
-          "retired",
-          "not_employed",
+          "open",
+          "settled"
+        ],
+        "title": "CommitmentStatus",
+        "type": "string"
+      },
+      "CommitmentUpdate": {
+        "additionalProperties": false,
+        "description": "Partial update; send the item's ETag in ``If-Match``. ``parties`` replaces the list.",
+        "properties": {
+          "account_ref_masked": {
+            "anyOf": [
+              {
+                "description": "Last 4 chars only",
+                "pattern": "^[A-Za-z0-9]{1,4}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Ref Masked"
+          },
+          "creditor": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Creditor"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CommitmentKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "parties": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CommitmentParty-Input"
+                },
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parties"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CommitmentStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "to_be_repaid_before_completion": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Be Repaid Before Completion"
+          }
+        },
+        "title": "CommitmentUpdate",
+        "type": "object"
+      },
+      "CountValue": {
+        "properties": {
+          "count": {
+            "minimum": 0.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "type": {
+            "const": "count",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "count"
+        ],
+        "title": "CountValue",
+        "type": "object"
+      },
+      "DateValue": {
+        "properties": {
+          "date": {
+            "format": "date",
+            "title": "Date",
+            "type": "string"
+          },
+          "type": {
+            "const": "date",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "date"
+        ],
+        "title": "DateValue",
+        "type": "object"
+      },
+      "DurationValue": {
+        "properties": {
+          "months": {
+            "minimum": 0.0,
+            "title": "Months",
+            "type": "integer"
+          },
+          "type": {
+            "const": "duration",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "months"
+        ],
+        "title": "DurationValue",
+        "type": "object"
+      },
+      "EmploymentBasis": {
+        "enum": [
+          "permanent",
+          "fixed_term",
+          "contract",
+          "zero_hours",
+          "agency",
           "other"
         ],
-        "title": "EmploymentStatus",
+        "title": "EmploymentBasis",
+        "type": "string"
+      },
+      "ExpenditureCategory": {
+        "enum": [
+          "housing_rent",
+          "council_tax",
+          "utilities",
+          "transport",
+          "childcare",
+          "insurance",
+          "service_charge_ground_rent",
+          "other"
+        ],
+        "title": "ExpenditureCategory",
+        "type": "string"
+      },
+      "ExpenditureCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "$ref": "#/components/schemas/ExpenditureCategory"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "parties": {
+            "items": {
+              "$ref": "#/components/schemas/ExpenditureParty-Input"
+            },
+            "title": "Parties",
+            "type": "array"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/ExpenditureScope"
+          }
+        },
+        "required": [
+          "category",
+          "scope"
+        ],
+        "title": "ExpenditureCreate",
+        "type": "object"
+      },
+      "ExpenditureOut": {
+        "properties": {
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "category": {
+            "$ref": "#/components/schemas/ExpenditureCategory"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "parties": {
+            "items": {
+              "$ref": "#/components/schemas/ExpenditureParty-Output"
+            },
+            "title": "Parties",
+            "type": "array"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/ExpenditureScope"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "case_id",
+          "category",
+          "scope",
+          "description",
+          "parties",
+          "created_at",
+          "updated_at",
+          "version"
+        ],
+        "title": "ExpenditureOut",
+        "type": "object"
+      },
+      "ExpenditureParty-Input": {
+        "properties": {
+          "applicant_id": {
+            "format": "uuid",
+            "title": "Applicant Id",
+            "type": "string"
+          },
+          "share": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share"
+          }
+        },
+        "required": [
+          "applicant_id"
+        ],
+        "title": "ExpenditureParty",
+        "type": "object"
+      },
+      "ExpenditureParty-Output": {
+        "properties": {
+          "applicant_id": {
+            "format": "uuid",
+            "title": "Applicant Id",
+            "type": "string"
+          },
+          "share": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share"
+          }
+        },
+        "required": [
+          "applicant_id"
+        ],
+        "title": "ExpenditureParty",
+        "type": "object"
+      },
+      "ExpenditureScope": {
+        "enum": [
+          "household",
+          "individual"
+        ],
+        "title": "ExpenditureScope",
+        "type": "string"
+      },
+      "ExpenditureUpdate": {
+        "additionalProperties": false,
+        "description": "Partial update; send the item's ETag in ``If-Match``. Scope and parties change\ntogether: send both, and ``parties`` replaces the list.",
+        "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExpenditureCategory"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "parties": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ExpenditureParty-Input"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parties"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExpenditureScope"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "ExpenditureUpdate",
+        "type": "object"
+      },
+      "FirmSettingsOut": {
+        "properties": {
+          "max_applicants": {
+            "description": "Most active applicants (borrowers and guarantors)",
+            "title": "Max Applicants",
+            "type": "integer"
+          },
+          "platform_max_applicants": {
+            "default": 8,
+            "title": "Platform Max Applicants",
+            "type": "integer"
+          },
+          "require_four_eyes_verification": {
+            "description": "Verification must be approved by a different broker (enforced from Phase 9)",
+            "title": "Require Four Eyes Verification",
+            "type": "boolean"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "max_applicants",
+          "require_four_eyes_verification",
+          "updated_at",
+          "version"
+        ],
+        "title": "FirmSettingsOut",
+        "type": "object"
+      },
+      "FirmSettingsUpdate": {
+        "additionalProperties": false,
+        "description": "Partial update; send the settings' ETag in ``If-Match``.",
+        "properties": {
+          "max_applicants": {
+            "anyOf": [
+              {
+                "maximum": 8.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Applicants"
+          },
+          "require_four_eyes_verification": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Require Four Eyes Verification"
+          }
+        },
+        "title": "FirmSettingsUpdate",
+        "type": "object"
+      },
+      "Frequency": {
+        "enum": [
+          "one_off",
+          "weekly",
+          "fortnightly",
+          "four_weekly",
+          "monthly",
+          "quarterly",
+          "annual"
+        ],
+        "title": "Frequency",
         "type": "string"
       },
       "HTTPValidationError": {
@@ -812,6 +1700,316 @@
         "title": "HealthOut",
         "type": "object"
       },
+      "IncomeKind": {
+        "enum": [
+          "employment",
+          "self_employment",
+          "directorship",
+          "property_rental",
+          "pension",
+          "benefit",
+          "investment",
+          "maintenance_received",
+          "other"
+        ],
+        "title": "IncomeKind",
+        "type": "string"
+      },
+      "IncomeSourceCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "applicant_id": {
+            "format": "uuid",
+            "title": "Applicant Id",
+            "type": "string"
+          },
+          "basis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmploymentBasis"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "is_primary": {
+            "default": false,
+            "description": "The applicant's main employment",
+            "title": "Is Primary",
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/IncomeKind"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Employer or business name",
+            "title": "Name"
+          },
+          "ownership_share": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For jointly held sources (e.g. a let property)",
+            "title": "Ownership Share"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          }
+        },
+        "required": [
+          "applicant_id",
+          "kind"
+        ],
+        "title": "IncomeSourceCreate",
+        "type": "object"
+      },
+      "IncomeSourceOut": {
+        "properties": {
+          "applicant_id": {
+            "format": "uuid",
+            "title": "Applicant Id",
+            "type": "string"
+          },
+          "basis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmploymentBasis"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_primary": {
+            "title": "Is Primary",
+            "type": "boolean"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/IncomeKind"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "ownership_share": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ownership Share"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "case_id",
+          "applicant_id",
+          "kind",
+          "name",
+          "basis",
+          "is_primary",
+          "start_date",
+          "end_date",
+          "ownership_share",
+          "created_at",
+          "updated_at",
+          "version"
+        ],
+        "title": "IncomeSourceOut",
+        "type": "object"
+      },
+      "IncomeSourceUpdate": {
+        "additionalProperties": false,
+        "description": "Partial update; send the item's ETag in ``If-Match``.",
+        "properties": {
+          "basis": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EmploymentBasis"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "is_primary": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Primary"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IncomeKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "ownership_share": {
+            "anyOf": [
+              {
+                "maximum": 100.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ownership Share"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          }
+        },
+        "title": "IncomeSourceUpdate",
+        "type": "object"
+      },
       "InvitationOut": {
         "description": "A pending invitation addressed to the caller. Grants no access until accepted.",
         "properties": {
@@ -841,6 +2039,14 @@
         ],
         "title": "InvitationOut",
         "type": "object"
+      },
+      "LiabilityRole": {
+        "enum": [
+          "principal",
+          "guarantor"
+        ],
+        "title": "LiabilityRole",
+        "type": "string"
       },
       "MeOut": {
         "properties": {
@@ -916,6 +2122,36 @@
           "invitations"
         ],
         "title": "MeOut",
+        "type": "object"
+      },
+      "MeasureOut": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "subject_kind": {
+            "$ref": "#/components/schemas/SubjectKind"
+          },
+          "temporal_kind": {
+            "$ref": "#/components/schemas/TemporalKind"
+          },
+          "value_type": {
+            "$ref": "#/components/schemas/ValueType"
+          }
+        },
+        "required": [
+          "code",
+          "subject_kind",
+          "value_type",
+          "temporal_kind",
+          "description"
+        ],
+        "title": "MeasureOut",
         "type": "object"
       },
       "MemberCreate": {
@@ -1047,6 +2283,7 @@
       },
       "MemberUpdate": {
         "additionalProperties": false,
+        "description": "Send the membership's current ETag in ``If-Match``.",
         "properties": {
           "role": {
             "anyOf": [
@@ -1068,17 +2305,8 @@
               }
             ],
             "description": "'deactivated' revokes access or a pending invitation. 'active' is only allowed for a membership the person has previously accepted."
-          },
-          "version": {
-            "description": "Current version, for optimistic concurrency",
-            "minimum": 1.0,
-            "title": "Version",
-            "type": "integer"
           }
         },
-        "required": [
-          "version"
-        ],
         "title": "MemberUpdate",
         "type": "object"
       },
@@ -1114,6 +2342,447 @@
           "amount_minor"
         ],
         "title": "Money",
+        "type": "object"
+      },
+      "MoneyValue": {
+        "properties": {
+          "amount_minor": {
+            "description": "Minor units (pence); negative only for signed_money",
+            "title": "Amount Minor",
+            "type": "integer"
+          },
+          "currency": {
+            "const": "GBP",
+            "default": "GBP",
+            "title": "Currency",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "money",
+              "signed_money"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "amount_minor"
+        ],
+        "title": "MoneyValue",
+        "type": "object"
+      },
+      "ObservationCreate": {
+        "additionalProperties": false,
+        "description": "Record one typed value about one item. To correct a value, record a new observation\nwith ``supersedes_observation_id``; the old one is retired, never edited.",
+        "properties": {
+          "as_of_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Stock measures: defaults to today if omitted",
+            "title": "As Of Date"
+          },
+          "commitment_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commitment Id"
+          },
+          "expenditure_item_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expenditure Item Id"
+          },
+          "frequency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Frequency"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required for flow measures"
+          },
+          "income_source_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Income Source Id"
+          },
+          "measure": {
+            "examples": [
+              "basic_pay"
+            ],
+            "maxLength": 48,
+            "minLength": 1,
+            "title": "Measure",
+            "type": "string"
+          },
+          "period_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period End"
+          },
+          "period_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Start"
+          },
+          "source_kind": {
+            "default": "declared",
+            "enum": [
+              "declared",
+              "broker_entry"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "supersedes_observation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Observation Id"
+          },
+          "tax_year": {
+            "anyOf": [
+              {
+                "examples": [
+                  "2025-26"
+                ],
+                "pattern": "^\\d{4}-\\d{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax Year"
+          },
+          "value": {
+            "discriminator": {
+              "mapping": {
+                "count": "#/components/schemas/CountValue",
+                "date": "#/components/schemas/DateValue",
+                "duration": "#/components/schemas/DurationValue",
+                "money": "#/components/schemas/MoneyValue",
+                "proportion": "#/components/schemas/PercentValue-Input",
+                "rate": "#/components/schemas/PercentValue-Input",
+                "signed_money": "#/components/schemas/MoneyValue"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MoneyValue"
+              },
+              {
+                "$ref": "#/components/schemas/PercentValue-Input"
+              },
+              {
+                "$ref": "#/components/schemas/DurationValue"
+              },
+              {
+                "$ref": "#/components/schemas/CountValue"
+              },
+              {
+                "$ref": "#/components/schemas/DateValue"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "measure",
+          "value"
+        ],
+        "title": "ObservationCreate",
+        "type": "object"
+      },
+      "ObservationOut": {
+        "properties": {
+          "as_of_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of Date"
+          },
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "commitment_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commitment Id"
+          },
+          "expenditure_item_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expenditure Item Id"
+          },
+          "frequency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Frequency"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "income_source_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Income Source Id"
+          },
+          "measure": {
+            "title": "Measure",
+            "type": "string"
+          },
+          "period_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period End"
+          },
+          "period_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Start"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "title": "Recorded At",
+            "type": "string"
+          },
+          "recorded_by_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorded By User Id"
+          },
+          "retired_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retired At"
+          },
+          "retired_reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RetiredReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_kind": {
+            "$ref": "#/components/schemas/SourceKind"
+          },
+          "subject_kind": {
+            "$ref": "#/components/schemas/SubjectKind"
+          },
+          "supersedes_observation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Observation Id"
+          },
+          "tax_year": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax Year"
+          },
+          "value": {
+            "discriminator": {
+              "mapping": {
+                "count": "#/components/schemas/CountValue",
+                "date": "#/components/schemas/DateValue",
+                "duration": "#/components/schemas/DurationValue",
+                "money": "#/components/schemas/MoneyValue",
+                "proportion": "#/components/schemas/PercentValue-Output",
+                "rate": "#/components/schemas/PercentValue-Output",
+                "signed_money": "#/components/schemas/MoneyValue"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MoneyValue"
+              },
+              {
+                "$ref": "#/components/schemas/PercentValue-Output"
+              },
+              {
+                "$ref": "#/components/schemas/DurationValue"
+              },
+              {
+                "$ref": "#/components/schemas/CountValue"
+              },
+              {
+                "$ref": "#/components/schemas/DateValue"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "id",
+          "case_id",
+          "subject_kind",
+          "income_source_id",
+          "commitment_id",
+          "expenditure_item_id",
+          "measure",
+          "value",
+          "frequency",
+          "period_start",
+          "period_end",
+          "tax_year",
+          "as_of_date",
+          "source_kind",
+          "recorded_by_user_id",
+          "recorded_at",
+          "supersedes_observation_id",
+          "retired_at",
+          "retired_reason"
+        ],
+        "title": "ObservationOut",
+        "type": "object"
+      },
+      "ObservationRetirement": {
+        "additionalProperties": false,
+        "properties": {
+          "reason": {
+            "const": "entered_in_error",
+            "description": "Corrections use supersedes_observation_id on a new observation instead",
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "ObservationRetirement",
         "type": "object"
       },
       "Page_AuditEventOut_": {
@@ -1178,6 +2847,93 @@
         "title": "Page[CaseOut]",
         "type": "object"
       },
+      "PartyRole": {
+        "enum": [
+          "borrower",
+          "guarantor"
+        ],
+        "title": "PartyRole",
+        "type": "string"
+      },
+      "PercentValue-Input": {
+        "properties": {
+          "percent": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Percent"
+          },
+          "type": {
+            "enum": [
+              "rate",
+              "proportion"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "percent"
+        ],
+        "title": "PercentValue",
+        "type": "object"
+      },
+      "PercentValue-Output": {
+        "properties": {
+          "percent": {
+            "title": "Percent",
+            "type": "string"
+          },
+          "type": {
+            "enum": [
+              "rate",
+              "proportion"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "percent"
+        ],
+        "title": "PercentValue",
+        "type": "object"
+      },
+      "PropertyUse": {
+        "enum": [
+          "residential",
+          "buy_to_let",
+          "second_home"
+        ],
+        "title": "PropertyUse",
+        "type": "string"
+      },
+      "RemovalReason": {
+        "enum": [
+          "added_in_error",
+          "no_longer_applying",
+          "replaced",
+          "other"
+        ],
+        "title": "RemovalReason",
+        "type": "string"
+      },
+      "RetiredReason": {
+        "enum": [
+          "superseded",
+          "entered_in_error"
+        ],
+        "title": "RetiredReason",
+        "type": "string"
+      },
       "Role": {
         "enum": [
           "firm_admin",
@@ -1186,6 +2942,40 @@
           "read_only"
         ],
         "title": "Role",
+        "type": "string"
+      },
+      "ShareBasis": {
+        "enum": [
+          "declared",
+          "broker"
+        ],
+        "title": "ShareBasis",
+        "type": "string"
+      },
+      "SourceKind": {
+        "enum": [
+          "declared",
+          "broker_entry"
+        ],
+        "title": "SourceKind",
+        "type": "string"
+      },
+      "SubjectKind": {
+        "enum": [
+          "income_source",
+          "commitment",
+          "expenditure"
+        ],
+        "title": "SubjectKind",
+        "type": "string"
+      },
+      "TemporalKind": {
+        "enum": [
+          "flow",
+          "stock",
+          "attribute"
+        ],
+        "title": "TemporalKind",
         "type": "string"
       },
       "TenantMembershipOut": {
@@ -1256,6 +3046,19 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "ValueType": {
+        "enum": [
+          "money",
+          "signed_money",
+          "rate",
+          "proportion",
+          "duration",
+          "count",
+          "date"
+        ],
+        "title": "ValueType",
+        "type": "string"
       }
     },
     "securitySchemes": {
@@ -1520,6 +3323,24 @@
               "title": "X-Tenant-Id",
               "type": "string"
             }
+          },
+          {
+            "description": "Current ETag of the resource, e.g. \"3\"",
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Current ETag of the resource, e.g. \"3\"",
+              "title": "If-Match"
+            }
           }
         ],
         "requestBody": {
@@ -1577,6 +3398,18 @@
               "format": "uuid",
               "title": "Case Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Also list removed applicants (kept for traceability)",
+            "in": "query",
+            "name": "include_removed",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also list removed applicants (kept for traceability)",
+              "title": "Include Removed",
+              "type": "boolean"
             }
           },
           {
@@ -1699,80 +3532,6 @@
       }
     },
     "/api/v1/cases/{case_id}/applicants/{applicant_id}": {
-      "delete": {
-        "description": "Only while the case is editable. The audit history is retained.",
-        "operationId": "remove_applicant_api_v1_cases__case_id__applicants__applicant_id__delete",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "case_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Case Id",
-              "type": "string"
-            }
-          },
-          {
-            "in": "path",
-            "name": "applicant_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Applicant Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "Current applicant version",
-            "in": "query",
-            "name": "version",
-            "required": true,
-            "schema": {
-              "description": "Current applicant version",
-              "minimum": 1,
-              "title": "Version",
-              "type": "integer"
-            }
-          },
-          {
-            "description": "The firm this request acts within",
-            "in": "header",
-            "name": "X-Tenant-ID",
-            "required": true,
-            "schema": {
-              "description": "The firm this request acts within",
-              "format": "uuid",
-              "title": "X-Tenant-Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Successful Response"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "summary": "Remove an applicant",
-        "tags": [
-          "applicants"
-        ]
-      },
       "get": {
         "operationId": "get_applicant_api_v1_cases__case_id__applicants__applicant_id__get",
         "parameters": [
@@ -1875,6 +3634,24 @@
               "title": "X-Tenant-Id",
               "type": "string"
             }
+          },
+          {
+            "description": "Current ETag of the resource, e.g. \"3\"",
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Current ETag of the resource, e.g. \"3\"",
+              "title": "If-Match"
+            }
           }
         ],
         "requestBody": {
@@ -1915,6 +3692,204 @@
           }
         ],
         "summary": "Update an applicant",
+        "tags": [
+          "applicants"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/applicants/{applicant_id}/reinstatement": {
+      "post": {
+        "description": "Returns the same applicant (same ID) to the case. Superseded or invalidated reviews are not revived.",
+        "operationId": "reinstate_applicant_api_v1_cases__case_id__applicants__applicant_id__reinstatement_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "applicant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Applicant Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Current ETag of the resource, e.g. \"3\"",
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Current ETag of the resource, e.g. \"3\"",
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicantReinstatement"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicantOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Reinstate a removed applicant",
+        "tags": [
+          "applicants"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/applicants/{applicant_id}/removal": {
+      "post": {
+        "description": "Marks the applicant removed. Nothing is deleted or reassigned: documents, financial records and audit history stay traceable. Only while the case is editable.",
+        "operationId": "remove_applicant_api_v1_cases__case_id__applicants__applicant_id__removal_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "applicant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Applicant Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Current ETag of the resource, e.g. \"3\"",
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Current ETag of the resource, e.g. \"3\"",
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApplicantRemoval"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApplicantOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Remove an applicant from the case",
         "tags": [
           "applicants"
         ]
@@ -2003,6 +3978,940 @@
         ]
       }
     },
+    "/api/v1/cases/{case_id}/financial/commitments": {
+      "get": {
+        "operationId": "list_commitments_api_v1_cases__case_id__financial_commitments_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CommitmentOut"
+                  },
+                  "title": "Response List Commitments Api V1 Cases  Case Id  Financial Commitments Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List commitments",
+        "tags": [
+          "financial"
+        ]
+      },
+      "post": {
+        "operationId": "create_commitment_api_v1_cases__case_id__financial_commitments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommitmentCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitmentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add a commitment and the applicants liable for it",
+        "tags": [
+          "financial"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/financial/commitments/{commitment_id}": {
+      "patch": {
+        "operationId": "update_commitment_api_v1_cases__case_id__financial_commitments__commitment_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "commitment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Commitment Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Current ETag of the resource, e.g. \"3\"",
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Current ETag of the resource, e.g. \"3\"",
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommitmentUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommitmentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update a commitment (parties, if sent, replace the list)",
+        "tags": [
+          "financial"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/financial/expenditure": {
+      "get": {
+        "operationId": "list_expenditure_api_v1_cases__case_id__financial_expenditure_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ExpenditureOut"
+                  },
+                  "title": "Response List Expenditure Api V1 Cases  Case Id  Financial Expenditure Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List expenditure",
+        "tags": [
+          "financial"
+        ]
+      },
+      "post": {
+        "operationId": "create_expenditure_api_v1_cases__case_id__financial_expenditure_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExpenditureCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenditureOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add household or individual expenditure",
+        "tags": [
+          "financial"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/financial/expenditure/{expenditure_item_id}": {
+      "patch": {
+        "operationId": "update_expenditure_api_v1_cases__case_id__financial_expenditure__expenditure_item_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "expenditure_item_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Expenditure Item Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Current ETag of the resource, e.g. \"3\"",
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Current ETag of the resource, e.g. \"3\"",
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExpenditureUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExpenditureOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update an expenditure item",
+        "tags": [
+          "financial"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/financial/income-sources": {
+      "get": {
+        "operationId": "list_income_sources_api_v1_cases__case_id__financial_income_sources_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/IncomeSourceOut"
+                  },
+                  "title": "Response List Income Sources Api V1 Cases  Case Id  Financial Income Sources Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List income sources",
+        "tags": [
+          "financial"
+        ]
+      },
+      "post": {
+        "operationId": "create_income_source_api_v1_cases__case_id__financial_income_sources_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IncomeSourceCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncomeSourceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add an income source for an active applicant",
+        "tags": [
+          "financial"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/financial/income-sources/{income_source_id}": {
+      "patch": {
+        "operationId": "update_income_source_api_v1_cases__case_id__financial_income_sources__income_source_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "income_source_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Income Source Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Current ETag of the resource, e.g. \"3\"",
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Current ETag of the resource, e.g. \"3\"",
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IncomeSourceUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IncomeSourceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Update an income source",
+        "tags": [
+          "financial"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/financial/observations": {
+      "get": {
+        "operationId": "list_observations_api_v1_cases__case_id__financial_observations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only observations of this item",
+            "in": "query",
+            "name": "subject_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only observations of this item",
+              "title": "Subject Id"
+            }
+          },
+          {
+            "description": "Also list superseded and retired observations",
+            "in": "query",
+            "name": "include_retired",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Also list superseded and retired observations",
+              "title": "Include Retired",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ObservationOut"
+                  },
+                  "title": "Response List Observations Api V1 Cases  Case Id  Financial Observations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List financial observations",
+        "tags": [
+          "financial"
+        ]
+      },
+      "post": {
+        "description": "The value's type must match the measure (see `GET /api/v1/financial/measures`). Set `supersedes_observation_id` to correct an earlier value; it is retired, not edited.",
+        "operationId": "record_observation_api_v1_cases__case_id__financial_observations_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ObservationCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Record a typed value for an item",
+        "tags": [
+          "financial"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/financial/observations/{observation_id}/retirement": {
+      "post": {
+        "operationId": "retire_observation_api_v1_cases__case_id__financial_observations__observation_id__retirement_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "observation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Observation Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ObservationRetirement"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Retire an observation entered in error",
+        "tags": [
+          "financial"
+        ]
+      }
+    },
     "/api/v1/cases/{case_id}/transitions": {
       "post": {
         "description": "Moves the case through its lifecycle. Transitions that depend on capabilities not yet delivered return 409 with `available: false`.",
@@ -2028,6 +4937,24 @@
               "format": "uuid",
               "title": "X-Tenant-Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Current ETag of the resource, e.g. \"3\"",
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Current ETag of the resource, e.g. \"3\"",
+              "title": "If-Match"
             }
           }
         ],
@@ -2071,6 +4998,187 @@
         "summary": "Change case status",
         "tags": [
           "cases"
+        ]
+      }
+    },
+    "/api/v1/financial/measures": {
+      "get": {
+        "operationId": "list_measures_api_v1_financial_measures_get",
+        "parameters": [
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/MeasureOut"
+                  },
+                  "title": "Response List Measures Api V1 Financial Measures Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Measures and the value type each one takes",
+        "tags": [
+          "financial"
+        ]
+      }
+    },
+    "/api/v1/firm/settings": {
+      "get": {
+        "operationId": "get_settings_api_v1_firm_settings_get",
+        "parameters": [
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FirmSettingsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "The firm's settings",
+        "tags": [
+          "firm"
+        ]
+      },
+      "patch": {
+        "description": "Firm administrators only. Limits apply to future changes, not existing cases.",
+        "operationId": "update_settings_api_v1_firm_settings_patch",
+        "parameters": [
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Current ETag of the resource, e.g. \"3\"",
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Current ETag of the resource, e.g. \"3\"",
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FirmSettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FirmSettingsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Change the firm's settings",
+        "tags": [
+          "firm"
         ]
       }
     },
@@ -2287,6 +5395,24 @@
               "format": "uuid",
               "title": "X-Tenant-Id",
               "type": "string"
+            }
+          },
+          {
+            "description": "Current ETag of the resource, e.g. \"3\"",
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Current ETag of the resource, e.g. \"3\"",
+              "title": "If-Match"
             }
           }
         ],

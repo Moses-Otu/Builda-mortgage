@@ -4,15 +4,18 @@ B2B SaaS for UK mortgage broker firms that turns borrower financial documents in
 reconciled, source-linked, broker-approved financial profile. See
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/ROADMAP.md](docs/ROADMAP.md).
 
-**Current state: Phase 1 (foundation and core domain).** Firms, members, mortgage cases,
-applicants, an append-only audit trail and database-enforced tenant isolation. No document
-handling yet. See [docs/phases/PHASE-1-REPORT.md](docs/phases/PHASE-1-REPORT.md).
+**Current state: Phase 1.1 (stable domain model).** Firms, invited members, mortgage cases
+with a broker-centred lifecycle, applicants with roles and soft removal, typed declared
+financial data (income sources, commitments, expenditure, observations), per-firm settings,
+an append-only audit trail with erasable details, and database-enforced tenant isolation. No
+document handling yet. See [docs/phases/PHASE-1-REPORT.md](docs/phases/PHASE-1-REPORT.md)
+and [docs/phases/PHASE-1.1-REPORT.md](docs/phases/PHASE-1.1-REPORT.md).
 
 ## Repository layout
 
 ```
 backend/            FastAPI service (Python package `meip`)
-  src/meip/         core/ auth/ tenancy/ cases/ applicants/ audit/ api/
+  src/meip/         core/ auth/ tenancy/ firm/ cases/ applicants/ financial/ audit/ api/
   migrations/       Alembic migrations (run as the owner DB role)
   scripts/db/       Role and database bootstrap SQL (local only)
   tests/            unit/ integration/ isolation/
@@ -114,10 +117,29 @@ UPDATE_OPENAPI_SNAPSHOT=1 uv run pytest tests/integration/test_schema.py
 - **Authorization:** each tenant route declares its permission by taking a `*Ctx` dependency
   from `api/deps.py`. Services make only data-dependent checks, such as closing a case or
   assigning an adviser. `test_authorization_matrix.py` pins who may do what.
+- **Who acts, where:** services receive an `OperationContext` = `TenantScope` (one
+  tenant-bound transaction) + `Actor` (user, operator, system or integration). Background work
+  uses `open_tenant_scope` with a system actor, recorded *on behalf of* the triggering user.
+  It never impersonates them. Only `api/` may import FastAPI (`test_module_boundaries.py`).
 - **Transactions:** mutating endpoints call `ctx.commit()` explicitly. Anything uncommitted is
   rolled back.
+- **Concurrency:** single-resource responses carry `ETag: "<version>"`. Every change to an
+  existing resource needs `If-Match`: a stale value gets 412, a missing one 428.
+- **Case lifecycle:** `draft → collecting_evidence ⇄ in_review → (verified) → closed`.
+  Closing needs a `closure_reason`, and reopening needs a note. `verified` cannot be stored
+  until profile approvals exist (Phase 9).
+- **Applicants:** never deleted. They are removed with a reason, and can be reinstated with
+  the same ID. `party_role` (borrower or guarantor) is separate from `on_title` (ownership).
+- **Financial data:** typed items (income sources, commitments with liable parties,
+  expenditure) plus immutable `financial_observations`. Each observation's value type is
+  fixed by `measure_definitions` and enforced by the database. Corrections supersede; they
+  never edit.
 - **Audit:** every mutation writes exactly one `audit_events` row in the same transaction.
-  Direct identifiers (names, date of birth, email) are recorded only as "changed".
+  The permanent row holds no direct identifiers and no financial values, though it is still
+  pseudonymous personal data (status and role facts about an applicant ID). Amounts,
+  names, reasons and notes go to the erasable
+  `audit_event_details`. Direct identifiers (names, date of birth, email) are recorded only
+  as "changed".
 - **Money:** integer minor units (pence) with an explicit currency. Never floats.
 - **Errors:** RFC 9457 `application/problem+json` with stable `urn:meip:problem:<slug>` types,
   always carrying `request_id`. Uniqueness races return 409 and other constraint violations

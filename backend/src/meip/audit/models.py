@@ -1,7 +1,8 @@
 """Append-only audit event log.
 
 ``audit_events`` rows are immutable: the runtime role has INSERT/SELECT only, and a trigger
-rejects UPDATE and DELETE for every role (including the owner). They hold no personal data.
+rejects UPDATE and DELETE for every role (including the owner). They hold no direct
+identifiers and no financial values, but remain pseudonymous personal data.
 
 ``audit_event_details`` holds the erasable values of an event (amounts, reasons, notes). It
 is append-only for the runtime role; only the owner-run retention process may delete rows.

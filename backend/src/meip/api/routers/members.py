@@ -3,9 +3,9 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Response, status
 
-from meip.api.deps import MemberManageCtx, MemberReadCtx, get_auth_provider
+from meip.api.deps import IfMatch, MemberManageCtx, MemberReadCtx, etag, get_auth_provider
 from meip.auth.provider import AuthProvider
 from meip.tenancy import service
 from meip.tenancy.schemas import MemberCreate, MemberOut, MemberUpdate
@@ -33,9 +33,11 @@ async def add_member(
     body: MemberCreate,
     ctx: MemberManageCtx,
     provider: Annotated[AuthProvider, Depends(get_auth_provider)],
+    response: Response,
 ) -> MemberOut:
     out = await service.add_member(ctx, body, issuer=provider.issuer)
     await ctx.commit()
+    response.headers["ETag"] = etag(out.version)
     return out
 
 
@@ -45,8 +47,13 @@ async def add_member(
     summary="Change a member's role, or deactivate them",
 )
 async def update_member(
-    membership_id: uuid.UUID, body: MemberUpdate, ctx: MemberManageCtx
+    membership_id: uuid.UUID,
+    body: MemberUpdate,
+    ctx: MemberManageCtx,
+    version: IfMatch,
+    response: Response,
 ) -> MemberOut:
-    out = await service.update_member(ctx, membership_id, body)
+    out = await service.update_member(ctx, membership_id, body, version)
     await ctx.commit()
+    response.headers["ETag"] = etag(out.version)
     return out

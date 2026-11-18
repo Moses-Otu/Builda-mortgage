@@ -3,9 +3,17 @@ from __future__ import annotations
 import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, Response, status
 
-from meip.api.deps import AuditReadCtx, CaseCreateCtx, CaseReadCtx, CaseTransitionCtx, CaseUpdateCtx
+from meip.api.deps import (
+    AuditReadCtx,
+    CaseCreateCtx,
+    CaseReadCtx,
+    CaseTransitionCtx,
+    CaseUpdateCtx,
+    IfMatch,
+    etag,
+)
 from meip.audit import service as audit
 from meip.audit.schemas import AuditEventOut
 from meip.cases import service
@@ -40,21 +48,31 @@ async def list_cases(
 @router.post(
     "", response_model=CaseOut, status_code=status.HTTP_201_CREATED, summary="Create a case"
 )
-async def create_case(body: CaseCreate, ctx: CaseCreateCtx) -> CaseOut:
+async def create_case(body: CaseCreate, ctx: CaseCreateCtx, response: Response) -> CaseOut:
     out = await service.create_case(ctx, body)
     await ctx.commit()
+    response.headers["ETag"] = etag(out.version)
     return out
 
 
 @router.get("/{case_id}", response_model=CaseOut, summary="Get a case")
-async def get_case(case_id: uuid.UUID, ctx: CaseReadCtx) -> CaseOut:
-    return await service.get_case_out(ctx, case_id)
+async def get_case(case_id: uuid.UUID, ctx: CaseReadCtx, response: Response) -> CaseOut:
+    out = await service.get_case_out(ctx, case_id)
+    response.headers["ETag"] = etag(out.version)
+    return out
 
 
 @router.patch("/{case_id}", response_model=CaseOut, summary="Update case details")
-async def update_case(case_id: uuid.UUID, body: CaseUpdate, ctx: CaseUpdateCtx) -> CaseOut:
-    out = await service.update_case(ctx, case_id, body)
+async def update_case(
+    case_id: uuid.UUID,
+    body: CaseUpdate,
+    ctx: CaseUpdateCtx,
+    version: IfMatch,
+    response: Response,
+) -> CaseOut:
+    out = await service.update_case(ctx, case_id, body, version)
     await ctx.commit()
+    response.headers["ETag"] = etag(out.version)
     return out
 
 
@@ -68,10 +86,15 @@ async def update_case(case_id: uuid.UUID, body: CaseUpdate, ctx: CaseUpdateCtx) 
     ),
 )
 async def transition_case(
-    case_id: uuid.UUID, body: CaseTransition, ctx: CaseTransitionCtx
+    case_id: uuid.UUID,
+    body: CaseTransition,
+    ctx: CaseTransitionCtx,
+    version: IfMatch,
+    response: Response,
 ) -> CaseOut:
-    out = await service.transition_case(ctx, case_id, body)
+    out = await service.transition_case(ctx, case_id, body, version)
     await ctx.commit()
+    response.headers["ETag"] = etag(out.version)
     return out
 
 

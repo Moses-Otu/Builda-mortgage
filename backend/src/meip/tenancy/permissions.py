@@ -16,8 +16,10 @@ class Permission(StrEnum):
     CASE_CLOSE = "case:close"
     CASE_ASSIGN_ADVISER = "case:assign_adviser"
     APPLICANT_WRITE = "applicant:write"
+    FINANCIAL_WRITE = "financial:write"
     MEMBER_READ = "member:read"
     MEMBER_MANAGE = "member:manage"
+    FIRM_SETTINGS_MANAGE = "firm_settings:manage"
     AUDIT_READ = "audit:read"
 
 
@@ -27,6 +29,7 @@ _CASE_WORK = {
     Permission.CASE_UPDATE,
     Permission.CASE_TRANSITION,
     Permission.APPLICANT_WRITE,
+    Permission.FINANCIAL_WRITE,
 }
 
 ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {

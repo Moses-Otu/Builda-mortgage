@@ -16,6 +16,12 @@ class AppError(Exception):
         self.extra = extra or {}
 
 
+class BadRequestError(AppError):
+    status_code = 400
+    error_type = "bad-request"
+    title = "Malformed request"
+
+
 class UnauthorizedError(AppError):
     status_code = 401
     error_type = "unauthorized"
@@ -40,9 +46,20 @@ class ConflictError(AppError):
     title = "Conflict"
 
 
-class VersionConflictError(ConflictError):
-    error_type = "version-conflict"
+class VersionConflictError(AppError):
+    """The client's If-Match version is no longer current (RFC 9110 412)."""
+
+    status_code = 412
+    error_type = "precondition-failed"
     title = "Resource was modified by another request"
+
+
+class PreconditionRequiredError(AppError):
+    """A mutation was attempted without If-Match (RFC 6585 428)."""
+
+    status_code = 428
+    error_type = "precondition-required"
+    title = "If-Match header required"
 
 
 class InvalidStateTransitionError(ConflictError):

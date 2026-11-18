@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 
 from meip.cases import lifecycle
-from meip.cases.models import CaseStatus
+from meip.cases.models import STATUS_CHECK, STORABLE_STATUSES, CaseStatus
 from meip.core.errors import ForbiddenError
 from meip.tenancy.models import Role
 from meip.tenancy.permissions import ROLE_PERMISSIONS, Permission, has_permission, require
@@ -13,8 +13,9 @@ class TestLifecycle:
     def test_every_status_has_transition_entry(self) -> None:
         assert set(lifecycle.TRANSITIONS) == set(CaseStatus)
 
-    def test_closed_is_terminal(self) -> None:
-        assert lifecycle.TRANSITIONS[CaseStatus.CLOSED] == frozenset()
+    def test_closed_can_only_reopen_to_evidence_collection(self) -> None:
+        assert lifecycle.TRANSITIONS[CaseStatus.CLOSED] == {CaseStatus.COLLECTING_EVIDENCE}
+        assert lifecycle.is_reopening(CaseStatus.CLOSED, CaseStatus.COLLECTING_EVIDENCE)
 
     @pytest.mark.parametrize("status", [s for s in CaseStatus if s is not CaseStatus.CLOSED])
     def test_every_open_status_can_close(self, status: CaseStatus) -> None:
@@ -24,18 +25,24 @@ class TestLifecycle:
         for current, target in lifecycle.NOT_YET_AVAILABLE:
             assert lifecycle.is_defined(current, target)
 
-    def test_no_skipping_to_approved(self) -> None:
-        assert not lifecycle.is_defined(CaseStatus.DRAFT, CaseStatus.APPROVED)
-        assert not lifecycle.is_defined(CaseStatus.COLLECTING_EVIDENCE, CaseStatus.APPROVED)
+    def test_verified_only_reachable_from_review_and_not_yet(self) -> None:
+        sources = {
+            s for s, targets in lifecycle.TRANSITIONS.items() if CaseStatus.VERIFIED in targets
+        }
+        assert sources == {CaseStatus.IN_REVIEW}
+        assert lifecycle.unavailable_reason(CaseStatus.IN_REVIEW, CaseStatus.VERIFIED)
 
-    def test_phase_one_transitions_available(self) -> None:
-        assert (
-            lifecycle.unavailable_reason(CaseStatus.DRAFT, CaseStatus.COLLECTING_EVIDENCE) is None
-        )
-        assert (
-            lifecycle.unavailable_reason(CaseStatus.COLLECTING_EVIDENCE, CaseStatus.DRAFT) is None
-        )
-        assert lifecycle.unavailable_reason(CaseStatus.COLLECTING_EVIDENCE, CaseStatus.PROCESSING)
+    def test_verified_is_not_storable(self) -> None:
+        assert CaseStatus.VERIFIED not in STORABLE_STATUSES
+        assert "verified" not in STATUS_CHECK
+
+    def test_leaving_verified_is_a_reopen(self) -> None:
+        for target in (CaseStatus.COLLECTING_EVIDENCE, CaseStatus.IN_REVIEW):
+            assert lifecycle.is_reopening(CaseStatus.VERIFIED, target)
+
+    def test_verified_and_closed_are_not_editable(self) -> None:
+        assert CaseStatus.VERIFIED not in lifecycle.EDITABLE_STATUSES
+        assert CaseStatus.CLOSED not in lifecycle.EDITABLE_STATUSES
 
 
 class TestPermissions:

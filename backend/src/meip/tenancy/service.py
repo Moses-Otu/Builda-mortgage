@@ -21,6 +21,7 @@ from meip.core.db import utcnow
 from meip.core.errors import BusinessRuleError, ConflictError, NotFoundError, VersionConflictError
 from meip.core.ids import uuid7
 from meip.core.request_context import request_id_var
+from meip.firm.models import FirmSettings
 from meip.tenancy.context import Actor, OperationContext
 from meip.tenancy.models import Membership, MembershipStatus, Role, Tenant, TenantStatus, User
 from meip.tenancy.schemas import (
@@ -225,10 +226,10 @@ async def _lock_active_admins(ctx: OperationContext) -> set[uuid.UUID]:
 
 
 async def update_member(
-    ctx: OperationContext, membership_id: uuid.UUID, body: MemberUpdate
+    ctx: OperationContext, membership_id: uuid.UUID, body: MemberUpdate, expected_version: int
 ) -> MemberOut:
     membership = await _get_member(ctx, membership_id)
-    if membership.version != body.version:
+    if membership.version != expected_version:
         raise VersionConflictError()
 
     new_role = body.role.value if body.role else membership.role
@@ -336,6 +337,7 @@ async def onboard_tenant(
         accepted_at=utcnow(),
     )
     owner_session.add(membership)
+    owner_session.add(FirmSettings(tenant_id=tenant.id))
     await owner_session.flush()
 
     await audit.record(

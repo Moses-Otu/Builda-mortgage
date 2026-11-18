@@ -160,9 +160,17 @@ class Firm:
         return {"Authorization": f"Bearer {token}", "X-Tenant-ID": str(self.tenant_id)}
 
     async def request(
-        self, method: str, path: str, *, as_: str | None = None, **kwargs: Any
+        self,
+        method: str,
+        path: str,
+        *,
+        as_: str | None = None,
+        if_match: int | None = None,
+        **kwargs: Any,
     ) -> httpx.Response:
         headers = {**self.headers(as_), **kwargs.pop("headers", {})}
+        if if_match is not None:
+            headers["If-Match"] = f'"{if_match}"'
         return await self.client.request(method, path, headers=headers, **kwargs)
 
     def bearer(self, subject: str) -> dict[str, str]:

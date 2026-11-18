@@ -168,21 +168,35 @@ async def test_validation_and_business_errors_do_not_log_or_echo_values(
             "loan_amount": {"amount_minor": int(SECRET_AMOUNT), "currency": "GBP"},
         },
     )
-    assert rule.status_code == 422
+    # Loan above value is advisory (a warning), and the warning must not echo the amount.
+    assert rule.status_code == 201
+    assert rule.json()["warnings"][0]["code"] == "loan_exceeds_property_value"
     out = capsys.readouterr().out
     _assert_clean(out)
     _assert_clean(invalid.text)
-    _assert_clean(rule.text)
+    # The created resource legitimately returns the caller's own amount; the warning must not.
+    _assert_clean(str(rule.json()["warnings"]))
 
 
 async def test_successful_requests_log_route_templates_not_values(
     info_firm: Firm, capsys: pytest.CaptureFixture[str]
 ) -> None:
     case = await info_firm.create_case()
-    await info_firm.add_applicant(
-        case["id"],
-        first_name=SECRET_NAME,
-        declared_gross_annual_income={"amount_minor": int(SECRET_AMOUNT), "currency": "GBP"},
+    applicant = await info_firm.add_applicant(case["id"], first_name=SECRET_NAME)
+    source = await info_firm.request(
+        "POST",
+        f"/api/v1/cases/{case['id']}/financial/income-sources",
+        json={"applicant_id": applicant["id"], "kind": "employment", "name": SECRET_NAME},
+    )
+    await info_firm.request(
+        "POST",
+        f"/api/v1/cases/{case['id']}/financial/observations",
+        json={
+            "income_source_id": source.json()["id"],
+            "measure": "basic_pay",
+            "value": {"type": "money", "amount_minor": int(SECRET_AMOUNT)},
+            "frequency": "annual",
+        },
     )
     out = capsys.readouterr().out
     _assert_clean(out)

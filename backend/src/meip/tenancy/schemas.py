@@ -6,7 +6,7 @@ from typing import Annotated
 
 from pydantic import Field, StringConstraints
 
-from meip.core.schemas import InputModel, OutputModel, ShortText, Version
+from meip.core.schemas import InputModel, OutputModel, ShortText
 from meip.tenancy.models import MembershipStatus, Role
 
 
@@ -70,7 +70,8 @@ class MemberCreate(InputModel):
 
 
 class MemberUpdate(InputModel):
-    version: Version
+    """Send the membership's current ETag in ``If-Match``."""
+
     role: Role | None = None
     status: MembershipStatus | None = Field(
         default=None,

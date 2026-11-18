@@ -16,8 +16,10 @@ from sqlalchemy.ext.asyncio import AsyncEngine
 
 from tests.conftest import TEST_DB, db_url
 from tests.isolation.schema_policy import (
+    COLUMN_UPDATES,
     EXEMPT,
     EXPECTED_USERS_COLUMNS,
+    REFERENCE,
     SPECIAL_POLICY,
     STANDARD_EXPRESSION,
     STANDARD_POLICY,
@@ -69,12 +71,9 @@ async def _policies(conn: asyncpg.Connection, table: str) -> list[asyncpg.Record
 
 
 async def test_every_table_is_classified(catalog: asyncpg.Connection) -> None:
-    classified = set(TENANT_SCOPED) | set(SPECIAL_POLICY) | set(EXEMPT)
-    overlap = (
-        (set(TENANT_SCOPED) & set(SPECIAL_POLICY))
-        | (set(TENANT_SCOPED) & set(EXEMPT))
-        | (set(SPECIAL_POLICY) & set(EXEMPT))
-    )
+    groups = [set(TENANT_SCOPED), set(SPECIAL_POLICY), set(EXEMPT), set(REFERENCE)]
+    classified = set().union(*groups)
+    overlap = {t for i, a in enumerate(groups) for b in groups[i + 1 :] for t in a & b}
     assert not overlap, f"Tables classified twice: {overlap}"
     actual = await _public_tables(catalog)
     assert actual - classified == set(), (
@@ -128,6 +127,42 @@ async def test_special_policy_table_is_isolated(catalog: asyncpg.Connection, tab
     assert _normalise(policy["qual"]) == expected.using
     assert _normalise(policy["with_check"]) == expected.with_check
     assert await _app_privileges(catalog, table) == set(privileges)
+
+
+@pytest.mark.parametrize("table", sorted(REFERENCE))
+async def test_reference_table_is_read_only_and_tenant_free(
+    catalog: asyncpg.Connection, table: str
+) -> None:
+    columns = await catalog.fetch(
+        "SELECT column_name FROM information_schema.columns "
+        "WHERE table_schema = 'public' AND table_name = $1",
+        table,
+    )
+    assert "tenant_id" not in {c["column_name"] for c in columns}
+    assert await _app_privileges(catalog, table) == {"SELECT"}
+    column_grants = await catalog.fetchval(
+        "SELECT count(*) FROM information_schema.column_privileges "
+        "WHERE grantee = $1 AND table_name = $2 AND privilege_type <> 'SELECT'",
+        APP_ROLE,
+        table,
+    )
+    assert column_grants == 0
+
+
+async def test_column_level_grants_are_exactly_as_expected(catalog: asyncpg.Connection) -> None:
+    rows = await catalog.fetch(
+        "SELECT table_name, column_name FROM information_schema.column_privileges "
+        "WHERE grantee = $1 AND table_schema = 'public' AND privilege_type = 'UPDATE'",
+        APP_ROLE,
+    )
+    granted: dict[str, set[str]] = {}
+    for row in rows:
+        granted.setdefault(row["table_name"], set()).add(row["column_name"])
+    # Whole-table UPDATE also shows every column here; only check tables without it.
+    column_only = {
+        t: cols for t, cols in granted.items() if "UPDATE" not in await _app_privileges(catalog, t)
+    }
+    assert column_only == {t: set(c) for t, c in COLUMN_UPDATES.items()}
 
 
 @pytest.mark.parametrize("table", sorted(EXEMPT))
@@ -225,3 +260,16 @@ async def test_register_user_returns_only_an_identifier(catalog: asyncpg.Connect
         "SELECT format_type(prorettype, NULL) FROM pg_proc WHERE proname = 'app_register_user'"
     )
     assert result_type == "uuid"
+
+
+async def test_constraint_names_follow_the_naming_convention(catalog: asyncpg.Connection) -> None:
+    """Every CHECK is named ck_<table>_<name> exactly once (0001 produced doubled prefixes)."""
+    rows = await catalog.fetch(
+        "SELECT conrelid::regclass::text AS tbl, conname FROM pg_constraint "
+        "WHERE connamespace = 'public'::regnamespace AND contype = 'c'"
+    )
+    assert rows
+    for row in rows:
+        table, name = row["tbl"], row["conname"]
+        assert name.startswith(f"ck_{table}_"), f"{name} on {table}"
+        assert f"ck_{table}_ck_" not in name, f"doubled prefix: {name}"

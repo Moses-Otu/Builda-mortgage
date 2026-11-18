@@ -62,7 +62,9 @@ Single deployable backend codebase (modular monolith) with API and worker proces
 |---|---|---|---|
 | 1 | `tenancy` | tenants (firms), users, memberships, roles | 1 |
 | 2 | `cases` | mortgage cases, status lifecycle | 1 |
-| 3 | `applicants` | applicants, case↔applicant roles, declared data | 1 |
+| 3 | `applicants` | applicants, party roles, title flag, primary applicant, soft removal | 1, 1.1 |
+| 6a | `financial` | income sources, commitments + liable parties, expenditure + parties, typed observations, measure definitions | 1.1 (declared/broker data); 2+ adds document lineage |
+| 1a | `firm` | per-firm settings (applicant limit, four-eyes switch) | 1.1 |
 | 14 | `audit` | append-only event log | 1 |
 | 4 | `documents` | upload, blob storage, hashing, versions, pages | 2 |
 | 5 | `extraction` | classification, provider adapters, versioned schemas, raw outputs, source anchors | 3 |
@@ -83,7 +85,9 @@ Single deployable backend codebase (modular monolith) with API and worker proces
 - **Personal data across firms:** `users` holds identity only. What a firm records about a person (email, display name) lives on that firm's `memberships` row, under RLS. Firms *invite* identities; access begins only when the person accepts with their own token. The two cross-firm lookups (`app_memberships_for_subject`, `app_accept_invitation`) and registration (`app_register_user`) are `SECURITY DEFINER` functions with a fixed `search_path`, no PUBLIC execute, and no profile data in their results.
 - **Money:** integer minor units (pence) + ISO currency; `Decimal` in Python; never floats. Periods are explicit (`period_start`, `period_end`, `frequency`).
 - **Identifiers:** UUIDv7 (time-ordered) primary keys; no sequential IDs exposed.
-- **Audit:** append-only `audit_events` (DB trigger blocks UPDATE/DELETE); records actor, tenant, case, action, entity, before/after diff hash, request ID, timestamp.
+- **Audit:** append-only `audit_events` (DB trigger blocks UPDATE/DELETE/TRUNCATE) records actor (user, operator, system or integration, with `on_behalf_of_user_id` for work a user caused), tenant, case, action, entity, request or correlation ID, and a change set that holds **no direct identifiers and no financial values** (it is still pseudonymous personal data: status and role facts about applicant IDs). Values (amounts, reasons, notes) go in `audit_event_details`, which retention erasure can delete without touching the immutable log. Unknown fields default to the erasable class.
+- **Actors and scopes:** domain services take an `OperationContext` (`TenantScope` + `Actor`). HTTP builds a user actor. Workers build a system actor with an explicit capability allowlist and never impersonate a user. Routes check their primary permission by dependency; workers check theirs per job kind.
+- **Financial evidence model (1.1):** typed *items* (`income_sources` per applicant; `commitments` with `commitment_parties` for legal liability and an optional responsibility allocation; `expenditure_items`, household or individual) and immutable typed *observations*. `measure_definitions` fixes each measure's value type (money, signed money, rate, proportion, duration, count, date) and temporal kind (flow, stock, attribute). A composite FK and CHECKs enforce it. Liability, case association and inclusion in reconciliation are separate: removing an applicant never edits or reassigns their records. Phase 2 adds `source_kind = 'document'` with `observation_sources` lineage to extracted fields.
 - **PII:** never logged. Structured JSON logs carry IDs only. Field-level encryption considered for highest-risk fields (NI number, account numbers) in Phase 2+.
 - **Storage:** private Blob containers, no public access, no long-lived SAS; downloads proxied through the API with authorisation and audit, or short-lived user-delegation SAS.
 - **Residency:** Azure UK South (primary) / UK West (DR). Provider regions verified per service; where a model is unavailable in UK regions, this is surfaced as a decision, not silently routed elsewhere.

@@ -39,18 +39,17 @@ async def test_concurrent_admin_demotions_keep_one_admin(
 
     # Each admin demotes the other at the same moment.
     results = await asyncio.gather(
-        firm.request(
-            "PATCH", f"/api/v1/members/{second_id}", json={"version": 2, "role": "adviser"}
-        ),
+        firm.request("PATCH", f"/api/v1/members/{second_id}", if_match=2, json={"role": "adviser"}),
         firm.request(
             "PATCH",
             f"/api/v1/members/{first_id}",
             as_=second,
-            json={"version": 1, "role": "adviser"},
+            if_match=1,
+            json={"role": "adviser"},
         ),
     )
     statuses = sorted(r.status_code for r in results)
-    assert statuses in ([200, 403], [200, 409], [200, 422]), [r.text for r in results]
+    assert statuses in ([200, 403], [200, 412], [200, 422]), [r.text for r in results]
     assert await _active_admins(owner_sessionmaker, firm.tenant_id) == 1
 
 
@@ -65,7 +64,8 @@ async def test_many_concurrent_admin_deactivations_keep_one_admin(
             firm.request(
                 "PATCH",
                 f"/api/v1/members/{mid}",
-                json={"version": version, "status": "deactivated"},
+                if_match=version,
+                json={"status": "deactivated"},
             )
             for mid, version in targets
         )
@@ -88,13 +88,13 @@ async def test_concurrent_updates_with_same_version_only_one_wins(firm: Firm) ->
     results = await asyncio.gather(
         *(
             firm.request(
-                "PATCH", f"/api/v1/cases/{case['id']}", json={"version": 1, "term_months": t}
+                "PATCH", f"/api/v1/cases/{case['id']}", if_match=1, json={"term_months": t}
             )
             for t in (120, 240, 360)
         )
     )
     statuses = sorted(r.status_code for r in results)
-    assert statuses == [200, 409, 409], [r.text for r in results]
+    assert statuses == [200, 412, 412], [r.text for r in results]
 
 
 async def test_concurrent_applicant_adds_get_distinct_positions(firm: Firm) -> None:
@@ -109,7 +109,7 @@ async def test_concurrent_applicant_adds_get_distinct_positions(firm: Firm) -> N
             for i in range(6)
         )
     )
-    created = [r.json()["position"] for r in results if r.status_code == 201]
+    created = [r.json()["display_order"] for r in results if r.status_code == 201]
     rejected = [r for r in results if r.status_code != 201]
     assert sorted(created) == [1, 2, 3, 4]
     assert all(r.status_code == 422 for r in rejected), [r.text for r in rejected]
@@ -132,7 +132,8 @@ async def test_applicant_update_waits_for_and_respects_case_lock(firm: Firm) -> 
             firm.request(
                 "PATCH",
                 f"/api/v1/cases/{case['id']}/applicants/{applicant['id']}",
-                json={"version": 1, "first_name": "Late"},
+                if_match=1,
+                json={"first_name": "Late"},
             )
         )
         await asyncio.sleep(0.5)
@@ -140,7 +141,8 @@ async def test_applicant_update_waits_for_and_respects_case_lock(firm: Firm) -> 
 
         # The competing transaction closes the case while holding the lock.
         await conn.execute(
-            "UPDATE cases SET status = 'closed', version = version + 1 WHERE id = $1",
+            "UPDATE cases SET status = 'closed', closure_reason = 'not_proceeding',"
+            " version = version + 1 WHERE id = $1",
             uuid.UUID(case["id"]),
         )
         await transaction.commit()

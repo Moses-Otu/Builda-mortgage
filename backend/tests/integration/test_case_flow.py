@@ -28,17 +28,17 @@ async def test_create_case_add_two_applicants_update_transition_and_list(firm: F
         first_name="Sam",
         last_name="Taylor",
         date_of_birth="1988-04-12",
-        employment_status="employed",
-        declared_gross_annual_income={"amount_minor": 5_250_000, "currency": "GBP"},
     )
     second = await firm.add_applicant(case_id, first_name="Jo", last_name="Taylor")
-    assert (first["position"], second["position"]) == (1, 2)
+    assert (first["display_order"], second["display_order"]) == (1, 2)
+    assert (first["is_primary"], second["is_primary"]) == (True, False)
 
     updated = await firm.request(
         "PATCH",
         f"/api/v1/cases/{case_id}",
         as_=adviser,
-        json={"version": 1, "term_months": 360, "external_reference": None},
+        if_match=1,
+        json={"term_months": 360, "external_reference": None},
     )
     assert updated.status_code == 200, updated.text
     assert updated.json()["term_months"] == 360
@@ -49,7 +49,8 @@ async def test_create_case_add_two_applicants_update_transition_and_list(firm: F
         "POST",
         f"/api/v1/cases/{case_id}/transitions",
         as_=adviser,
-        json={"to_status": "collecting_evidence", "version": 2},
+        if_match=2,
+        json={"to_status": "collecting_evidence"},
     )
     assert moved.status_code == 200, moved.text
     assert moved.json()["status"] == "collecting_evidence"

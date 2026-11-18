@@ -44,6 +44,6 @@ async def test_unhandled_error_is_generic_500(failing_client: httpx.AsyncClient)
 
 async def test_stale_data_maps_to_version_conflict(failing_client: httpx.AsyncClient) -> None:
     resp = await failing_client.get("/stale")
-    assert resp.status_code == 409
-    assert resp.json()["type"].endswith(":version-conflict")
+    assert resp.status_code == 412
+    assert resp.json()["type"].endswith(":precondition-failed")
     assert "cases" not in resp.text

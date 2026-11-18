@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Annotated
@@ -13,7 +14,12 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from meip.auth.provider import AuthProvider, Principal
 from meip.core.config import Settings
-from meip.core.errors import ForbiddenError, UnauthorizedError
+from meip.core.errors import (
+    BadRequestError,
+    ForbiddenError,
+    PreconditionRequiredError,
+    UnauthorizedError,
+)
 from meip.tenancy.context import Actor, OperationContext, open_tenant_scope
 from meip.tenancy.permissions import Permission
 from meip.tenancy.service import resolve_membership
@@ -68,6 +74,35 @@ async def get_request_context(
 
 
 Context = Annotated[OperationContext, Depends(get_request_context)]
+
+
+# --- Optimistic concurrency ----------------------------------------------------------------
+#
+# Single-resource responses carry ``ETag: "<version>"``. Every mutation of an existing
+# resource must send it back in ``If-Match``; a stale value gets 412, a missing one 428.
+
+_STRONG_ETAG = re.compile(r'^"(\d{1,9})"$')
+
+
+def etag(version: int) -> str:
+    return f'"{version}"'
+
+
+def expected_version(
+    if_match: Annotated[
+        str | None,
+        Header(alias="If-Match", description='Current ETag of the resource, e.g. "3"'),
+    ] = None,
+) -> int:
+    if if_match is None:
+        raise PreconditionRequiredError("Send the resource's current ETag in If-Match")
+    match = _STRONG_ETAG.match(if_match.strip())
+    if match is None:
+        raise BadRequestError('If-Match must be a single strong ETag, e.g. "3"')
+    return int(match.group(1))
+
+
+IfMatch = Annotated[int, Depends(expected_version)]
 CurrentPrincipal = Annotated[Principal, Depends(get_principal)]
 
 
@@ -94,6 +129,10 @@ CaseCreateCtx = Annotated[OperationContext, Depends(requires(Permission.CASE_CRE
 CaseUpdateCtx = Annotated[OperationContext, Depends(requires(Permission.CASE_UPDATE))]
 CaseTransitionCtx = Annotated[OperationContext, Depends(requires(Permission.CASE_TRANSITION))]
 ApplicantWriteCtx = Annotated[OperationContext, Depends(requires(Permission.APPLICANT_WRITE))]
+FinancialWriteCtx = Annotated[OperationContext, Depends(requires(Permission.FINANCIAL_WRITE))]
 MemberReadCtx = Annotated[OperationContext, Depends(requires(Permission.MEMBER_READ))]
 MemberManageCtx = Annotated[OperationContext, Depends(requires(Permission.MEMBER_MANAGE))]
+FirmSettingsManageCtx = Annotated[
+    OperationContext, Depends(requires(Permission.FIRM_SETTINGS_MANAGE))
+]
 AuditReadCtx = Annotated[OperationContext, Depends(requires(Permission.AUDIT_READ))]

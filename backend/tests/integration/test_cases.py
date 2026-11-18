@@ -17,26 +17,46 @@ async def _transition(firm: Firm, case_id: str, to: str, version: int, **extra: 
     return await firm.request(
         "POST",
         f"/api/v1/cases/{case_id}/transitions",
-        json={"to_status": to, "version": version, **extra},
+        if_match=version,
+        json={"to_status": to, **extra},
     )
 
 
 class TestCaseValidation:
-    async def test_loan_cannot_exceed_property_value(self, firm: Firm) -> None:
+    async def test_loan_above_property_value_is_a_warning_not_a_block(self, firm: Firm) -> None:
         resp = await firm.request(
             "POST",
             "/api/v1/cases",
             json={"purpose": "purchase", "property_value": money(100), "loan_amount": money(101)},
         )
-        assert resp.status_code == 422
-        assert resp.json()["type"].endswith(":business-rule-violation")
+        assert resp.status_code == 201
+        assert [w["code"] for w in resp.json()["warnings"]] == ["loan_exceeds_property_value"]
 
-    @pytest.mark.parametrize("term", [11, 481])
-    async def test_term_bounds(self, firm: Firm, term: int) -> None:
+    @pytest.mark.parametrize(
+        ("term", "warned"), [(59, True), (60, False), (480, False), (481, True)]
+    )
+    async def test_atypical_term_is_a_warning(self, firm: Firm, term: int, warned: bool) -> None:
+        resp = await firm.request(
+            "POST", "/api/v1/cases", json={"purpose": "purchase", "term_months": term}
+        )
+        assert resp.status_code == 201
+        codes = [w["code"] for w in resp.json()["warnings"]]
+        assert ("term_outside_typical_range" in codes) is warned
+
+    @pytest.mark.parametrize("term", [0, 601])
+    async def test_term_outside_sanity_range_rejected(self, firm: Firm, term: int) -> None:
         resp = await firm.request(
             "POST", "/api/v1/cases", json={"purpose": "purchase", "term_months": term}
         )
         assert resp.status_code == 422
+
+    async def test_purpose_and_property_use_are_separate(self, firm: Firm) -> None:
+        case = await firm.create_case(purpose="porting", property_use="buy_to_let")
+        assert (case["purpose"], case["property_use"]) == ("porting", "buy_to_let")
+        updated = await firm.request(
+            "PATCH", f"/api/v1/cases/{case['id']}", if_match=1, json={"property_use": None}
+        )
+        assert updated.json()["property_use"] is None
 
     async def test_negative_money_rejected(self, firm: Firm) -> None:
         resp = await firm.request(
@@ -44,38 +64,40 @@ class TestCaseValidation:
         )
         assert resp.status_code == 422
 
-    async def test_update_validates_against_existing_values(self, firm: Firm) -> None:
+    async def test_update_recomputes_warnings(self, firm: Firm) -> None:
         case = await firm.create_case(property_value=money(1000))
+        assert case["warnings"] == []
         resp = await firm.request(
-            "PATCH", f"/api/v1/cases/{case['id']}", json={"version": 1, "loan_amount": money(2000)}
+            "PATCH", f"/api/v1/cases/{case['id']}", if_match=1, json={"loan_amount": money(2000)}
         )
-        assert resp.status_code == 422
+        assert resp.status_code == 200
+        assert [w["code"] for w in resp.json()["warnings"]] == ["loan_exceeds_property_value"]
 
     async def test_purpose_cannot_be_cleared(self, firm: Firm) -> None:
         case = await firm.create_case()
         resp = await firm.request(
-            "PATCH", f"/api/v1/cases/{case['id']}", json={"version": 1, "purpose": None}
+            "PATCH", f"/api/v1/cases/{case['id']}", if_match=1, json={"purpose": None}
         )
         assert resp.status_code == 422
 
     async def test_noop_update_rejected(self, firm: Firm) -> None:
         case = await firm.create_case()
         resp = await firm.request(
-            "PATCH", f"/api/v1/cases/{case['id']}", json={"version": 1, "purpose": "purchase"}
+            "PATCH", f"/api/v1/cases/{case['id']}", if_match=1, json={"purpose": "purchase"}
         )
         assert resp.status_code == 422
 
-    async def test_stale_version_is_409(self, firm: Firm) -> None:
+    async def test_stale_version_is_412(self, firm: Firm) -> None:
         case = await firm.create_case()
         ok = await firm.request(
-            "PATCH", f"/api/v1/cases/{case['id']}", json={"version": 1, "term_months": 240}
+            "PATCH", f"/api/v1/cases/{case['id']}", if_match=1, json={"term_months": 240}
         )
         assert ok.status_code == 200
         stale = await firm.request(
-            "PATCH", f"/api/v1/cases/{case['id']}", json={"version": 1, "term_months": 300}
+            "PATCH", f"/api/v1/cases/{case['id']}", if_match=1, json={"term_months": 300}
         )
-        assert stale.status_code == 409
-        assert stale.json()["type"].endswith(":version-conflict")
+        assert stale.status_code == 412
+        assert stale.json()["type"].endswith(":precondition-failed")
 
     async def test_unknown_case_is_404(self, firm: Firm) -> None:
         resp = await firm.request("GET", "/api/v1/cases/00000000-0000-7000-8000-000000000000")
@@ -96,7 +118,7 @@ class TestAdviserAssignment:
         adviser = await firm.add_member("adviser")
         mid = firm.members[adviser]
         deact = await firm.request(
-            "PATCH", f"/api/v1/members/{mid}", json={"version": 2, "status": "deactivated"}
+            "PATCH", f"/api/v1/members/{mid}", if_match=2, json={"status": "deactivated"}
         )
         assert deact.status_code == 200
         resp = await firm.request(
@@ -119,7 +141,8 @@ class TestAdviserAssignment:
             "PATCH",
             f"/api/v1/cases/{case['id']}",
             as_=clerk,
-            json={"version": 1, "adviser_membership_id": None},
+            if_match=1,
+            json={"adviser_membership_id": None},
         )
         assert resp.status_code == 403
 
@@ -132,7 +155,8 @@ class TestAdviserAssignment:
             "PATCH",
             f"/api/v1/cases/{case['id']}",
             as_=adviser,
-            json={"version": 1, "adviser_membership_id": mid},
+            if_match=1,
+            json={"adviser_membership_id": mid},
         )
         assert resp.status_code == 200
         listed = await firm.request("GET", "/api/v1/cases", params={"adviser_membership_id": mid})
@@ -166,7 +190,8 @@ class TestRoles:
             "POST",
             f"/api/v1/cases/{case['id']}/transitions",
             as_=clerk,
-            json={"to_status": "closed", "version": 1, "reason": "Client withdrew"},
+            if_match=1,
+            json={"to_status": "closed", "closure_reason": "not_proceeding"},
         )
         assert resp.status_code == 403
 
@@ -177,38 +202,67 @@ class TestLifecycle:
         resp = await _transition(firm, case["id"], "collecting_evidence", 1)
         assert resp.status_code == 422
 
-    async def test_back_to_draft(self, firm: Firm) -> None:
+    async def test_forward_to_review_and_back(self, firm: Firm) -> None:
         case = await firm.create_case()
         await firm.add_applicant(case["id"])
         assert (await _transition(firm, case["id"], "collecting_evidence", 1)).status_code == 200
-        back = await _transition(firm, case["id"], "draft", 2)
-        assert back.status_code == 200
-        assert back.json()["status"] == "draft"
+        review = await _transition(firm, case["id"], "in_review", 2)
+        assert review.json()["status"] == "in_review"
+        back = await _transition(firm, case["id"], "collecting_evidence", 3)
+        assert back.json()["status"] == "collecting_evidence"
+        draft = await _transition(firm, case["id"], "draft", 4)
+        assert draft.json()["status"] == "draft"
+
+    @pytest.mark.parametrize("retired", ["processing", "approved"])
+    async def test_retired_statuses_are_rejected(self, firm: Firm, retired: str) -> None:
+        case = await firm.create_case()
+        resp = await _transition(firm, case["id"], retired, 1)
+        assert resp.status_code == 422
 
     async def test_undefined_transition_is_409(self, firm: Firm) -> None:
         case = await firm.create_case()
-        resp = await _transition(firm, case["id"], "approved", 1)
+        resp = await _transition(firm, case["id"], "in_review", 1)
         assert resp.status_code == 409
         assert resp.json()["type"].endswith(":invalid-state-transition")
         assert "available" not in resp.json()
 
-    async def test_later_phase_transition_reports_unavailable(self, firm: Firm) -> None:
+    async def test_verification_is_unavailable_until_approvals_exist(self, firm: Firm) -> None:
         case = await firm.create_case()
         await firm.add_applicant(case["id"])
         await _transition(firm, case["id"], "collecting_evidence", 1)
-        resp = await _transition(firm, case["id"], "processing", 2)
+        await _transition(firm, case["id"], "in_review", 2)
+        resp = await _transition(firm, case["id"], "verified", 3)
         assert resp.status_code == 409
         assert resp.json()["available"] is False
 
-    async def test_close_requires_reason_and_is_terminal(self, firm: Firm) -> None:
+    async def test_closing_requires_a_reason_code(self, firm: Firm) -> None:
         case = await firm.create_case()
         assert (await _transition(firm, case["id"], "closed", 1)).status_code == 422
-        closed = await _transition(firm, case["id"], "closed", 1, reason="Client withdrew")
+        other = await _transition(firm, case["id"], "closed", 1, closure_reason="other")
+        assert other.status_code == 422  # 'other' also needs a note
+        closed = await _transition(
+            firm, case["id"], "closed", 1, closure_reason="duplicate", note="Same as C-12"
+        )
         assert closed.status_code == 200
-        assert (await _transition(firm, case["id"], "draft", 2)).status_code == 409
+        body = closed.json()
+        assert (body["status"], body["closure_reason"]) == ("closed", "duplicate")
+        assert body["closure_note"] == "Same as C-12"
+
+    async def test_closure_reason_only_when_closing(self, firm: Firm) -> None:
+        case = await firm.create_case()
+        await firm.add_applicant(case["id"])
+        resp = await _transition(
+            firm, case["id"], "collecting_evidence", 1, closure_reason="duplicate"
+        )
+        assert resp.status_code == 422
+
+    async def test_closed_case_is_locked_until_reopened(self, firm: Firm) -> None:
+        case = await firm.create_case()
+        await firm.add_applicant(case["id"])
+        await _transition(firm, case["id"], "closed", 1, closure_reason="not_proceeding")
 
         edit = await firm.request(
-            "PATCH", f"/api/v1/cases/{case['id']}", json={"version": 2, "term_months": 240}
+            "PATCH", f"/api/v1/cases/{case['id']}", if_match=2, json={"term_months": 240}
         )
         assert edit.status_code == 409
         add = await firm.request(
@@ -217,12 +271,49 @@ class TestLifecycle:
             json={"first_name": "A", "last_name": "B"},
         )
         assert add.status_code == 409
+        assert (await _transition(firm, case["id"], "draft", 2)).status_code == 409
+
+    async def test_reopen_requires_a_note_and_clears_the_closure(self, firm: Firm) -> None:
+        case = await firm.create_case()
+        await firm.add_applicant(case["id"])
+        await _transition(firm, case["id"], "closed", 1, closure_reason="not_proceeding")
+
+        assert (await _transition(firm, case["id"], "collecting_evidence", 2)).status_code == 422
+        reopened = await _transition(
+            firm, case["id"], "collecting_evidence", 2, note="Client returned"
+        )
+        assert reopened.status_code == 200
+        body = reopened.json()
+        assert (body["status"], body["closure_reason"], body["closure_note"]) == (
+            "collecting_evidence",
+            None,
+            None,
+        )
+        events = (await firm.request("GET", f"/api/v1/cases/{case['id']}/events")).json()
+        last = events["items"][-1]
+        assert last["changes"]["status"] == {"from": "closed", "to": "collecting_evidence"}
+        assert last["changes"]["closure_reason"] == {"from": "not_proceeding", "to": None}
+        assert last["details"] == {"note": "Client returned"}
+
+    async def test_case_administrator_cannot_reopen(self, firm: Firm) -> None:
+        clerk = await firm.add_member("case_administrator")
+        case = await firm.create_case()
+        await firm.add_applicant(case["id"])
+        await _transition(firm, case["id"], "closed", 1, closure_reason="not_proceeding")
+        resp = await firm.request(
+            "POST",
+            f"/api/v1/cases/{case['id']}/transitions",
+            as_=clerk,
+            if_match=2,
+            json={"to_status": "collecting_evidence", "note": "x"},
+        )
+        assert resp.status_code == 403
 
 
 class TestListing:
     async def test_pagination_and_status_filter(self, firm: Firm) -> None:
         ids = [(await firm.create_case())["id"] for _ in range(3)]
-        await _transition(firm, ids[0], "closed", 1, reason="Duplicate")
+        await _transition(firm, ids[0], "closed", 1, closure_reason="duplicate")
 
         page = (await firm.request("GET", "/api/v1/cases", params={"limit": 2})).json()
         assert page["total"] == 3

@@ -134,7 +134,7 @@ async def test_invitation_grants_no_access_without_consent(make_firm: MakeFirm) 
 
     # The inviting firm cannot force activation.
     forced = await firm_b.request(
-        "PATCH", f"/api/v1/members/{invitation_id}", json={"version": 1, "status": "active"}
+        "PATCH", f"/api/v1/members/{invitation_id}", if_match=1, json={"status": "active"}
     )
     assert forced.status_code == 422
     assert (await firm_b.request("GET", "/api/v1/cases", as_=subject)).status_code == 403

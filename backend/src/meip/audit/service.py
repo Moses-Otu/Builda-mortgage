@@ -21,6 +21,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime
+from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 
@@ -72,7 +73,16 @@ NON_PERSONAL_FIELDS = frozenset(
         "adviser_membership_id",
         "admin_membership_id",
         "new_primary_applicant_id",
-        "name",
+        "previous_primary_applicant_id",
+        "income_source_id",
+        "commitment_id",
+        "expenditure_item_id",
+        "supersedes_observation_id",
+        "retired_reason",
+        "currency",
+        "to_be_repaid_before_completion",
+        # No "name": it means a firm's name in one place and an employer or business in
+        # another. Unclassified fields are erasable, which is the safe default.
         "fca_frn",
         "max_applicants",
         "require_four_eyes_verification",
@@ -131,6 +141,8 @@ def _jsonable(value: Any) -> Any:
         return value.isoformat()
     if isinstance(value, StrEnum):
         return value.value
+    if isinstance(value, Decimal):
+        return str(value)  # exact; floats would lose precision
     return value
 
 

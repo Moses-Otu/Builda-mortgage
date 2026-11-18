@@ -15,14 +15,20 @@ from fastapi import FastAPI
 
 from tests.conftest import Firm, MakeFirm
 
+_F = "/api/v1/cases/{case_id}/financial"
+
 # (method, route template, request kwargs). Bodies are valid so that only tenancy decides.
+# "{...}" placeholders inside bodies are filled with the victim's IDs too.
 PROBES: list[tuple[str, str, dict[str, Any]]] = [
     ("GET", "/api/v1/cases/{case_id}", {}),
-    ("PATCH", "/api/v1/cases/{case_id}", {"json": {"version": 1, "term_months": 240}}),
+    ("PATCH", "/api/v1/cases/{case_id}", {"if_match": 1, "json": {"term_months": 240}}),
     (
         "POST",
         "/api/v1/cases/{case_id}/transitions",
-        {"json": {"to_status": "closed", "version": 1, "reason": "x"}},
+        {
+            "if_match": 1,
+            "json": {"to_status": "closed", "closure_reason": "not_proceeding", "note": "x"},
+        },
     ),
     ("GET", "/api/v1/cases/{case_id}/events", {}),
     ("GET", "/api/v1/cases/{case_id}/applicants", {}),
@@ -31,10 +37,53 @@ PROBES: list[tuple[str, str, dict[str, Any]]] = [
     (
         "PATCH",
         "/api/v1/cases/{case_id}/applicants/{applicant_id}",
-        {"json": {"version": 1, "first_name": "X"}},
+        {"if_match": 1, "json": {"first_name": "X"}},
     ),
-    ("DELETE", "/api/v1/cases/{case_id}/applicants/{applicant_id}", {"params": {"version": 1}}),
-    ("PATCH", "/api/v1/members/{membership_id}", {"json": {"version": 1, "role": "read_only"}}),
+    (
+        "POST",
+        "/api/v1/cases/{case_id}/applicants/{applicant_id}/removal",
+        {"if_match": 1, "json": {"removal_reason": "replaced"}},
+    ),
+    (
+        "POST",
+        "/api/v1/cases/{case_id}/applicants/{applicant_id}/reinstatement",
+        {"if_match": 1, "json": {"note": "x"}},
+    ),
+    ("PATCH", "/api/v1/members/{membership_id}", {"if_match": 1, "json": {"role": "read_only"}}),
+    ("GET", _F + "/income-sources", {}),
+    ("POST", _F + "/income-sources", {"json": {"applicant_id": "{applicant_id}", "kind": "other"}}),
+    ("PATCH", _F + "/income-sources/{income_source_id}", {"if_match": 1, "json": {"name": "x"}}),
+    ("GET", _F + "/commitments", {}),
+    (
+        "POST",
+        _F + "/commitments",
+        {"json": {"kind": "other", "parties": [{"applicant_id": "{applicant_id}"}]}},
+    ),
+    ("PATCH", _F + "/commitments/{commitment_id}", {"if_match": 1, "json": {"status": "settled"}}),
+    ("GET", _F + "/expenditure", {}),
+    ("POST", _F + "/expenditure", {"json": {"category": "other", "scope": "household"}}),
+    (
+        "PATCH",
+        _F + "/expenditure/{expenditure_item_id}",
+        {"if_match": 1, "json": {"category": "transport"}},
+    ),
+    ("GET", _F + "/observations", {}),
+    (
+        "POST",
+        _F + "/observations",
+        {
+            "json": {
+                "commitment_id": "{commitment_id}",
+                "measure": "outstanding_balance",
+                "value": {"type": "money", "amount_minor": 1},
+            }
+        },
+    ),
+    (
+        "POST",
+        _F + "/observations/{observation_id}/retirement",
+        {"json": {"reason": "entered_in_error"}},
+    ),
     # Not tenant-scoped, but an attacker must not be able to accept someone else's invitation.
     ("POST", "/api/v1/me/invitations/{membership_id}/accept", {}),
 ]
@@ -57,12 +106,50 @@ async def victim(make_firm: MakeFirm) -> tuple[Firm, dict[str, str]]:
     applicant = await firm.add_applicant(case["id"])
     # A *pending* invitation, so the accept probe targets something actually acceptable.
     member = await firm.add_member("adviser", accept=False)
+    base = f"/api/v1/cases/{case['id']}/financial"
+    source = await firm.request(
+        "POST",
+        f"{base}/income-sources",
+        json={"applicant_id": applicant["id"], "kind": "employment"},
+    )
+    commitment = await firm.request(
+        "POST",
+        f"{base}/commitments",
+        json={"kind": "credit_card", "parties": [{"applicant_id": applicant["id"]}]},
+    )
+    spend = await firm.request(
+        "POST", f"{base}/expenditure", json={"category": "utilities", "scope": "household"}
+    )
+    observation = await firm.request(
+        "POST",
+        f"{base}/observations",
+        json={
+            "commitment_id": commitment.json()["id"],
+            "measure": "outstanding_balance",
+            "value": {"type": "money", "amount_minor": 99_999},
+        },
+    )
+    assert observation.status_code == 201, observation.text
     ids = {
         "case_id": case["id"],
         "applicant_id": applicant["id"],
         "membership_id": str(firm.members[member]),
+        "income_source_id": source.json()["id"],
+        "commitment_id": commitment.json()["id"],
+        "expenditure_item_id": spend.json()["id"],
+        "observation_id": observation.json()["id"],
     }
     return firm, ids
+
+
+def _fill(value: Any, ids: dict[str, str]) -> Any:
+    if isinstance(value, str):
+        return value.format(**ids) if value.startswith("{") else value
+    if isinstance(value, dict):
+        return {k: _fill(v, ids) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_fill(v, ids) for v in value]
+    return value
 
 
 @pytest.mark.parametrize(("method", "template", "kwargs"), PROBES, ids=lambda p: str(p))
@@ -77,13 +164,20 @@ async def test_foreign_firm_gets_404(
     attacker = await make_firm("Attacker Firm")
     path = template.format(**ids)
 
-    resp = await attacker.request(method, path, **kwargs)
+    resp = await attacker.request(method, path, **_fill(kwargs, ids))
     assert resp.status_code == 404, resp.text
 
     # And the victim's data is untouched.
     case = await owner.request("GET", f"/api/v1/cases/{ids['case_id']}")
     assert case.json()["version"] == 1
     assert case.json()["status"] == "draft"
+    base = f"/api/v1/cases/{ids['case_id']}/financial"
+    observations = (await owner.request("GET", f"{base}/observations")).json()
+    assert [o["id"] for o in observations] == [ids["observation_id"]]
+    commitments = (await owner.request("GET", f"{base}/commitments")).json()
+    assert [(c["status"], c["version"]) for c in commitments] == [("open", 1)]
+    assert len((await owner.request("GET", f"{base}/income-sources")).json()) == 1
+    assert len((await owner.request("GET", f"{base}/expenditure")).json()) == 1
 
 
 async def test_list_endpoints_only_show_own_firm(

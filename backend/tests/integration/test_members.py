@@ -31,7 +31,7 @@ async def test_change_role(firm: Firm) -> None:
     subject = await firm.add_member("read_only")
     mid = firm.members[subject]
     resp = await firm.request(
-        "PATCH", f"/api/v1/members/{mid}", json={"version": 2, "role": "adviser"}
+        "PATCH", f"/api/v1/members/{mid}", if_match=2, json={"role": "adviser"}
     )
     assert resp.status_code == 200
     assert resp.json()["role"] == "adviser"
@@ -44,7 +44,7 @@ async def test_deactivated_member_loses_access(firm: Firm) -> None:
     subject = await firm.add_member("adviser")
     mid = firm.members[subject]
     resp = await firm.request(
-        "PATCH", f"/api/v1/members/{mid}", json={"version": 2, "status": "deactivated"}
+        "PATCH", f"/api/v1/members/{mid}", if_match=2, json={"status": "deactivated"}
     )
     assert resp.status_code == 200
     assert (await firm.request("GET", "/api/v1/cases", as_=subject)).status_code == 403
@@ -53,11 +53,11 @@ async def test_deactivated_member_loses_access(firm: Firm) -> None:
 async def test_last_admin_cannot_be_removed(firm: Firm) -> None:
     mid = firm.admin_membership_id
     demote = await firm.request(
-        "PATCH", f"/api/v1/members/{mid}", json={"version": 1, "role": "adviser"}
+        "PATCH", f"/api/v1/members/{mid}", if_match=1, json={"role": "adviser"}
     )
     assert demote.status_code == 422
     deactivate = await firm.request(
-        "PATCH", f"/api/v1/members/{mid}", json={"version": 1, "status": "deactivated"}
+        "PATCH", f"/api/v1/members/{mid}", if_match=1, json={"status": "deactivated"}
     )
     assert deactivate.status_code == 422
 
@@ -67,7 +67,8 @@ async def test_admin_can_step_down_when_another_admin_exists(firm: Firm) -> None
     resp = await firm.request(
         "PATCH",
         f"/api/v1/members/{firm.admin_membership_id}",
-        json={"version": 1, "role": "adviser"},
+        if_match=1,
+        json={"role": "adviser"},
     )
     assert resp.status_code == 200
 
@@ -108,7 +109,8 @@ async def test_admin_cannot_activate_an_unaccepted_invitation(firm: Firm) -> Non
     resp = await firm.request(
         "PATCH",
         f"/api/v1/members/{firm.members[subject]}",
-        json={"version": 1, "status": "active"},
+        if_match=1,
+        json={"status": "active"},
     )
     assert resp.status_code == 422
     assert (await firm.request("GET", "/api/v1/cases", as_=subject)).status_code == 403
@@ -118,12 +120,12 @@ async def test_revoked_invitation_cannot_be_accepted_or_reactivated(firm: Firm) 
     subject = await firm.add_member("adviser", accept=False)
     mid = firm.members[subject]
     revoked = await firm.request(
-        "PATCH", f"/api/v1/members/{mid}", json={"version": 1, "status": "deactivated"}
+        "PATCH", f"/api/v1/members/{mid}", if_match=1, json={"status": "deactivated"}
     )
     assert revoked.status_code == 200
     assert (await firm.accept(subject, mid)).status_code == 404
     reactivate = await firm.request(
-        "PATCH", f"/api/v1/members/{mid}", json={"version": 2, "status": "active"}
+        "PATCH", f"/api/v1/members/{mid}", if_match=2, json={"status": "active"}
     )
     assert reactivate.status_code == 422
 
@@ -132,11 +134,11 @@ async def test_previously_accepted_member_can_be_reactivated(firm: Firm) -> None
     subject = await firm.add_member("adviser")
     mid = firm.members[subject]
     off = await firm.request(
-        "PATCH", f"/api/v1/members/{mid}", json={"version": 2, "status": "deactivated"}
+        "PATCH", f"/api/v1/members/{mid}", if_match=2, json={"status": "deactivated"}
     )
     assert off.status_code == 200, off.text
     on = await firm.request(
-        "PATCH", f"/api/v1/members/{mid}", json={"version": 3, "status": "active"}
+        "PATCH", f"/api/v1/members/{mid}", if_match=3, json={"status": "active"}
     )
     assert on.status_code == 200, on.text
     assert (await firm.request("GET", "/api/v1/cases", as_=subject)).status_code == 200
