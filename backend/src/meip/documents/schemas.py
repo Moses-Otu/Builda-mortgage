@@ -81,12 +81,48 @@ class ExtractedFieldOut(BaseModel):
     )
 
 
+class CellOut(BaseModel):
+    """One value's provenance: its text exactly as printed, page and box (top-left origin)."""
+
+    text: str
+    page: int
+    box: list[float] = Field(description="[x0, y0, x1, y1]")
+
+
+class TransactionCellsOut(BaseModel):
+    date: CellOut | None
+    date_inherited: bool = Field(description="No date printed on the row: the previous row's")
+    description: list[CellOut] = Field(description="Every printed description line")
+    paid_out: CellOut | None
+    paid_in: CellOut | None
+    balance: CellOut | None
+    other: list[CellOut] = Field(description="Cells that fit no column (the row is unparsed)")
+
+
+class TransactionOut(BaseModel):
+    """One printed row of a bank statement's table (Stage 2-B)."""
+
+    row_number: int
+    kind: str = Field(description="transaction, brought_forward, carried_forward or unparsed")
+    posted_on: date | None
+    description: str = Field(description="Verbatim; lines joined with line breaks")
+    description_truncated: bool
+    paid_in_minor: int | None
+    paid_out_minor: int | None
+    balance_minor: int | None = Field(description="The running balance, when the row prints one")
+    cells: TransactionCellsOut
+    row_evidence: Evidence
+    page_width: float
+    page_height: float
+    unit: str
+
+
 class ExtractionOut(BaseModel):
     provider: str = Field(description="'synthetic-fixture' marks results from synthetic test data")
     model_version: str
     schema_version: str
     classifier_version: str
-    classification: str = Field(description="'payslip' or 'unrecognised'")
+    classification: str = Field(description="'payslip', 'bank_statement' or 'unrecognised'")
     markers: list[str] = Field(description="Classification marker groups found (names only)")
     created_at: datetime
     summary: list[ExtractedFieldOut]
@@ -94,7 +130,11 @@ class ExtractionOut(BaseModel):
     deductions: list[ExtractedFieldOut]
     year_to_date: list[ExtractedFieldOut]
     missing_required: list[str] = Field(
-        description="Required summary fields with no parsed value (pay_date, gross_pay, net_pay)"
+        description="Required summary fields with no parsed value (payslips: pay_date, "
+        "gross_pay, net_pay; statements: period start and end, opening and closing balance)"
+    )
+    transactions: list[TransactionOut] = Field(
+        default_factory=list, description="Bank statements only: every printed table row"
     )
 
 

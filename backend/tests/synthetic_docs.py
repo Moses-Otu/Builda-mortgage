@@ -425,6 +425,289 @@ def payslip_series(
     return out
 
 
+# --- bank statements, consistent with a payslip series (Stage 2-B) --------------------------
+
+STATEMENT_FAULTS = frozenset(
+    {
+        "missing_credit",  # the salary at ``fault_at`` never arrives
+        "short_credit",  # it arrives £100.00 short
+        "near_credit",  # it arrives £1.50 short
+        "duplicate_amount_credit",  # a second credit of the same amount, 2 days earlier
+        "late_credit",  # it arrives 4 days after the pay date (still within the window)
+        "outside_window",  # it arrives 7 days after the pay date
+        "missing_row",  # a non-salary row of statement ``fault_at`` is left out of the PDF
+        "unparsed_row",  # a row's amount is printed unreadably (a letter O for a zero)
+        "statement_gap",  # statement ``fault_at`` isn't produced
+        "multiple_accounts",  # statement ``fault_at`` prints a second account number
+        "foreign_currency",  # statement ``fault_at`` has amounts in US dollars
+    }
+)
+STATEMENT_LAYOUTS = frozenset({"standard", "end_of_day", "no_balance", "two_pages"})
+SALARY_DESCRIPTION = ("SERIES EMPLOYER LTD", "SALARY")
+
+
+@dataclass
+class StatementRow:
+    """Ground truth for one printed row: ``kind`` is transaction, brought_forward or
+    carried_forward; ``balance`` is what the row prints (None when it prints none)."""
+
+    kind: str
+    posted_on: date_type | None
+    description: list[str]
+    paid_in: int | None
+    paid_out: int | None
+    balance: int | None
+    unparsed: bool = False
+
+
+@dataclass
+class SeriesStatement:
+    document: SyntheticDocument
+    account_number: str | None
+    sort_code: str | None
+    period_start: date_type
+    period_end: date_type
+    opening_minor: int
+    closing_minor: int
+    rows: list[StatementRow]
+
+
+@dataclass
+class _Txn:
+    posted_on: date_type
+    description: list[str]
+    amount: int  # signed: credits positive
+    salary: bool = False
+
+
+def _next_working_day(day: date_type) -> date_type:
+    while day.weekday() >= 5:
+        day += timedelta(days=1)
+    return day
+
+
+def _plain(minor: int) -> str:
+    """Table money: no £ sign, as banks print it."""
+    sign = "-" if minor < 0 else ""
+    pounds, pence = divmod(abs(minor), 100)
+    return f"{sign}{pounds:,}.{pence:02d}"
+
+
+def salaries_from(payslips: list[SeriesPayslip]) -> list[tuple[date_type, int]]:
+    """(pay date, net pay) for each payslip: what the account should receive."""
+    return [(p.pay_date, p.net_minor) for p in payslips]
+
+
+def bank_statement_series(
+    salaries: list[tuple[date_type, int]],
+    *,
+    start: tuple[int, int] = (2026, 5),
+    months: int = 4,
+    sort_code: str = "12-34-56",
+    account_number: str = "12344821",
+    holders: str = "MR A EXAMPLE",
+    opening_minor: int = 120_000,
+    layout: str = "standard",
+    masked_number: bool = False,
+    faults: frozenset[str] = frozenset(),
+    fault_at: int = 1,
+    positions: dict[str, int] | None = None,
+) -> list[SeriesStatement]:
+    """SYNTHETIC monthly current-account statements (never real data).
+
+    The salary credits arrive as given (from :func:`salaries_from`); other made-up credits
+    and debits fill each month, with running balances. Statements run from the 1st to the
+    month end. ``fault_at`` (or ``positions``) is a month index for statement faults and an
+    index into ``salaries`` for credit faults."""
+    positions = positions or {}
+    unknown = (faults | set(positions)) - STATEMENT_FAULTS
+    if unknown or layout not in STATEMENT_LAYOUTS:
+        raise ValueError(f"Unknown faults or layout: {sorted(unknown)} {layout}")
+    faults = faults | frozenset(positions)
+
+    def hit(fault: str, i: int) -> bool:
+        return fault in faults and i == positions.get(fault, fault_at)
+
+    txns: list[_Txn] = []
+    for i, (pay_date, net) in enumerate(salaries):
+        if hit("missing_credit", i):
+            continue
+        amount = net - (10_000 if hit("short_credit", i) else 150 if hit("near_credit", i) else 0)
+        day = pay_date + timedelta(
+            days=4 if hit("late_credit", i) else 7 if hit("outside_window", i) else 0
+        )
+        txns.append(_Txn(day, list(SALARY_DESCRIPTION), amount, salary=True))
+        if hit("duplicate_amount_credit", i):
+            txns.append(_Txn(pay_date - timedelta(days=2), ["TRANSFER FROM J SAMPLE"], net))
+
+    year, month = start
+    statements: list[SeriesStatement] = []
+    balance = opening_minor
+    for m in range(months):
+        first = date_type(year, month, 1)
+        last = _month_end(year, month)
+        month_txns = [t for t in txns if first <= t.posted_on <= last] + [
+            _Txn(date_type(year, month, 1), ["STANDING ORDER", "LANDLORD RENT"], -95_000),
+            _Txn(date_type(year, month, 5), ["CARD PAYMENT GROCER", "LONDON GB"], -5_420),
+            _Txn(date_type(year, month, 5), ["CARD PAYMENT CAFE"], -380),
+            _Txn(date_type(year, month, 12), ["DIRECT DEBIT ENERGY CO"], -8_900),
+            _Txn(date_type(year, month, 20), ["TRANSFER FROM S SYNTHETIC"], 2_000),
+        ]
+        month_txns.sort(key=lambda t: (t.posted_on, not t.salary, t.description))
+        opening = balance
+        rows: list[StatementRow] = [
+            StatementRow("brought_forward", None, ["BALANCE BROUGHT FORWARD"], None, None, opening)
+        ]
+        for n, t in enumerate(month_txns):
+            balance += t.amount
+            same_day_next = n + 1 < len(month_txns) and month_txns[n + 1].posted_on == t.posted_on
+            printed_balance: int | None = balance
+            if layout == "no_balance" or (layout == "end_of_day" and same_day_next):
+                printed_balance = None
+            rows.append(
+                StatementRow(
+                    "transaction",
+                    t.posted_on,
+                    t.description,
+                    t.amount if t.amount > 0 else None,
+                    -t.amount if t.amount < 0 else None,
+                    printed_balance,
+                )
+            )
+        closing = balance
+        if layout == "no_balance":
+            rows[0].balance = None  # brought forward printed only in the summary
+        if hit("statement_gap", m):
+            year, month = (year + 1, 1) if month == 12 else (year, month + 1)
+            continue
+        printed = list(rows)
+        if hit("missing_row", m):
+            printed.remove(next(r for r in printed if r.description[0] == "CARD PAYMENT CAFE"))
+        if hit("unparsed_row", m):
+            target = next(r for r in printed if r.description[0] == "DIRECT DEBIT ENERGY CO")
+            target.unparsed = True
+        doc = _draw_statement(
+            printed,
+            period=(first, last),
+            opening=opening,
+            closing=closing,
+            sort_code=sort_code,
+            account_number=account_number,
+            holders=holders,
+            masked=masked_number,
+            balance_column=layout != "no_balance",
+            two_pages=layout == "two_pages",
+            second_account=hit("multiple_accounts", m),
+            dollars=hit("foreign_currency", m),
+        )
+        statements.append(
+            SeriesStatement(
+                doc,
+                None if masked_number else account_number,
+                None if masked_number else sort_code,
+                first,
+                last,
+                opening,
+                closing,
+                printed,
+            )
+        )
+        year, month = (year + 1, 1) if month == 12 else (year, month + 1)
+    return statements
+
+
+# Table columns: date at the left, description, then three right-aligned money columns.
+_COL_DATE, _COL_DESC = 50.0, 110.0
+_RIGHT_OUT, _RIGHT_IN, _RIGHT_BAL = 400.0, 470.0, 545.0
+_TABLE_TOP, _ROW_STEP, _PAGE_BOTTOM = 330.0, 15.0, 790.0
+
+
+def _draw_statement(
+    rows: list[StatementRow],
+    *,
+    period: tuple[date_type, date_type],
+    opening: int,
+    closing: int,
+    sort_code: str,
+    account_number: str,
+    holders: str,
+    masked: bool,
+    balance_column: bool,
+    two_pages: bool,
+    second_account: bool,
+    dollars: bool,
+) -> SyntheticDocument:
+    doc = SyntheticDocument(pages=2 if two_pages else 1)
+    doc.text(1, 50, 60, "SYNTHETIC BANK PLC")
+    doc.text(1, 50, 75, "Statement of account")
+    doc.text(1, 50, 90, holders)  # account holder names: printed, never extracted
+    printed_number = f"****{account_number[-4:]}" if masked else account_number
+    _row(doc, 1, 120, "Sort code", "**-**-**" if masked else sort_code, 300)
+    _row(doc, 1, 135, "Account number", printed_number, 300)
+    if second_account:
+        _row(doc, 1, 150, "Account number", "87654321", 300)
+    first, last = period
+    _row(doc, 1, 170, "Statement period", f"{first:%d %B %Y} to {last:%d %B %Y}", 300)
+    currency = "$" if dollars else "£"
+    _row(doc, 1, 200, "Opening balance", f"{currency}{_plain(opening)}", 300)
+    paid_in = sum(r.paid_in or 0 for r in rows)
+    paid_out = sum(r.paid_out or 0 for r in rows)
+    _row(doc, 1, 215, "Total paid in", f"{currency}{_plain(paid_in)}", 300)
+    _row(doc, 1, 230, "Total paid out", f"{currency}{_plain(paid_out)}", 300)
+    _row(doc, 1, 245, "Closing balance", f"{currency}{_plain(closing)}", 300)
+
+    def header(page: int, y: float) -> None:
+        doc.text(page, _COL_DATE, y, "Date")
+        doc.text(page, _COL_DESC, y, "Description")
+        doc.right(page, _RIGHT_OUT, y, "Paid out (USD)" if dollars else "Paid out")
+        doc.right(page, _RIGHT_IN, y, "Paid in")
+        if balance_column:
+            doc.right(page, _RIGHT_BAL, y, "Balance")
+
+    page, y = 1, _TABLE_TOP
+    header(page, y - 20)
+    split_at = len(rows) // 2 if two_pages else None
+    running = opening
+    drawn: list[StatementRow] = []
+    for n, r in enumerate(rows):
+        if split_at is not None and n == split_at:
+            doc.text(page, _COL_DESC, y, "BALANCE CARRIED FORWARD")
+            doc.right(page, _RIGHT_BAL, y, _plain(running))
+            drawn.append(
+                StatementRow(
+                    "carried_forward", None, ["BALANCE CARRIED FORWARD"], None, None, running
+                )
+            )
+            page, y = 2, 80.0
+            header(page, y - 20)
+            doc.text(page, _COL_DESC, y, "BALANCE BROUGHT FORWARD")
+            doc.right(page, _RIGHT_BAL, y, _plain(running))
+            drawn.append(
+                StatementRow(
+                    "brought_forward", None, ["BALANCE BROUGHT FORWARD"], None, None, running
+                )
+            )
+            y += _ROW_STEP
+        drawn.append(r)
+        if r.posted_on is not None:
+            doc.text(page, _COL_DATE, y, f"{r.posted_on:%d %b}")
+        for k, line in enumerate(r.description):
+            doc.text(page, _COL_DESC, y + k * _ROW_STEP, line)
+        if r.paid_out is not None:
+            text = _plain(r.paid_out)
+            doc.right(page, _RIGHT_OUT, y, text.replace("0", "O", 1) if r.unparsed else text)
+        if r.paid_in is not None:
+            doc.right(page, _RIGHT_IN, y, _plain(r.paid_in))
+        if r.balance is not None and balance_column:
+            doc.right(page, _RIGHT_BAL, y, _plain(r.balance))
+        running += (r.paid_in or 0) - (r.paid_out or 0)
+        y += _ROW_STEP * len(r.description)
+        if y > _PAGE_BOTTOM:
+            raise ValueError("statement too long for one page; use layout='two_pages'")
+    rows[:] = drawn  # the ground truth is what was printed, page-break rows included
+    return doc
+
+
 # --- look-alike documents that must NOT be classified as payslips -------------------------
 
 

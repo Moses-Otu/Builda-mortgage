@@ -25,6 +25,10 @@ const FAILURES: Record<string, string> = {
   encrypted_pdf: "This PDF is password-protected. Upload an unprotected copy.",
   unreadable_pdf: "This file couldn't be opened as a PDF.",
   timeout: "Opening this PDF took too long. Try uploading it again.",
+  statement_multiple_accounts:
+    "This statement shows more than one account. Upload a statement for a single account.",
+  statement_foreign_currency: "This statement isn't in pounds sterling. Only GBP statements are supported.",
+  statement_no_table: "No transactions table could be found on this statement.",
 };
 
 export function documentStatusView(status: DocumentStatus | string, failureCode: string | null): StatusView {

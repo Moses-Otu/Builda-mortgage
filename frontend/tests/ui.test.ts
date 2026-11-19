@@ -47,6 +47,9 @@ describe("document status in plain English", () => {
     ["encrypted_pdf", "password-protected"],
     ["unreadable_pdf", "couldn't be opened as a PDF"],
     ["timeout", "took too long"],
+    ["statement_multiple_accounts", "more than one account"],
+    ["statement_foreign_currency", "pounds sterling"],
+    ["statement_no_table", "No transactions table"],
   ])("explains %s without showing the code", (code, words) => {
     const view = documentStatusView("failed", code);
     expect(view.label).toBe("Failed");
@@ -223,6 +226,10 @@ describe("case steps", () => {
       "upcoming",
       "upcoming",
     ]);
+  });
+  it("ignores bank statements (they have their own confirmation)", () => {
+    const statement = { ...doc("extracted"), document_type: "bank_statement" };
+    expect(states([source], [statement])).toEqual(["done", "current", "upcoming"]);
   });
   it("describes what is waiting", () => {
     expect(caseSteps([source], [doc("extracted"), doc("extracted")])[2]?.detail).toBe("2 payslips waiting for review");

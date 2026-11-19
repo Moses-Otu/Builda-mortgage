@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 MAX_PAGES = 10
+MAX_STATEMENT_PAGES = 20  # Stage 2-B (decision C7): statements only; payslips stay at 10
 
 # PDFium error codes (FPDF_ERR_*): 4 = a password is needed (encrypted).
 _PASSWORD_ERROR = 4
@@ -27,7 +28,7 @@ class PdfCheck:
     error: str | None = None
 
 
-def _inspect(path: str) -> dict[str, object]:
+def _inspect(path: str, max_pages: int = MAX_PAGES) -> dict[str, object]:
     import pypdfium2 as pdfium  # imported only in the child process
 
     try:
@@ -41,18 +42,18 @@ def _inspect(path: str) -> dict[str, object]:
         document.close()
     if pages < 1:
         return {"error": "unreadable_pdf"}
-    if pages > MAX_PAGES:
+    if pages > max_pages:
         return {"error": "too_many_pages"}
     return {"pages": pages}
 
 
-def check_pdf(path: Path, timeout: float) -> PdfCheck:
+def check_pdf(path: Path, timeout: float, max_pages: int = MAX_PAGES) -> PdfCheck:
     """Run the check in a child process. Never raises for a bad PDF; returns a code."""
     # Only what Python needs to start; nothing from MEIP_* reaches the child.
     env = {k: v for k, v in os.environ.items() if k in {"PATH", "SYSTEMROOT", "TEMP", "TMP"}}
     try:
         result = subprocess.run(  # noqa: S603 - fixed interpreter and module, path is ours
-            [sys.executable, "-I", "-m", "meip.documents.pdfcheck", str(path)],
+            [sys.executable, "-I", "-m", "meip.documents.pdfcheck", str(path), str(max_pages)],
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -72,7 +73,7 @@ def check_pdf(path: Path, timeout: float) -> PdfCheck:
 
 if __name__ == "__main__":
     try:
-        outcome = _inspect(sys.argv[1])
+        outcome = _inspect(sys.argv[1], int(sys.argv[2]) if len(sys.argv) > 2 else MAX_PAGES)
     except Exception:
         outcome = {"error": "unreadable_pdf"}
     print(json.dumps(outcome))

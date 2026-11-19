@@ -192,6 +192,16 @@ UPDATE_OPENAPI_SNAPSHOT=1 uv run pytest tests/integration/test_schema.py
   **Synthetic documents only** until D10 is approved; document routes answer 404
   `feature-disabled` unless `MEIP_DOCUMENTS_ENABLED=true`. Stored originals with no database
   row (after a crash) are listed by `meip-admin find-orphan-blobs`; nothing deletes them.
+- **Bank statements (Stage 2-B):** `document_type=bank_statement` (up to 20 pages), **local
+  and test only**: refused with 404 `feature-disabled` anywhere else, whatever other settings
+  say. Extraction keeps the summary (account last 4 digits, period, balances) and every table
+  row (verbatim description, money in and out, running balance), each value with its page
+  and box; it refuses statements with several accounts, a foreign currency or no table.
+  The full account number and sort code are never stored in columns; a keyed fingerprint
+  (`MEIP_ACCOUNT_FINGERPRINT_KEY`, fixed development key locally) tells accounts apart. They
+  remain in the original and the raw provider output. Statement confirmation and the bank
+  checks arrive in 2B-2 and 2B-3. Demo statements: `bank_statement_series()` in
+  `tests/synthetic_docs.py`.
 - **Tests and `.env`:** the suite sets `MEIP_ENV_FILE` to empty (in `tests/__init__.py`), so a
   local `backend/.env` never leaks into tests. Outside tests, `MEIP_ENV_FILE` chooses the
   dotenv file (default `.env`; empty for none).

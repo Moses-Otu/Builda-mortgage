@@ -182,7 +182,8 @@ class TestValidation:
     async def test_document_type_is_required_and_limited(
         self, firm: Firm, case: dict[str, Any]
     ) -> None:
-        for params in ({}, {"document_type": "bank_statement"}):
+        # bank_statement is a valid type since Stage 2-B (local and test only).
+        for params in ({}, {"document_type": "p60"}, {"document_type": "credit_report"}):
             resp = await firm.request(
                 "POST",
                 _docs(case),

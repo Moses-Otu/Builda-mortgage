@@ -391,9 +391,13 @@ function DocumentList(props: {
   return (
     <ul className="flex flex-col gap-2">
       {documents.map((d) => {
-        const view = documentStatusView(d.status, d.failure_code);
+        // Bank statements are extracted from step 2B-1; their confirmation screen is 2B-2.
+        const isStatement = d.document_type === "bank_statement";
+        const status = documentStatusView(d.status, d.failure_code);
+        const view =
+          isStatement && d.status === "extracted" ? { ...status, label: "Extracted", tone: "info" as const } : status;
         const href = `/cases/${caseId}/documents/${d.id}`;
-        const canOpen = d.status === "extracted" || d.status === "reviewed";
+        const canOpen = !isStatement && (d.status === "extracted" || d.status === "reviewed");
         return (
           <li key={d.id} className="rounded-xl border border-slate-200 p-4">
             <div className="flex items-center gap-3">
@@ -401,7 +405,10 @@ function DocumentList(props: {
                 <FileText className="size-5" />
               </span>
               <div className="min-w-0 flex-1 text-sm">
-                <p className="truncate font-medium">{d.original.original_filename ?? "payslip.pdf"}</p>
+                <p className="flex items-center gap-2 truncate font-medium">
+                  {d.original.original_filename ?? (isStatement ? "statement.pdf" : "payslip.pdf")}
+                  {isStatement && <Badge tone="neutral">Bank statement</Badge>}
+                </p>
                 <p className="text-slate-500">
                   {nameOf(d.applicant_id)} · {formatDateTime(d.created_at)}
                   {d.page_count !== null && ` · ${d.page_count} page${d.page_count === 1 ? "" : "s"}`}

@@ -99,6 +99,8 @@ def test_the_worker_can_reach_no_user_facing_service() -> None:
         "meip.documents.extraction",
         "meip.documents.models",
         "meip.documents.pdfcheck",
+        # Bank statement extraction (Stage 2-B): a pure parser, like extraction.
+        "meip.documents.statements",
         "meip.documents.storage",
         # The model registry only (no services): lets the standalone worker resolve foreign keys.
         "meip.models",

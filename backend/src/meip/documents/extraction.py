@@ -368,6 +368,9 @@ def _rows(lines: list[Line]) -> list[list[Line]]:
     return [sorted(row, key=lambda ln: ln.box.x0) for row in rows]
 
 
+rows_of = _rows  # shared with bank statement extraction (meip.documents.statements)
+
+
 def _value_for(kind: ValueKind, cells: list[Line]) -> Line | None:
     """The value of a labelled row: the nearest suitable cell to the right of the label
     (for money in a table, the rightmost amount, i.e. the Amount column)."""

@@ -43,6 +43,7 @@ from meip.documents.models import (
     DocumentType,
     DocumentVersion,
     ExtractedField,
+    ExtractedTransaction,
     ExtractionRun,
     FailureCode,
     ScanStatus,
@@ -54,7 +55,10 @@ from meip.documents.schemas import (
     Evidence,
     ExtractedFieldOut,
     ExtractionOut,
+    TransactionCellsOut,
+    TransactionOut,
 )
+from meip.documents.statements import REQUIRED_FIELDS as STATEMENT_REQUIRED
 from meip.documents.storage import BlobKey, BlobNotFoundError, BlobStore
 from meip.tenancy.context import OperationContext
 
@@ -432,6 +436,20 @@ async def get_extraction(
         if f.value_money_minor is not None or f.value_date is not None or f.value_text
     }
     is_payslip = run.classification == "payslip"
+    is_statement = run.classification == "bank_statement"
+    required = REQUIRED_FIELDS if is_payslip else STATEMENT_REQUIRED if is_statement else ()
+    transactions = (
+        [
+            _transaction_out(t)
+            for t in await ctx.session.scalars(
+                select(ExtractedTransaction)
+                .where(ExtractedTransaction.run_id == run.id)
+                .order_by(ExtractedTransaction.row_number)
+            )
+        ]
+        if is_statement
+        else []
+    )
     return ExtractionOut(
         provider=run.provider,
         model_version=run.model_version,
@@ -444,5 +462,24 @@ async def get_extraction(
         payments=by_section["payment"],
         deductions=by_section["deduction"],
         year_to_date=by_section["year_to_date"],
-        missing_required=[c for c in REQUIRED_FIELDS if c not in parsed] if is_payslip else [],
+        missing_required=[c for c in required if c not in parsed],
+        transactions=transactions,
+    )
+
+
+def _transaction_out(t: ExtractedTransaction) -> TransactionOut:
+    return TransactionOut(
+        row_number=t.row_number,
+        kind=t.kind,
+        posted_on=t.posted_on,
+        description=t.description,
+        description_truncated=t.description_truncated,
+        paid_in_minor=t.paid_in_minor,
+        paid_out_minor=t.paid_out_minor,
+        balance_minor=t.balance_minor,
+        cells=TransactionCellsOut.model_validate(t.cells),
+        row_evidence=Evidence(page_number=t.page_number, x0=t.x0, y0=t.y0, x1=t.x1, y1=t.y1),
+        page_width=t.page_width,
+        page_height=t.page_height,
+        unit=t.unit,
     )

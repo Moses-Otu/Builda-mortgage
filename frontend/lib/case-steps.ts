@@ -13,7 +13,10 @@ export interface Step {
 
 export function caseSteps(sources: IncomeSource[], documents: DocumentOut[]): Step[] {
   const hasSource = sources.some((s) => !s.withdrawn_at);
-  const usable = documents.filter((d) => d.status !== "failed" && d.status !== "unrecognised");
+  // Payslips only: bank statements have their own confirmation (Stage 2-B).
+  const usable = documents.filter(
+    (d) => d.document_type !== "bank_statement" && d.status !== "failed" && d.status !== "unrecognised",
+  );
   const hasUpload = usable.length > 0;
   const toReview = usable.filter((d) => d.status === "extracted").length;
   const processing = usable.filter((d) => d.status === "received" || d.status === "ready").length;

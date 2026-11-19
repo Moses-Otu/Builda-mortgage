@@ -27,6 +27,7 @@ from meip.api.deps import (
     etag,
     require_documents_enabled,
 )
+from meip.core.errors import FeatureDisabledError
 from meip.documents import review, service
 from meip.documents.models import PDF_MEDIA_TYPE, DocumentType
 from meip.documents.schemas import DocumentOut, ExtractionOut, ReviewIn, ReviewOut
@@ -65,7 +66,10 @@ async def upload_document(
     store: Store,
     settings: SettingsDep,
     response: Response,
-    document_type: Annotated[DocumentType, Query(description="Phase 2.0: payslip only")],
+    document_type: Annotated[
+        DocumentType,
+        Query(description="payslip, or bank_statement (local and test only in Stage 2-B)"),
+    ],
     applicant_id: Annotated[
         uuid.UUID | None, Query(description="The applicant the document belongs to")
     ] = None,
@@ -79,6 +83,9 @@ async def upload_document(
         ),
     ] = None,
 ) -> DocumentOut:
+    if document_type is DocumentType.BANK_STATEMENT and not settings.bank_statements_allowed:
+        # Fail closed: real statements need the privacy gate first (Stage 2-B plan, 2.3).
+        raise FeatureDisabledError("Bank statements are not enabled in this deployment")
     service.check_declared(content_type, content_length, settings.document_max_bytes)
     await service.check_upload_target(ctx, case_id, applicant_id)
     received = await service.receive_pdf(request.stream(), max_bytes=settings.document_max_bytes)

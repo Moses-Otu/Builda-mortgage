@@ -262,11 +262,12 @@ class Firm:
         applicant_id: str | None = None,
         filename: str | None = None,
         content_type: str = "application/pdf",
+        document_type: str = "payslip",
     ) -> httpx.Response:
         headers = {"Content-Type": content_type}
         if filename is not None:
             headers["Upload-Filename"] = filename
-        params = {"document_type": "payslip"}
+        params = {"document_type": document_type}
         if applicant_id is not None:
             params["applicant_id"] = applicant_id
         return await self.request(

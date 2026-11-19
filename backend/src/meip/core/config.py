@@ -52,6 +52,9 @@ NON_DEPLOYED_ENVIRONMENTS = frozenset({Environment.LOCAL, Environment.TEST})
 
 MIB = 1024 * 1024
 
+# Local and test only: a fixed key so fingerprints are stable across restarts in development.
+DEVELOPMENT_FINGERPRINT_KEY = b"meip-local-development-account-fingerprint-key"
+
 
 def _env_file() -> str | None:
     """The dotenv file to read: ``MEIP_ENV_FILE`` if set (empty means none), else ``.env``.
@@ -121,6 +124,30 @@ class Settings(BaseSettings):
     )
     pdf_check_timeout_seconds: float = Field(default=30.0, gt=0)
     extraction_provider: ExtractionProvider = ExtractionProvider.SYNTHETIC
+    account_fingerprint_key: SecretStr | None = Field(
+        default=None,
+        description=(
+            "Secret key for bank account fingerprints (HMAC of sort code and account number). "
+            "Optional in local and test (a fixed development key is used); required anywhere "
+            "else before bank statements can be enabled. Rotating it changes every fingerprint."
+        ),
+    )
+
+    @property
+    def bank_statements_allowed(self) -> bool:
+        """Stage 2-B: bank statements are refused outside local and test, whatever else is
+        set. Real statements need the DPIA, D10, R15-R17, provider terms and key management
+        first (Stage 2-B plan, section 2.3)."""
+        return self.env in NON_DEPLOYED_ENVIRONMENTS
+
+    def fingerprint_key(self) -> bytes:
+        if self.account_fingerprint_key is not None:
+            return self.account_fingerprint_key.get_secret_value().encode()
+        if self.env in NON_DEPLOYED_ENVIRONMENTS:
+            return DEVELOPMENT_FINGERPRINT_KEY
+        raise ConfigurationError(
+            f"MEIP_ACCOUNT_FINGERPRINT_KEY is required when env={self.env.value}"
+        )
 
     @model_validator(mode="after")
     def _validate_documents(self) -> Settings:

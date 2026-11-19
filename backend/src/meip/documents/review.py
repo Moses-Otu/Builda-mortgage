@@ -31,6 +31,7 @@ from meip.documents.models import (
     Document,
     DocumentReview,
     DocumentStatus,
+    DocumentType,
     DocumentVersion,
     ExtractedField,
     ExtractionRun,
@@ -193,6 +194,8 @@ async def submit_review(
     # The case lock serialises every write to the case, including concurrent reviews.
     require_editable(await get_case(ctx, case_id, for_update=True))
     document, _, run = await _load(ctx, case_id, document_id)
+    if document.document_type != DocumentType.PAYSLIP.value:
+        raise ConflictError("Only payslips can be reviewed here; statement confirmation is 2B-2")
     # "Already reviewed" comes first: a duplicate or concurrent submission carries the same,
     # now stale, If-Match, and must learn that the review exists rather than get a 412.
     if document.status == DocumentStatus.REVIEWED.value and run is not None:

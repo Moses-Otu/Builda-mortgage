@@ -157,6 +157,19 @@ Single deployable backend codebase (modular monolith) with API and worker proces
     cases and applicants (`POST cases`, `POST cases/{id}/applicants`); the API's own
     permissions decide. Display wording for API codes lives in `lib/labels.ts` and
     `lib/failures.ts`; the codes are unchanged.
+  - **Bank statements (Stage 2-B, step 2B-1):** document type `bank_statement`, refused in
+    code outside local and test (`Settings.bank_statements_allowed`) until the privacy gate
+    in the plan is passed. `documents/statements.py` (classifier `statement-rules/1`, schema
+    `bank_statement/1.0.0`) parses the same provider layout as payslips: the summary
+    (account last 4 digits, period, opening and closing balance, totals) as
+    `extracted_fields`, and every printed table row as `extracted_transactions`, with the
+    description verbatim, money in and out kept separate, and each value's page and box in
+    `cells`. Unreadable rows are kept as `unparsed`; multiple accounts, foreign currency or
+    no table are refused with a reason. The full account number and sort code are read only
+    in memory to compute a **keyed HMAC fingerprint** on the extraction run
+    (`MEIP_ACCOUNT_FINGERPRINT_KEY`; a fixed development key in local and test). They remain
+    in the original PDF and the raw provider output, which are classed together for
+    retention. Statements may have up to 20 pages (payslips 10).
   - **Reconciliation (Stage 2-A):** module `reconciliation`. Six deterministic checks
     (`payslip-checks/1`) are **pure functions** over the case's current reviewed payslip
     figures, reviewed pay dates and periods, and the declared basic salary. They run **in the

@@ -15,6 +15,7 @@ from typing import Any
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     Date,
     Float,
@@ -32,14 +33,18 @@ from sqlalchemy.orm import Mapped, mapped_column
 from meip.core.db import Base, check_in, utcnow
 from meip.core.ids import uuid7
 from meip.documents.extraction import FIELD_CODES
+from meip.documents.statements import FIELD_CODES as STATEMENT_FIELD_CODES
 from meip.documents.storage import BLOB_KEY_PATTERN
 
 PDF_MEDIA_TYPE = "application/pdf"
+# Payslip and bank statement field codes, in a fixed order (the CHECK must match migration 0017).
+ALL_FIELD_CODES = sorted(FIELD_CODES | STATEMENT_FIELD_CODES)
 
 
 class DocumentType(StrEnum):
     PAYSLIP = "payslip"
-    """Phase 2.0 accepts payslips only."""
+    BANK_STATEMENT = "bank_statement"
+    """Stage 2-B. Local and test only until the privacy gate is passed (plan, section 2.3)."""
 
 
 class DocumentStatus(StrEnum):
@@ -66,6 +71,10 @@ class FailureCode(StrEnum):
     TIMEOUT = "timeout"
     RETRIES_EXHAUSTED = "retries_exhausted"
     EXTRACTION_FAILED = "extraction_failed"
+    # Bank statements the extractor refuses rather than guesses (Stage 2-B).
+    STATEMENT_MULTIPLE_ACCOUNTS = "statement_multiple_accounts"
+    STATEMENT_FOREIGN_CURRENCY = "statement_foreign_currency"
+    STATEMENT_NO_TABLE = "statement_no_table"
 
 
 class JobKind(StrEnum):
@@ -208,6 +217,7 @@ class Job(Base):
 
 class Classification(StrEnum):
     PAYSLIP = "payslip"
+    BANK_STATEMENT = "bank_statement"
     UNRECOGNISED = "unrecognised"
 
 
@@ -230,6 +240,10 @@ class ExtractionRun(Base):
         ),
         CheckConstraint(check_in("classification", Classification), name="classification"),
         CheckConstraint("raw_output_sha256 ~ '^[0-9a-f]{64}$'", name="raw_output_sha256"),
+        CheckConstraint(
+            "account_fingerprint IS NULL OR account_fingerprint ~ '^[0-9a-f]{64}$'",
+            name="account_fingerprint",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
@@ -244,6 +258,8 @@ class ExtractionRun(Base):
     markers: Mapped[list[str]] = mapped_column(JSONB)
     raw_output: Mapped[dict[str, Any]] = mapped_column(JSONB, deferred=True)
     raw_output_sha256: Mapped[str] = mapped_column(String(64))
+    account_fingerprint: Mapped[str | None] = mapped_column(String(64))
+    """Bank statements: keyed HMAC of the sort code and account number (never the numbers)."""
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 
 
@@ -275,7 +291,7 @@ class ExtractedField(Base):
             "section IN ('summary', 'payment', 'deduction', 'year_to_date')", name="section"
         ),
         CheckConstraint(
-            f"field_code IS NULL OR field_code IN ({', '.join(repr(c) for c in FIELD_CODES)})",
+            f"field_code IS NULL OR field_code IN ({', '.join(repr(c) for c in ALL_FIELD_CODES)})",
             name="field_code",
         ),
         CheckConstraint("ordinal > 0", name="ordinal"),
@@ -320,6 +336,77 @@ class ExtractedField(Base):
     label_x1: Mapped[float] = mapped_column(Float)
     label_y1: Mapped[float] = mapped_column(Float)
     confidence: Mapped[float | None] = mapped_column(Float)
+
+
+TRANSACTION_KINDS = ("transaction", "brought_forward", "carried_forward", "unparsed")
+
+
+class ExtractedTransaction(Base):
+    """One printed row of a bank statement's transactions table (Stage 2-B). Immutable for
+    the runtime role.
+
+    The description is kept **verbatim** (multi-line descriptions joined with line breaks);
+    money in and money out stay in separate columns, as printed. ``cells`` holds each value's
+    own raw text, page and box (date, every description line, paid in, paid out, balance), so
+    every figure traces to its place on the original. A row that couldn't be read is kept as
+    ``unparsed`` with its raw text and box, never dropped."""
+
+    __tablename__ = "extracted_transactions"
+    __table_args__ = (
+        UniqueConstraint("run_id", "row_number"),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "run_id"],
+            ["extraction_runs.tenant_id", "extraction_runs.case_id", "extraction_runs.id"],
+            name="fk_extracted_transactions_run",
+        ),
+        CheckConstraint(
+            "kind IN (" + ", ".join(repr(k) for k in TRANSACTION_KINDS) + ")", name="kind"
+        ),
+        CheckConstraint("row_number > 0", name="row_number"),
+        CheckConstraint(
+            "(paid_in_minor IS NULL OR paid_in_minor >= 0) "
+            "AND (paid_out_minor IS NULL OR paid_out_minor >= 0)",
+            name="amounts_not_negative",
+        ),
+        CheckConstraint(
+            "kind <> 'transaction' OR num_nonnulls(paid_in_minor, paid_out_minor) >= 1",
+            name="transaction_has_amount",
+        ),
+        CheckConstraint(
+            "kind = 'transaction' OR (paid_in_minor IS NULL AND paid_out_minor IS NULL)",
+            name="only_transactions_have_amounts",
+        ),
+        CheckConstraint(
+            "kind <> 'unparsed' OR balance_minor IS NULL", name="unparsed_has_no_balance"
+        ),
+        CheckConstraint("jsonb_typeof(cells) = 'object'", name="cells"),
+        CheckConstraint("page_number >= 1 AND page_width > 0 AND page_height > 0", name="page"),
+        CheckConstraint("unit IN ('pt', 'inch')", name="unit"),
+        CheckConstraint(_box_check(""), name="row_box"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
+    case_id: Mapped[uuid.UUID] = mapped_column()
+    run_id: Mapped[uuid.UUID] = mapped_column(index=True)
+    row_number: Mapped[int] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(String(16))
+    posted_on: Mapped[date | None] = mapped_column(Date)
+    date_inherited: Mapped[bool] = mapped_column(Boolean, default=False)
+    description: Mapped[str] = mapped_column(String(500))
+    description_truncated: Mapped[bool] = mapped_column(Boolean, default=False)
+    paid_in_minor: Mapped[int | None] = mapped_column(BigInteger)
+    paid_out_minor: Mapped[int | None] = mapped_column(BigInteger)
+    balance_minor: Mapped[int | None] = mapped_column(BigInteger)
+    cells: Mapped[dict[str, Any]] = mapped_column(JSONB)
+    page_number: Mapped[int] = mapped_column(Integer)
+    page_width: Mapped[float] = mapped_column(Float)
+    page_height: Mapped[float] = mapped_column(Float)
+    unit: Mapped[str] = mapped_column(String(8))
+    x0: Mapped[float] = mapped_column(Float)
+    y0: Mapped[float] = mapped_column(Float)
+    x1: Mapped[float] = mapped_column(Float)
+    y1: Mapped[float] = mapped_column(Float)
 
 
 class Decision(StrEnum):

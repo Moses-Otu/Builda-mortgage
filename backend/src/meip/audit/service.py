@@ -105,6 +105,8 @@ NON_PERSONAL_FIELDS = frozenset(
         "markers",
         "field_count",
         "payment_line_count",
+        "transaction_count",
+        "unparsed_count",
         "deduction_line_count",
         # review: decision counts and figure IDs (corrected values and reasons are erasable)
         "observation_ids",

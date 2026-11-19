@@ -41,6 +41,9 @@ from meip.core.logging import configure_logging, get_logger
 from meip.documents.extraction import (
     CLASSIFIER_VERSION,
     SCHEMA_VERSION,
+    Field,
+    Layout,
+    LayoutProvider,
     ProviderError,
     build_layout_provider,
     classify,
@@ -51,15 +54,20 @@ from meip.documents.models import (
     Classification,
     Document,
     DocumentStatus,
+    DocumentType,
     DocumentVersion,
     ExtractedField,
+    ExtractedTransaction,
     ExtractionRun,
     FailureCode,
     Job,
     JobKind,
     JobStatus,
 )
-from meip.documents.pdfcheck import check_pdf
+from meip.documents.pdfcheck import MAX_PAGES, MAX_STATEMENT_PAGES, check_pdf
+from meip.documents.statements import CLASSIFIER_VERSION as STATEMENT_CLASSIFIER_VERSION
+from meip.documents.statements import SCHEMA_VERSION as STATEMENT_SCHEMA_VERSION
+from meip.documents.statements import RowKind, account_fingerprint, extract_statement
 from meip.documents.storage import BlobKey, BlobNotFoundError, BlobStore, build_blob_store
 from meip.tenancy.context import Actor, OperationContext, TenantScope, open_tenant_scope
 from meip.tenancy.permissions import Permission
@@ -239,7 +247,14 @@ async def ingest(
             await _set_outcome(ctx, document, pages=None, failure=FailureCode.HASH_MISMATCH)
             return FailureCode.HASH_MISMATCH.value
 
-        result = await anyio.to_thread.run_sync(check_pdf, path, settings.pdf_check_timeout_seconds)
+        max_pages = (
+            MAX_STATEMENT_PAGES
+            if document.document_type == DocumentType.BANK_STATEMENT.value
+            else MAX_PAGES
+        )
+        result = await anyio.to_thread.run_sync(
+            check_pdf, path, settings.pdf_check_timeout_seconds, max_pages
+        )
     if result.error is not None:
         await _set_outcome(ctx, document, pages=None, failure=FailureCode(result.error))
         return result.error
@@ -282,6 +297,9 @@ async def extract_document(
         await _set_outcome(ctx, document, pages=None, failure=FailureCode.EXTRACTION_FAILED)
         return FailureCode.EXTRACTION_FAILED.value
 
+    if document.document_type == DocumentType.BANK_STATEMENT.value:
+        return await _extract_statement(ctx, document, version, provider, layout, settings)
+
     classification = classify(layout.text)
     run = ExtractionRun(
         tenant_id=ctx.tenant_id,
@@ -304,36 +322,7 @@ async def extract_document(
     counts = {"field_count": 0, "payment_line_count": 0, "deduction_line_count": 0}
     if classification.is_payslip:
         for item in extract(layout).fields:
-            page = layout.pages[item.value.page]
-            ctx.session.add(
-                ExtractedField(
-                    tenant_id=ctx.tenant_id,
-                    case_id=document.case_id,
-                    run_id=run.id,
-                    section=item.section.value,
-                    ordinal=item.ordinal,
-                    field_code=item.field_code,
-                    label_text=item.label_text,
-                    raw_text=item.raw_text,
-                    value_money_minor=item.money_minor,
-                    currency="GBP" if item.money_minor is not None else None,
-                    value_date=item.value_date,
-                    value_text=item.value_text,
-                    page_number=page.number,
-                    page_width=page.width,
-                    page_height=page.height,
-                    unit=layout.unit,
-                    x0=item.value.box.x0,
-                    y0=item.value.box.y0,
-                    x1=item.value.box.x1,
-                    y1=item.value.box.y1,
-                    label_x0=item.label.box.x0,
-                    label_y0=item.label.box.y0,
-                    label_x1=item.label.box.x1,
-                    label_y1=item.label.box.y1,
-                    confidence=item.value.confidence,
-                )
-            )
+            ctx.session.add(_field_row(ctx, document, run, layout, item))
             counts["field_count"] += 1
             if item.section.value == "payment":
                 counts["payment_line_count"] += 1
@@ -368,6 +357,152 @@ async def extract_document(
         correlation_id=ctx.correlation_id,
     )
     return document.status
+
+
+def _field_row(
+    ctx: OperationContext, document: Document, run: ExtractionRun, layout: Layout, item: Field
+) -> ExtractedField:
+    page = layout.pages[item.value.page]
+    return ExtractedField(
+        tenant_id=ctx.tenant_id,
+        case_id=document.case_id,
+        run_id=run.id,
+        section=item.section.value,
+        ordinal=item.ordinal,
+        field_code=item.field_code,
+        label_text=item.label_text,
+        raw_text=item.raw_text,
+        value_money_minor=item.money_minor,
+        currency="GBP" if item.money_minor is not None else None,
+        value_date=item.value_date,
+        value_text=item.value_text,
+        page_number=page.number,
+        page_width=page.width,
+        page_height=page.height,
+        unit=layout.unit,
+        x0=item.value.box.x0,
+        y0=item.value.box.y0,
+        x1=item.value.box.x1,
+        y1=item.value.box.y1,
+        label_x0=item.label.box.x0,
+        label_y0=item.label.box.y0,
+        label_x1=item.label.box.x1,
+        label_y1=item.label.box.y1,
+        confidence=item.value.confidence,
+    )
+
+
+async def _extract_statement(
+    ctx: OperationContext,
+    document: Document,
+    version: DocumentVersion,
+    provider: LayoutProvider,
+    layout: Layout,
+    settings: Settings,
+) -> str:
+    """Bank statements (Stage 2-B): ``extracted`` (summary fields and every table row
+    stored), ``unrecognised`` (not a statement: run stored, no rows) or a statement refusal
+    (``failed`` with the reason: run stored, no rows). The raw provider output is stored in
+    full (decision C1): it holds the whole document's text, so it is classed and erased with
+    the original. The full account number and sort code reach only the fingerprint."""
+    found = extract_statement(layout)
+    fingerprint = (
+        account_fingerprint(settings.fingerprint_key(), found.sort_code, found.account_number)
+        if found.refusal is None
+        else None
+    )
+    found.account_number = found.sort_code = None  # nothing below may see them
+    markers = list(found.markers) + ([f"refused:{found.refusal.value}"] if found.refusal else [])
+    run = ExtractionRun(
+        tenant_id=ctx.tenant_id,
+        case_id=document.case_id,
+        document_version_id=version.id,
+        provider=provider.name,
+        model_version=provider.model_version,
+        schema_version=STATEMENT_SCHEMA_VERSION,
+        classifier_version=STATEMENT_CLASSIFIER_VERSION,
+        classification=(
+            Classification.BANK_STATEMENT
+            if found.is_statement or found.refusal is not None
+            else Classification.UNRECOGNISED
+        ).value,
+        markers=markers,
+        raw_output=layout.raw,
+        raw_output_sha256=raw_output_sha256(layout.raw),
+        account_fingerprint=fingerprint,
+    )
+    ctx.session.add(run)
+    await ctx.session.flush()
+
+    counts = {"field_count": 0, "transaction_count": 0, "unparsed_count": 0}
+    if found.refusal is None and found.is_statement:
+        for item in found.fields:
+            ctx.session.add(_field_row(ctx, document, run, layout, item))
+            counts["field_count"] += 1
+        for row in found.rows:
+            page = layout.pages[row.page]
+            box = row.row_box
+            ctx.session.add(
+                ExtractedTransaction(
+                    tenant_id=ctx.tenant_id,
+                    case_id=document.case_id,
+                    run_id=run.id,
+                    row_number=row.row_number,
+                    kind=row.kind.value,
+                    posted_on=row.posted_on,
+                    date_inherited=row.date_inherited,
+                    description=row.description,
+                    description_truncated=row.description_truncated,
+                    paid_in_minor=row.paid_in,
+                    paid_out_minor=row.paid_out,
+                    balance_minor=row.balance,
+                    cells=row.cells_json(),
+                    page_number=page.number,
+                    page_width=page.width,
+                    page_height=page.height,
+                    unit=layout.unit,
+                    x0=box.x0,
+                    y0=box.y0,
+                    x1=box.x1,
+                    y1=box.y1,
+                )
+            )
+            counts["transaction_count"] += 1
+            counts["unparsed_count"] += row.kind is RowKind.UNPARSED
+        await ctx.session.flush()
+
+    before = {"status": document.status}
+    if found.refusal is not None:
+        document.status = DocumentStatus.FAILED.value
+        document.failure_code = found.refusal.value
+        action = AuditAction.DOCUMENT_PROCESSING_FAILED
+    elif found.is_statement:
+        document.status = DocumentStatus.EXTRACTED.value
+        action = AuditAction.DOCUMENT_EXTRACTED
+    else:
+        document.status = DocumentStatus.UNRECOGNISED.value
+        action = AuditAction.DOCUMENT_UNRECOGNISED
+    await ctx.session.flush()
+    # Counts, versions, marker names and codes only: no descriptions, amounts or numbers.
+    change_set = audit.diff(before, {"status": document.status})
+    change_set.note("classification", run.classification)
+    change_set.note("schema_version", STATEMENT_SCHEMA_VERSION)
+    change_set.note("markers", markers)
+    change_set.note("failure_code", document.failure_code)
+    for name, value in counts.items():
+        change_set.note(name, value)
+    await audit.record(
+        ctx.session,
+        tenant_id=ctx.tenant_id,
+        actor=ctx.actor,
+        action=action,
+        entity_type="document",
+        entity_id=document.id,
+        case_id=document.case_id,
+        change_set=change_set,
+        correlation_id=ctx.correlation_id,
+    )
+    return document.status if found.refusal is None else found.refusal.value
 
 
 def _sha256(path: Path) -> str:
