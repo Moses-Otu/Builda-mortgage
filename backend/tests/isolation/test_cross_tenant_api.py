@@ -99,6 +99,18 @@ PROBES: list[tuple[str, str, dict[str, Any]]] = [
         _F + "/observations/{observation_id}/retirement",
         {"json": {"reason": "entered_in_error"}},
     ),
+    ("GET", "/api/v1/cases/{case_id}/documents", {}),
+    (
+        "POST",
+        "/api/v1/cases/{case_id}/documents",
+        {
+            "params": {"document_type": "payslip"},
+            "content": b"%PDF-1.4 SYNTHETIC cross-tenant probe",
+            "headers": {"Content-Type": "application/pdf"},
+        },
+    ),
+    ("GET", "/api/v1/cases/{case_id}/documents/{document_id}", {}),
+    ("GET", "/api/v1/cases/{case_id}/documents/{document_id}/content", {}),
     # Not tenant-scoped, but an attacker must not be able to accept someone else's invitation.
     ("POST", "/api/v1/me/invitations/{membership_id}/accept", {}),
 ]
@@ -145,7 +157,10 @@ async def victim(make_firm: MakeFirm) -> tuple[Firm, dict[str, str]]:
         },
     )
     assert observation.status_code == 201, observation.text
+    document = await firm.upload(case["id"])
+    assert document.status_code == 201, document.text
     ids = {
+        "document_id": document.json()["id"],
         "case_id": case["id"],
         "applicant_id": applicant["id"],
         "membership_id": str(firm.members[member]),
@@ -193,6 +208,8 @@ async def test_foreign_firm_gets_404(
     assert [(c["status"], c["version"]) for c in commitments] == [("open", 1)]
     assert len((await owner.request("GET", f"{base}/income-sources")).json()) == 1
     assert len((await owner.request("GET", f"{base}/expenditure")).json()) == 1
+    documents = (await owner.request("GET", f"/api/v1/cases/{ids['case_id']}/documents")).json()
+    assert [d["id"] for d in documents] == [ids["document_id"]]
 
 
 async def test_list_endpoints_only_show_own_firm(

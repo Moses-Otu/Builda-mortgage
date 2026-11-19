@@ -21,15 +21,24 @@ class Permission(StrEnum):
     MEMBER_MANAGE = "member:manage"
     FIRM_SETTINGS_MANAGE = "firm_settings:manage"
     AUDIT_READ = "audit:read"
+    # Separate from case permissions so a firm can narrow access to originals later.
+    DOCUMENT_READ = "document:read"
+    DOCUMENT_WRITE = "document:write"
 
 
-_READ = {Permission.CASE_READ, Permission.MEMBER_READ, Permission.AUDIT_READ}
+_READ = {
+    Permission.CASE_READ,
+    Permission.MEMBER_READ,
+    Permission.AUDIT_READ,
+    Permission.DOCUMENT_READ,
+}
 _CASE_WORK = {
     Permission.CASE_CREATE,
     Permission.CASE_UPDATE,
     Permission.CASE_TRANSITION,
     Permission.APPLICANT_WRITE,
     Permission.FINANCIAL_WRITE,
+    Permission.DOCUMENT_WRITE,
 }
 
 ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {

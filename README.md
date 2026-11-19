@@ -45,6 +45,13 @@ MEIP_ENV=local MEIP_AUTH_MODE=dev uv run meip-admin dev-token --subject alice
 
 Call the API with `Authorization: Bearer <token>` and `X-Tenant-ID: <tenant_id>`.
 
+Document uploads in Docker use the Azurite emulator. Create its private container once (from
+`backend/`, with the Azurite connection string from `.env.example`):
+
+```bash
+MEIP_ENV=local MEIP_AUTH_MODE=dev MEIP_BLOB_BACKEND=azure MEIP_BLOB_CONNECTION_STRING="<Azurite connection string>" uv run meip-admin init-storage
+```
+
 `MEIP_ENV` is required, and there is deliberately no default. The development token issuer
 (`MEIP_AUTH_MODE=dev`) is accepted only when `MEIP_ENV` is `local` or `test`.
 
@@ -98,6 +105,13 @@ disposable `meip_test` and `meip_test_migrations` databases:
 MEIP_TEST_ADMIN_DATABASE_URL=postgresql://postgres:postgres@localhost:5432/postgres uv run pytest --cov
 ```
 
+The Azure blob adapter has an opt-in test against the Azurite emulator. It is deselected by
+default; run it with Azurite listening on port 10000:
+
+```bash
+MEIP_TEST_AZURITE_CONNECTION_STRING="DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;" uv run pytest -m azurite
+```
+
 After an intentional API change, regenerate the contract snapshot and review the diff:
 
 ```bash
@@ -138,6 +152,14 @@ UPDATE_OPENAPI_SNAPSHOT=1 uv run pytest tests/integration/test_schema.py
   expenditure) plus immutable `financial_observations`. Each observation's value type is
   fixed by `measure_definitions` and enforced by the database. Corrections supersede; they
   never edit.
+- **Documents (Phase 2.0):** `POST /api/v1/cases/{case_id}/documents?document_type=payslip`
+  with the raw PDF as the body (`Content-Type: application/pdf`) and an optional
+  percent-encoded `Upload-Filename` header; personal data never goes in the URL. Identical
+  content on the same case returns 409 `duplicate-document`. Originals are immutable, stored
+  under server-generated keys, and checked against their SHA-256 on every download.
+  **Synthetic documents only** until D10 is approved; document routes answer 404
+  `feature-disabled` unless `MEIP_DOCUMENTS_ENABLED=true`. Stored originals with no database
+  row (after a crash) are listed by `meip-admin find-orphan-blobs`; nothing deletes them.
 - **Audit:** every mutation writes exactly one `audit_events` row in the same transaction.
   The permanent row holds no direct identifiers and no financial values, though it is still
   pseudonymous personal data (status and role facts about an applicant ID). Amounts,

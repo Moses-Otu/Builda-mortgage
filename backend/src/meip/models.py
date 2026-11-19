@@ -4,6 +4,7 @@ from meip.applicants.models import Applicant
 from meip.audit.models import AuditEvent, AuditEventDetail
 from meip.cases.models import Case
 from meip.core.db import Base
+from meip.documents.models import Document, DocumentVersion
 from meip.financial.models import (
     Commitment,
     CommitmentParty,
@@ -25,6 +26,8 @@ __all__ = [
     "Case",
     "Commitment",
     "CommitmentParty",
+    "Document",
+    "DocumentVersion",
     "ExpenditureItem",
     "ExpenditureParty",
     "FinancialObservation",

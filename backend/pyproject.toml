@@ -15,6 +15,7 @@ dependencies = [
     "structlog>=24.4",
     "pyjwt[crypto]>=2.10",
     "anyio>=4.6",
+    "azure-storage-blob>=12.24",
 ]
 
 [dependency-groups]
@@ -67,7 +68,10 @@ testpaths = ["tests"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
-addopts = "--strict-markers -ra"
+addopts = "--strict-markers -ra -m 'not azurite'"
+markers = [
+    "azurite: needs a running Azurite emulator and MEIP_TEST_AZURITE_CONNECTION_STRING (opt-in: -m azurite)",
+]
 filterwarnings = ["error::pytest.PytestUnraisableExceptionWarning"]
 
 [tool.coverage.run]

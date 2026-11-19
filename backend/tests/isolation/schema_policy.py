@@ -46,6 +46,10 @@ TENANT_SCOPED: dict[str, frozenset[str]] = {
     "financial_observations": frozenset({"SELECT", "INSERT"}),
     # One row per firm, created at onboarding by the owner role.
     "firm_settings": frozenset({"SELECT", "UPDATE"}),
+    # Uploads: no UPDATE or DELETE in step 2-A (processing states arrive in later steps).
+    "documents": frozenset({"SELECT", "INSERT"}),
+    # Immutable originals: insert-only, and a trigger refuses changes for every role.
+    "document_versions": frozenset({"SELECT", "INSERT"}),
 }
 
 # table -> columns the runtime role may UPDATE through column-level grants only.
@@ -97,6 +101,8 @@ EXPECTED_TRIGGERS: dict[str, str] = {
     "expenditure_items_withdrawn_has_no_active_values": "expenditure_items",
     "commitment_parties_frozen_after_withdrawal": "commitment_parties",
     "expenditure_parties_frozen_after_withdrawal": "expenditure_parties",
+    "document_versions_immutable": "document_versions",
+    "document_versions_no_truncate": "document_versions",
     "income_sources_frozen_after_withdrawal": "income_sources",
     "commitments_frozen_after_withdrawal": "commitments",
     "expenditure_items_frozen_after_withdrawal": "expenditure_items",

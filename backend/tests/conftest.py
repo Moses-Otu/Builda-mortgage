@@ -8,6 +8,7 @@ connection; the suite creates the roles and a disposable ``meip_test`` database.
 from __future__ import annotations
 
 import os
+import shutil
 import tempfile
 import uuid
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
@@ -30,7 +31,7 @@ from meip.app import create_app
 from meip.audit.models import AuditEvent
 from meip.auth.dev import generate_key, mint_token
 from meip.auth.provider import JWTAuthProvider, StaticKeyResolver
-from meip.core.config import AuthMode, Environment, Settings
+from meip.core.config import AuthMode, BlobBackend, Environment, Settings
 from meip.core.db import create_engine, create_sessionmaker
 from meip.tenancy.service import onboard_tenant
 
@@ -42,6 +43,15 @@ TEST_DB = "meip_test"
 ISSUER = "https://meip-test.localhost/"
 AUDIENCE = "meip-api"
 ROLE_PASSWORDS = {"meip_owner": "meip_owner_local", "meip_app": "meip_app_local"}
+
+
+def synthetic_pdf(label: str = "") -> bytes:
+    """A tiny, clearly labelled SYNTHETIC PDF: never real borrower data. Unique per label
+    (pass a fresh label for distinct content)."""
+    marker = f"SYNTHETIC TEST DOCUMENT {label or uuid.uuid4()}".encode()
+    return b"\n".join(
+        [b"%PDF-1.4", b"% " + marker, b"1 0 obj << /Type /Catalog >> endobj", b"%%EOF", b""]
+    )
 
 
 def db_url(role: str, database: str, driver: str = "postgresql+asyncpg") -> str:
@@ -111,7 +121,15 @@ def tmp_dir() -> Iterator[Path]:
 
 
 @pytest.fixture(scope="session")
-def settings() -> Settings:
+def blob_root() -> Iterator[Path]:
+    """Filesystem blob store for the test session (tests only; forbidden when deployed)."""
+    root = Path(tempfile.mkdtemp(prefix="meip-blobs-"))
+    yield root
+    shutil.rmtree(root, ignore_errors=True)
+
+
+@pytest.fixture(scope="session")
+def settings(blob_root: Path) -> Settings:
     return Settings(
         env=Environment.TEST,
         auth_mode=AuthMode.DEV,
@@ -121,6 +139,10 @@ def settings() -> Settings:
         dev_auth_audience=AUDIENCE,
         dev_auth_key_path=Path(tempfile.gettempdir()) / "meip-test-unused.pem",
         log_level="WARNING",
+        documents_enabled=True,
+        blob_backend=BlobBackend.FILESYSTEM,
+        blob_root=blob_root,
+        document_max_bytes=3 * 1024 * 1024,
     )
 
 
@@ -208,6 +230,31 @@ class Firm:
         assert resp.status_code == 201, resp.text
         data: dict[str, Any] = resp.json()
         return data
+
+    async def upload(
+        self,
+        case_id: str,
+        content: bytes | None = None,
+        *,
+        as_: str | None = None,
+        applicant_id: str | None = None,
+        filename: str | None = None,
+        content_type: str = "application/pdf",
+    ) -> httpx.Response:
+        headers = {"Content-Type": content_type}
+        if filename is not None:
+            headers["Upload-Filename"] = filename
+        params = {"document_type": "payslip"}
+        if applicant_id is not None:
+            params["applicant_id"] = applicant_id
+        return await self.request(
+            "POST",
+            f"/api/v1/cases/{case_id}/documents",
+            as_=as_,
+            params=params,
+            content=synthetic_pdf() if content is None else content,
+            headers=headers,
+        )
 
     async def add_applicant(self, case_id: str, **body: Any) -> dict[str, Any]:
         payload = {"first_name": "Alex", "last_name": "Example", **body}

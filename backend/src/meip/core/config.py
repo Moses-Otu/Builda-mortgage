@@ -6,7 +6,7 @@ from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
 
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -25,12 +25,26 @@ class AuthMode(StrEnum):
     """Validate tokens signed by a local development key. Never allowed in production."""
 
 
+class BlobBackend(StrEnum):
+    AZURE = "azure"
+    """Azure Blob Storage (Azurite locally)."""
+
+    FILESYSTEM = "filesystem"
+    """A local directory. Local development and tests only."""
+
+
 class ConfigurationError(RuntimeError):
     """Raised when settings are invalid or unsafe for the selected environment."""
 
 
 # The only environments in which the development token issuer may be enabled.
 DEV_AUTH_ENVIRONMENTS = frozenset({Environment.LOCAL, Environment.TEST})
+
+# Environments that never hold real borrower data. Anywhere else, document features need an
+# approved retention and erasure decision (D10) and a real blob store.
+NON_DEPLOYED_ENVIRONMENTS = frozenset({Environment.LOCAL, Environment.TEST})
+
+MIB = 1024 * 1024
 
 
 class Settings(BaseSettings):
@@ -68,6 +82,70 @@ class Settings(BaseSettings):
     dev_auth_issuer: str = "https://meip-dev.localhost/"
     dev_auth_audience: str = "meip-api"
     dev_auth_key_path: Path = Path(".dev/dev_auth_key.pem")
+
+    documents_enabled: bool = Field(
+        default=False,
+        description="Master switch for document upload and processing. Off unless set.",
+    )
+    document_retention_approval: str | None = Field(
+        default=None,
+        description=(
+            "Reference to the approved retention and erasure decision (D10). Required to "
+            "enable documents outside local and test. A deployment control: the platform "
+            "cannot tell synthetic documents from real ones."
+        ),
+    )
+    document_max_bytes: int = Field(default=20 * MIB, gt=0)
+    blob_backend: BlobBackend = BlobBackend.AZURE
+    blob_root: Path = Field(
+        default=Path(".dev/blobs"), description="Directory for the filesystem blob backend"
+    )
+    blob_connection_string: SecretStr | None = None
+    blob_container: str = "documents"
+
+    @model_validator(mode="after")
+    def _validate_documents(self) -> Settings:
+        deployed = self.env not in NON_DEPLOYED_ENVIRONMENTS
+        if self.blob_backend is BlobBackend.FILESYSTEM and deployed:
+            raise ConfigurationError(
+                f"blob_backend=filesystem is forbidden when env={self.env.value}"
+            )
+        if not self.documents_enabled:
+            return self
+        if deployed and not (self.document_retention_approval or "").strip():
+            raise ConfigurationError(
+                "documents_enabled requires MEIP_DOCUMENT_RETENTION_APPROVAL (the approved "
+                f"retention and erasure decision, D10) when env={self.env.value}"
+            )
+        if self.blob_backend is BlobBackend.AZURE and self.blob_connection_string is None:
+            raise ConfigurationError(
+                "documents_enabled with blob_backend=azure requires MEIP_BLOB_CONNECTION_STRING"
+            )
+        if deployed and self.blob_connection_string is not None:
+            # Values are never echoed: the string contains the account key.
+            parts = {
+                k.strip().lower(): v.strip()
+                for k, _, v in (
+                    p.partition("=")
+                    for p in self.blob_connection_string.get_secret_value().split(";")
+                    if p.strip()
+                )
+            }
+            if parts.get("defaultendpointsprotocol", "").lower() != "https" or any(
+                v.lower().startswith("http://") for v in parts.values()
+            ):
+                raise ConfigurationError(
+                    f"MEIP_BLOB_CONNECTION_STRING must use HTTPS when env={self.env.value}"
+                )
+            if (
+                parts.get("accountname", "").lower() == "devstoreaccount1"
+                or parts.get("usedevelopmentstorage", "").lower() == "true"
+            ):
+                raise ConfigurationError(
+                    "MEIP_BLOB_CONNECTION_STRING must not be the Azurite development account "
+                    f"when env={self.env.value}"
+                )
+        return self
 
     @model_validator(mode="after")
     def _validate_auth(self) -> Settings:

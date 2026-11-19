@@ -16,10 +16,12 @@ from meip.auth.provider import AuthProvider, Principal
 from meip.core.config import Settings
 from meip.core.errors import (
     BadRequestError,
+    FeatureDisabledError,
     ForbiddenError,
     PreconditionRequiredError,
     UnauthorizedError,
 )
+from meip.documents.storage import BlobStore
 from meip.tenancy.context import Actor, OperationContext, open_tenant_scope
 from meip.tenancy.permissions import Permission
 from meip.tenancy.service import resolve_membership
@@ -35,6 +37,26 @@ def get_settings(request: Request) -> Settings:
 def get_auth_provider(request: Request) -> AuthProvider:
     provider: AuthProvider = request.app.state.auth_provider
     return provider
+
+
+def require_documents_enabled(
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> None:
+    """Fail closed: document routes answer 404 unless documents are enabled (and, outside
+    local and test, settings validation has required the D10 retention approval)."""
+    if not settings.documents_enabled:
+        raise FeatureDisabledError("Documents are not enabled in this deployment")
+
+
+def get_blob_store(request: Request) -> BlobStore:
+    store: BlobStore | None = request.app.state.blob_store
+    if store is None:
+        raise FeatureDisabledError("Documents are not enabled in this deployment")
+    return store
+
+
+Store = Annotated[BlobStore, Depends(get_blob_store)]
+SettingsDep = Annotated[Settings, Depends(get_settings)]
 
 
 def get_sessionmaker(request: Request) -> async_sessionmaker[AsyncSession]:
@@ -136,3 +158,5 @@ FirmSettingsManageCtx = Annotated[
     OperationContext, Depends(requires(Permission.FIRM_SETTINGS_MANAGE))
 ]
 AuditReadCtx = Annotated[OperationContext, Depends(requires(Permission.AUDIT_READ))]
+DocumentReadCtx = Annotated[OperationContext, Depends(requires(Permission.DOCUMENT_READ))]
+DocumentWriteCtx = Annotated[OperationContext, Depends(requires(Permission.DOCUMENT_WRITE))]

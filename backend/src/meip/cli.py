@@ -16,10 +16,12 @@ from collections.abc import Sequence
 from datetime import timedelta
 
 from pydantic import ValidationError
+from sqlalchemy import text
 
 from meip.auth.dev import load_or_create_key, mint_token
 from meip.core.config import AuthMode, ConfigurationError, Settings, get_settings
 from meip.core.db import create_engine, create_sessionmaker
+from meip.documents.storage import AzureBlobStore, build_blob_store, orphaned_keys
 from meip.tenancy.service import onboard_tenant
 
 
@@ -102,6 +104,45 @@ def _dev_token(args: argparse.Namespace) -> int:
     return 0
 
 
+async def _init_storage() -> int:
+    """Create the private blob container (local bootstrap; Azure containers come from IaC)."""
+    settings = _load_settings()
+    if settings is None:
+        return 2
+    store = build_blob_store(settings)
+    if not isinstance(store, AzureBlobStore):
+        print("Nothing to do: the filesystem backend needs no container")
+        return 0
+    created = await store.ensure_container()
+    print("container created" if created else "container already exists")
+    return 0
+
+
+async def _find_orphan_blobs() -> int:
+    """Read-only report: stored originals with no database row (left by a crash between
+    storing a blob and committing its row). Deleting them is an operator decision."""
+    owner_url = os.environ.get("MEIP_MIGRATIONS_DATABASE_URL")
+    if not owner_url:
+        print("MEIP_MIGRATIONS_DATABASE_URL (owner role) must be set", file=sys.stderr)
+        return 2
+    settings = _load_settings()
+    if settings is None:
+        return 2
+    engine = create_engine(owner_url, pool_size=1)
+    try:
+        async with engine.connect() as conn:
+            recorded = set(
+                (await conn.execute(text("SELECT blob_key FROM document_versions"))).scalars()
+            )
+    finally:
+        await engine.dispose()
+    orphans = orphaned_keys(await build_blob_store(settings).list_keys(), recorded)
+    for key in orphans:
+        print(key)
+    print(f"{len(orphans)} orphaned blob(s)", file=sys.stderr)
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="meip-admin")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -125,9 +166,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     d.add_argument("--name", default=None)
     d.add_argument("--ttl-minutes", type=int, default=60)
 
+    sub.add_parser("init-storage", help="Create the private blob container (local only)")
+    sub.add_parser(
+        "find-orphan-blobs", help="List stored originals with no database row (read-only)"
+    )
+
     args = parser.parse_args(argv)
     if args.command == "create-tenant":
         return asyncio.run(_create_tenant(args))
+    if args.command == "init-storage":
+        return asyncio.run(_init_storage())
+    if args.command == "find-orphan-blobs":
+        return asyncio.run(_find_orphan_blobs())
     return _dev_token(args)
 
 

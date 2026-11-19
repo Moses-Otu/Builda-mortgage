@@ -25,6 +25,7 @@ ALLOWED: dict[str, set[str]] = {
     "cases": {"core", "cases", "applicants", "audit", "tenancy"},
     "applicants": {"core", "applicants", "cases", "audit", "tenancy"},
     "financial": {"core", "financial", "applicants", "cases", "audit", "tenancy"},
+    "documents": {"core", "documents", "applicants", "cases", "audit", "tenancy"},
 }
 HTTP_FRAMEWORKS = {"fastapi", "starlette"}
 

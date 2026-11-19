@@ -34,6 +34,7 @@ async def populated(make_firm: MakeFirm) -> Firm:
     firm = await make_firm()
     case = await firm.create_case()
     await firm.add_applicant(case["id"])
+    assert (await firm.upload(case["id"])).status_code == 201
     return firm
 
 

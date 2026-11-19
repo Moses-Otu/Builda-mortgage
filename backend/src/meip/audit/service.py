@@ -88,6 +88,11 @@ NON_PERSONAL_FIELDS = frozenset(
         "fca_frn",
         "max_applicants",
         "require_four_eyes_verification",
+        # documents (file names and content hashes are erasable, so not listed)
+        "document_type",
+        "document_version_id",
+        "size_bytes",
+        "media_type",
     }
 )
 
@@ -111,6 +116,7 @@ class AuditAction(StrEnum):
     FINANCIAL_ITEM_WITHDRAWN = "financial_item.withdrawn"
     OBSERVATION_RECORDED = "observation.recorded"
     OBSERVATION_RETIRED = "observation.retired"
+    DOCUMENT_UPLOADED = "document.uploaded"
 
 
 @dataclass

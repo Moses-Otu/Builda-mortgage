@@ -5,13 +5,14 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 
 import jwt
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
-from tests.conftest import TEST_DB, db_url
+from tests.conftest import TEST_DB, Firm, db_url
 
 
 def _run(args: list[str], env: dict[str, str]) -> subprocess.CompletedProcess[str]:
@@ -108,3 +109,36 @@ def test_create_tenant_requires_owner_url() -> None:
     env = {"MEIP_AUTH_MODE": "dev", "MEIP_ENV": "local", "MEIP_MIGRATIONS_DATABASE_URL": ""}
     result = _run(["create-tenant", "--name", "X", "--admin-subject", "s"], env)
     assert result.returncode == 2
+
+
+def _filesystem_env(blob_root: Path) -> dict[str, str]:
+    return {
+        "MEIP_ENV": "test",
+        "MEIP_AUTH_MODE": "dev",
+        "MEIP_BLOB_BACKEND": "filesystem",
+        "MEIP_BLOB_ROOT": str(blob_root),
+        "MEIP_MIGRATIONS_DATABASE_URL": db_url("meip_owner", TEST_DB),
+    }
+
+
+async def test_find_orphan_blobs_reports_only_unrecorded_originals(
+    firm: Firm, blob_root: Path
+) -> None:
+    case = await firm.create_case()
+    assert (await firm.upload(case["id"])).status_code == 201
+    orphan = f"{firm.tenant_id}/{case['id']}/{uuid.uuid4()}/{uuid.uuid4()}/original"
+    (blob_root / orphan).parent.mkdir(parents=True)
+    (blob_root / orphan).write_bytes(b"left behind by a crash (synthetic)")
+    try:
+        result = _run(["find-orphan-blobs"], _filesystem_env(blob_root))
+    finally:
+        (blob_root / orphan).unlink()
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.split() == [orphan]
+    assert "1 orphaned blob(s)" in result.stderr
+
+
+def test_init_storage_is_a_no_op_for_the_filesystem(blob_root: Path) -> None:
+    result = _run(["init-storage"], _filesystem_env(blob_root))
+    assert result.returncode == 0, result.stderr
+    assert "Nothing to do" in result.stdout

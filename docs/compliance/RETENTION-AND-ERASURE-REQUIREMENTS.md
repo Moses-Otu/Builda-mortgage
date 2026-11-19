@@ -29,7 +29,7 @@ built in a later phase), **External** (held by a third party).
 
 | # | Category | Status | Where | Personal data it contains | Created by | Deleted by today |
 |---|---|---|---|---|---|---|
-| 1 | Original documents and document versions | Planned (Phase 2) | Private blob storage (UK region), referenced by `document_versions` | Full documents: payslips, P60s, SA302s, bank statements, credit reports | Upload | Nothing yet |
+| 1 | Original documents and document versions | **Exists (local and test only, synthetic documents)** since Phase 2.0 step 2-A | Private blob storage (UK region), referenced by `document_versions` | Full documents: payslips, P60s, SA302s, bank statements, credit reports | Upload | Nothing: immutable for every role, and the storage layer has no delete. Crash orphans are reported by `meip-admin find-orphan-blobs` and left for an operator. Original file names and content hashes are also held in erasable audit details. |
 | 2 | OCR / provider raw outputs, rendered page images | Planned (Phase 2–3) | Blob storage, referenced by `extraction_runs` | Full text and layout of the documents | Extraction jobs | Nothing yet |
 | 3 | Extracted fields | Planned (Phase 3) | `extracted_fields` | Raw text and parsed values per field, with page and region | Extraction runs | Nothing yet |
 | 4 | Normalised financial observations, items, parties | **Exists** | `financial_observations`, `income_sources`, `commitments`, `commitment_parties`, `expenditure_items`, `expenditure_parties` | Amounts, periods, employer/creditor names, masked account references, links to applicants | Brokers (declared/broker entries); later normalisation | Nothing: values are retired or items withdrawn, never deleted (by design) |
@@ -78,6 +78,9 @@ built in a later phase), **External** (held by a third party).
 | R12 | **Re-identification check:** after erasure, nothing left (audit skeleton, logs, metrics) can be joined back to the person through a remaining identifier | Pseudonymous data plus a key is identifiable |
 | R13 | **Who can trigger erasure** (firm administrator, platform operator, both) and with what confirmation | Irreversible and high impact |
 | R14 | **Tests** for each requirement, including restore-and-replay | Erasure must be verifiable, not assumed |
+| R15 | **Storage identity without delete:** in Azure the application uses a managed identity whose role can create and read blobs but not delete or overwrite them; deletion is done only by the retention process under a separate identity | Today's connection-string (account key) access could delete originals, even though the application code never does |
+| R16 | **Storage account hardening, verified in Azure:** anonymous (public) blob access disabled at account level, HTTPS-only (secure transfer required), minimum TLS 1.2, encryption at rest confirmed (Microsoft-managed or customer-managed keys, decision for Phase 12), blob soft-delete and versioning configured to match the retention decision | None of this can be verified against the local emulator |
+| R17 | **Access log for originals, before real documents:** every download (and later every page-image view) recorded with who, when, which document and from which request, **without** file names, document contents or extracted values; retained per the decision above | Reading a payslip is the most sensitive action in the system; the audit trail currently records only changes |
 
 ## 4. Decisions needed (questions for legal / DPO)
 

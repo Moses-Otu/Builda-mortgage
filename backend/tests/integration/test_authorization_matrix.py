@@ -17,7 +17,7 @@ from typing import Any
 import pytest
 from fastapi import FastAPI
 
-from tests.conftest import Firm
+from tests.conftest import Firm, synthetic_pdf
 
 ADMIN, ADVISER, CASE_ADMIN, READ_ONLY = "firm_admin", "adviser", "case_administrator", "read_only"
 ALL_ROLES = (ADMIN, ADVISER, CASE_ADMIN, READ_ONLY)
@@ -252,6 +252,25 @@ PROBES: list[Probe] = [
         CASE_WORKERS,
         lambda s: {"json": {"reason": "entered_in_error"}},
     ),
+    Probe("list documents", "GET", "/api/v1/cases/{case_id}/documents", EVERYONE),
+    Probe(
+        "upload document",
+        "POST",
+        "/api/v1/cases/{case_id}/documents",
+        CASE_WORKERS,
+        lambda s: {
+            "params": {"document_type": "payslip"},
+            "content": synthetic_pdf(),
+            "headers": {"Content-Type": "application/pdf"},
+        },
+    ),
+    Probe("get document", "GET", "/api/v1/cases/{case_id}/documents/{document_id}", EVERYONE),
+    Probe(
+        "download original",
+        "GET",
+        "/api/v1/cases/{case_id}/documents/{document_id}/content",
+        EVERYONE,
+    ),
 ]
 
 # Routes that do not act within a firm and so have no role-based permission.
@@ -318,7 +337,10 @@ async def _state(firm: Firm) -> State:
         },
     )
     assert observation.status_code == 201, observation.text
+    document = await firm.upload(case["id"])
+    assert document.status_code == 201, document.text
     return {
+        "document_id": document.json()["id"],
         "income_source_id": source.json()["id"],
         "commitment_id": commitment.json()["id"],
         "expenditure_item_id": spend.json()["id"],

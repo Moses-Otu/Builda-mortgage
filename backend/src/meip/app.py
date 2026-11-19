@@ -11,12 +11,22 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from meip import __version__
 from meip.api.errors import install_error_handlers
 from meip.api.middleware import RequestContextMiddleware
-from meip.api.routers import applicants, cases, financial, firm, health, me, members
+from meip.api.routers import (
+    applicants,
+    cases,
+    documents,
+    financial,
+    firm,
+    health,
+    me,
+    members,
+)
 from meip.auth.factory import build_auth_provider
 from meip.auth.provider import AuthProvider
 from meip.core.config import Settings, get_settings
 from meip.core.db import create_engine, create_sessionmaker
 from meip.core.logging import configure_logging, get_logger
+from meip.documents.storage import BlobStore, build_blob_store
 
 DESCRIPTION = """
 Document intelligence and evidence reconciliation for UK mortgage brokers.
@@ -34,6 +44,7 @@ def create_app(
     *,
     auth_provider: AuthProvider | None = None,
     sessionmaker: async_sessionmaker[AsyncSession] | None = None,
+    blob_store: BlobStore | None = None,
 ) -> FastAPI:
     settings = settings or get_settings()
     configure_logging(settings.log_level, settings.log_json)
@@ -61,10 +72,14 @@ def create_app(
     app.state.settings = settings
     app.state.auth_provider = provider
     app.state.sessionmaker = sessionmaker
+    # No store at all unless documents are enabled: document routes then fail closed.
+    if blob_store is None and settings.documents_enabled:
+        blob_store = build_blob_store(settings)
+    app.state.blob_store = blob_store if settings.documents_enabled else None
 
     app.add_middleware(RequestContextMiddleware)
     install_error_handlers(app)
-    for module in (health, me, firm, members, cases, applicants, financial):
+    for module in (health, me, firm, members, cases, applicants, financial, documents):
         app.include_router(module.router)
     app.include_router(financial.reference)
     return app

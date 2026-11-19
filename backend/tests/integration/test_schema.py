@@ -19,6 +19,7 @@ from tests.conftest import BACKEND_DIR, create_database, db_url, run_alembic
 
 MIGRATION_DB = "meip_test_migrations"
 SNAPSHOT = BACKEND_DIR / "openapi.json"
+HEAD = max(p.name[:4] for p in (BACKEND_DIR / "migrations" / "versions").glob("[0-9]*.py"))
 
 
 @pytest.fixture(scope="module")
@@ -277,7 +278,7 @@ async def test_downgrade_refuses_to_reinstate_withdrawn_items(scratch_engine: As
     with pytest.raises(Exception, match="Withdrawn items exist"):
         await run_alembic(scratch_engine, "downgrade", "0009")
     assert await _state(scratch_engine, "SELECT withdrawal_reason FROM income_sources") == (
-        "0011",
+        HEAD,
         "duplicate",
     )
     await _fresh(scratch_engine)
@@ -295,7 +296,7 @@ async def test_downgrade_refuses_to_discard_qualifiers(scratch_engine: AsyncEngi
     with pytest.raises(Exception, match="would discard qualifiers"):
         await run_alembic(scratch_engine, "downgrade", "0007")
     assert await _state(scratch_engine, "SELECT qualifier FROM financial_observations") == (
-        "0011",
+        HEAD,
         "guaranteed",
     )
     await _fresh(scratch_engine)
@@ -314,4 +315,23 @@ async def test_downgrade_keeps_working_without_lossy_data(scratch_engine: AsyncE
     await run_alembic(scratch_engine, "downgrade", "0007")
     async with scratch_engine.connect() as conn:
         assert await conn.scalar(text("SELECT count(*) FROM financial_observations")) == 1
+    await _fresh(scratch_engine)
+
+
+async def test_downgrade_refuses_to_orphan_stored_documents(scratch_engine: AsyncEngine) -> None:
+    await _fresh(scratch_engine)
+    await run_alembic(scratch_engine, "upgrade", "head")
+    await _seed_case_with_income(scratch_engine)
+    async with scratch_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO documents (id, tenant_id, case_id, document_type, status,"
+                " created_at, updated_at, version) VALUES (gen_random_uuid(),"
+                " '00000000-0000-7000-8000-0000000000a1', '00000000-0000-7000-8000-0000000000a2',"
+                " 'payslip', 'received', now(), now(), 1)"
+            )
+        )
+    with pytest.raises(Exception, match="Documents exist"):
+        await run_alembic(scratch_engine, "downgrade", "0011")
+    assert await _state(scratch_engine, "SELECT count(*) FROM documents") == (HEAD, 1)
     await _fresh(scratch_engine)

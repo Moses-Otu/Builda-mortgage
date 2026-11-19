@@ -66,7 +66,7 @@ Single deployable backend codebase (modular monolith) with API and worker proces
 | 6a | `financial` | income sources, commitments + liable parties, expenditure + parties, typed observations, measure definitions | 1.1 (declared/broker data); 2+ adds document lineage |
 | 1a | `firm` | per-firm settings (applicant limit, four-eyes switch) | 1.1 |
 | 14 | `audit` | append-only event log | 1 |
-| 4 | `documents` | upload, blob storage, hashing, versions, pages | 2 |
+| 4 | `documents` | upload, blob storage, hashing, versions, pages | 2 (2-A: upload, storage, verified download) |
 | 5 | `extraction` | classification, provider adapters, versioned schemas, raw outputs, source anchors | 3 |
 | 6 | `facts` | normalised financial facts, provenance, verification status | 4 |
 | 7 | `income` | income classification (employed basic/overtime/bonus/commission, self-employed, dividends, rental, benefits, other) | 5 |
@@ -99,6 +99,28 @@ Single deployable backend codebase (modular monolith) with API and worker proces
 - **Maintenance note.** The append-only and freeze triggers also apply to the owner role: a future migration that must UPDATE reference rows or withdrawn items has to say so explicitly and disable the specific trigger within that migration.
 - **Audit-detail binding (1.2):** `audit_event_details` rows can only be written in the transaction that wrote their event (`audit_events.txid`, which the runtime role cannot set). COPY into row-level-secured tables is refused by PostgreSQL.
 - **Retention and erasure:** requirements, the data inventory and the open decisions are in `docs/compliance/RETENTION-AND-ERASURE-REQUIREMENTS.md` (decision D10).
+- **Documents (2.0, step 2-A):**
+  - Originals live in private blob storage under keys generated from UUIDs only
+    (`{tenant}/{case}/{document}/{version}/original`). The **application code** can only
+    create and read: the storage interface has no delete and never overwrites. The **storage
+    identity** is a separate matter: a connection string with an account key can delete
+    anything, so production must use a managed identity whose role allows only create and
+    read (Phase 12, see the retention brief R15–R16).
+  - One version per document in Phase 2.0 (`version_number = 1`, enforced by a CHECK).
+    There is no replacement or new-version operation.
+  - `document_versions` rows are immutable for every role (trigger). `UNIQUE (tenant, case,
+    sha256)` stops identical content twice in a case, including under concurrent uploads;
+    the case lock means a duplicate is normally caught before anything is stored.
+  - The API never parses a PDF: it checks the declared type, the `%PDF-` signature at byte 0
+    and the size, while streaming. Parsing happens in the sandboxed worker (step 2-C).
+  - Downloads re-hash the stored bytes before sending any of them.
+  - **Fail-closed:** document routes return 404 unless enabled. Outside local and test,
+    enabling requires a D10 retention-approval reference, the filesystem backend is
+    refused, and the storage connection string must use HTTPS and must not be the Azurite
+    development account; the service will not start otherwise.
+  - **Downloads are not yet access-logged.** That is a production-readiness requirement
+    before real borrower documents are enabled (retention brief R17). The platform cannot tell synthetic from
+    real documents, so this is a deployment control, not content inspection.
 - **PII:** never logged. Structured JSON logs carry IDs only. Field-level encryption considered for highest-risk fields (NI number, account numbers) in Phase 2+.
 - **Storage:** private Blob containers, no public access, no long-lived SAS; downloads proxied through the API with authorisation and audit, or short-lived user-delegation SAS.
 - **Residency:** Azure UK South (primary) / UK West (DR). Provider regions verified per service; where a model is unavailable in UK regions, this is surfaced as a decision, not silently routed elsewhere.

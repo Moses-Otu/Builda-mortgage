@@ -71,3 +71,31 @@ class BusinessRuleError(AppError):
     status_code = 422
     error_type = "business-rule-violation"
     title = "Business rule violated"
+
+
+class PayloadTooLargeError(AppError):
+    status_code = 413
+    error_type = "payload-too-large"
+    title = "Request body too large"
+
+
+class UnsupportedMediaTypeError(AppError):
+    status_code = 415
+    error_type = "unsupported-media-type"
+    title = "Unsupported media type"
+
+
+class FeatureDisabledError(AppError):
+    """The feature is switched off in this deployment. Reported as 404: nothing is there."""
+
+    status_code = 404
+    error_type = "feature-disabled"
+    title = "Not available"
+
+
+class IntegrityFailureError(AppError):
+    """Stored data failed an integrity check (e.g. a hash mismatch). Never retried silently."""
+
+    status_code = 500
+    error_type = "integrity-error"
+    title = "Stored data failed an integrity check"

@@ -17,6 +17,16 @@ services:
       timeout: 3s
       retries: 30
 
+  # Local Azure Blob Storage emulator (Phase 2.0). The connection string below is Azurite's
+  # documented, public development account key: not a secret, and useless outside Azurite.
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:3.33.0
+    command: ["azurite-blob", "--blobHost", "0.0.0.0", "--location", "/data", "--skipApiVersionCheck"]
+    ports:
+      - "10000:10000"
+    volumes:
+      - blobdata:/data
+
   migrate:
     build: ./backend
     command: ["alembic", "upgrade", "head"]
@@ -33,6 +43,10 @@ services:
       MEIP_AUTH_MODE: dev
       MEIP_DATABASE_URL: postgresql+asyncpg://meip_app:meip_app_local@postgres:5432/meip
       MEIP_DEV_AUTH_KEY_PATH: /app/.dev/dev_auth_key.pem
+      # Synthetic documents only (D10 open). Local environments need no retention approval.
+      MEIP_DOCUMENTS_ENABLED: "true"
+      MEIP_BLOB_BACKEND: azure
+      MEIP_BLOB_CONNECTION_STRING: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;"
     volumes:
       # Shared with `meip-admin dev-token` on the host so locally minted tokens validate.
       - ./backend/.dev:/app/.dev
@@ -41,6 +55,9 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      azurite:
+        condition: service_started
 
 volumes:
   pgdata:
+  blobdata:

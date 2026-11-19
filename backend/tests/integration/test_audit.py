@@ -42,6 +42,7 @@ AUDITED_ROUTES: dict[Route, str] = {
     ("POST", _F + "/income-sources/{income_source_id}/withdrawal"): ("financial_item.withdrawn"),
     ("POST", _F + "/commitments/{commitment_id}/withdrawal"): "financial_item.withdrawn",
     ("POST", _F + "/expenditure/{expenditure_item_id}/withdrawal"): "financial_item.withdrawn",
+    ("POST", "/api/v1/cases/{case_id}/documents"): "document.uploaded",
     ("POST", _F + "/observations"): "observation.recorded",
     ("POST", _F + "/observations/{observation_id}/retirement"): "observation.retired",
 }
@@ -220,6 +221,7 @@ ACTIONS: dict[Route, Action] = {
         f"{s['base']}/observations/{s['observation']['id']}/retirement",
         json={"reason": "entered_in_error"},
     ),
+    ("POST", "/api/v1/cases/{case_id}/documents"): lambda f, s: f.upload(s["case"]["id"]),
 }
 
 
