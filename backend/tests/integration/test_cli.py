@@ -18,8 +18,16 @@ from tests.conftest import TEST_DB, Firm, db_url
 def _run(args: list[str], env: dict[str, str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603 - fixed interpreter and arguments
         [sys.executable, "-m", "meip.cli", *args],
-        # Start from a clean MEIP_* slate so the developer's shell cannot influence results.
-        env={**{k: v for k, v in os.environ.items() if not k.startswith("MEIP_")}, **env},
+        # Start from a clean MEIP_* slate so the developer's shell cannot influence results;
+        # keep MEIP_ENV_FILE (empty under the suite) so a local backend/.env can't either.
+        env={
+            **{
+                k: v
+                for k, v in os.environ.items()
+                if not k.startswith("MEIP_") or k == "MEIP_ENV_FILE"
+            },
+            **env,
+        },
         capture_output=True,
         text=True,
         timeout=60,

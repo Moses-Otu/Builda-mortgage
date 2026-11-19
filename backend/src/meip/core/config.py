@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from enum import StrEnum
 from functools import lru_cache
 from pathlib import Path
@@ -52,8 +53,14 @@ NON_DEPLOYED_ENVIRONMENTS = frozenset({Environment.LOCAL, Environment.TEST})
 MIB = 1024 * 1024
 
 
+def _env_file() -> str | None:
+    """The dotenv file to read: ``MEIP_ENV_FILE`` if set (empty means none), else ``.env``.
+    The test suite sets it to empty so a developer's local ``.env`` can't leak into tests."""
+    return os.environ.get("MEIP_ENV_FILE", ".env") or None
+
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="MEIP_", env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="MEIP_", env_file=_env_file(), extra="ignore")
 
     # Required, with no default: a deployment that forgets to declare its environment must
     # fail to start rather than silently inherit permissive local behaviour.

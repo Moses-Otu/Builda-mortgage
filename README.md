@@ -192,6 +192,9 @@ UPDATE_OPENAPI_SNAPSHOT=1 uv run pytest tests/integration/test_schema.py
   **Synthetic documents only** until D10 is approved; document routes answer 404
   `feature-disabled` unless `MEIP_DOCUMENTS_ENABLED=true`. Stored originals with no database
   row (after a crash) are listed by `meip-admin find-orphan-blobs`; nothing deletes them.
+- **Tests and `.env`:** the suite sets `MEIP_ENV_FILE` to empty (in `tests/__init__.py`), so a
+  local `backend/.env` never leaks into tests. Outside tests, `MEIP_ENV_FILE` chooses the
+  dotenv file (default `.env`; empty for none).
 - **Processing (Phase 2.0):** each upload queues a job in the same transaction. The worker
   (`uv run meip-worker`, or the `worker` service in Docker) re-checks the original's hash
   and opens the PDF in a separate, time-limited process, then marks the document `ready`

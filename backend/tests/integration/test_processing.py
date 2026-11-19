@@ -392,7 +392,7 @@ async def test_worker_stops_when_asked(worker: Worker, owner: asyncpg.Connection
 
 
 def test_worker_refuses_to_start_when_documents_are_disabled() -> None:
-    env = {k: v for k, v in os.environ.items() if not k.startswith("MEIP_")}
+    env = {k: v for k, v in os.environ.items() if not k.startswith("MEIP_") or k == "MEIP_ENV_FILE"}
     env.update({"MEIP_ENV": "test", "MEIP_AUTH_MODE": "dev"})
     result = subprocess.run(
         [sys.executable, "-m", "meip.documents.processing"],
@@ -443,7 +443,7 @@ def test_the_standalone_worker_registers_every_table() -> None:
             "print('ok')",
         ]
     )
-    env = {k: v for k, v in os.environ.items() if not k.startswith("MEIP_")}
+    env = {k: v for k, v in os.environ.items() if not k.startswith("MEIP_") or k == "MEIP_ENV_FILE"}
 
     def run(code: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(  # noqa: S603 - fixed interpreter and code
