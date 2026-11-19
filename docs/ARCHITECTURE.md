@@ -138,6 +138,13 @@ Single deployable backend codebase (modular monolith) with API and worker proces
     with boxes CHECKed to lie inside their page. The database can't verify that a box shows
     its value; the broker does. Provider: `LayoutProvider` interface; only the test-only
     synthetic provider exists so far.
+  - **Review (step 2-D):** one review per extraction run, with one decision per field.
+    Corrections sit beside the original value, never overwriting it. Approved financial
+    fields become `document` observations, and the database requires each to link to its
+    decision (and only those). Validation runs before any write, in one transaction under
+    the case lock; duplicates are refused by status and `UNIQUE (run_id)`. Document figures
+    sit outside the current-value rule, and deciding which figure counts is reconciliation
+    (Stage 2).
   - **Downloads are not yet access-logged.** That is a production-readiness requirement
     before real borrower documents are enabled (retention brief R17). The platform cannot tell synthetic from
     real documents, so this is a deployment control, not content inspection.

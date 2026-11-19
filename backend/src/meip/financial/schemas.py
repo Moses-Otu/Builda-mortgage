@@ -313,6 +313,10 @@ class ObservationOut(OutputModel):
     recorded_by_user_id: uuid.UUID | None
     recorded_at: datetime
     supersedes_observation_id: uuid.UUID | None
+    field_review_id: uuid.UUID | None = Field(
+        default=None,
+        description="For source_kind 'document': the review decision this figure came from",
+    )
     superseded_by_observation_id: uuid.UUID | None = Field(
         default=None, description="The correction that replaced this value, if any"
     )

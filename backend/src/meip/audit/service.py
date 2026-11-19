@@ -102,6 +102,11 @@ NON_PERSONAL_FIELDS = frozenset(
         "field_count",
         "payment_line_count",
         "deduction_line_count",
+        # review: decision counts and figure IDs (corrected values and reasons are erasable)
+        "observation_ids",
+        "accept_count",
+        "correct_count",
+        "reject_count",
     }
 )
 
@@ -130,6 +135,7 @@ class AuditAction(StrEnum):
     DOCUMENT_PROCESSING_FAILED = "document.processing_failed"
     DOCUMENT_EXTRACTED = "document.extracted"
     DOCUMENT_UNRECOGNISED = "document.unrecognised"
+    DOCUMENT_REVIEWED = "document.reviewed"
 
 
 @dataclass

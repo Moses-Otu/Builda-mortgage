@@ -171,6 +171,12 @@ UPDATE_OPENAPI_SNAPSHOT=1 uv run pytest tests/integration/test_schema.py
   raw text, normalised value, page and boxes. The only provider is the **synthetic test
   provider** (`synthetic-fixture`), which staging and production refuse; Azure Document
   Intelligence can be connected later behind the same interface.
+- **Review (Phase 2.0):** `POST …/documents/{id}/review` (`financial:write`, `If-Match`) takes
+  one decision per extracted field (accept, correct with a value and reason, or reject with a
+  reason) and an **existing** income source. Accepted and corrected financial fields become
+  `source_kind = 'document'` figures linked to their decision; dates, frequency and tax code
+  stay as reviewed evidence. All or nothing; a document is reviewed once (409 with the
+  existing review afterwards). Later corrections use the financial endpoints.
 - **Audit:** every mutation writes exactly one `audit_events` row in the same transaction.
   The permanent row holds no direct identifiers and no financial values, though it is still
   pseudonymous personal data (status and role facts about an applicant ID). Amounts,

@@ -375,3 +375,22 @@ async def test_downgrade_refuses_to_discard_extraction_results(
         await run_alembic(scratch_engine, "downgrade", "0013")
     assert await _state(scratch_engine, "SELECT status FROM documents") == (HEAD, "unrecognised")
     await _fresh(scratch_engine)
+
+
+async def test_downgrade_refuses_to_discard_reviews(scratch_engine: AsyncEngine) -> None:
+    await _fresh(scratch_engine)
+    await run_alembic(scratch_engine, "upgrade", "head")
+    await _seed_case_with_income(scratch_engine)
+    async with scratch_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO documents (id, tenant_id, case_id, document_type, status,"
+                " page_count, created_at, updated_at, version) VALUES (gen_random_uuid(),"
+                " '00000000-0000-7000-8000-0000000000a1', '00000000-0000-7000-8000-0000000000a2',"
+                " 'payslip', 'reviewed', 1, now(), now(), 1)"
+            )
+        )
+    with pytest.raises(Exception, match="Document reviews exist"):
+        await run_alembic(scratch_engine, "downgrade", "0014")
+    assert await _state(scratch_engine, "SELECT status FROM documents") == (HEAD, "reviewed")
+    await _fresh(scratch_engine)

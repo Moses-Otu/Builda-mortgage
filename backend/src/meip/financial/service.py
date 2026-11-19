@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterable
+from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
@@ -26,6 +27,7 @@ from meip.cases.service import get_case, require_editable
 from meip.core.db import utcnow
 from meip.core.errors import BusinessRuleError, ConflictError, NotFoundError, VersionConflictError
 from meip.financial.measures import (
+    Frequency,
     RetiredReason,
     SourceKind,
     SubjectKind,
@@ -700,6 +702,7 @@ def _observation_out(
         recorded_at=o.recorded_at,
         supersedes_observation_id=o.supersedes_observation_id,
         superseded_by_observation_id=superseded_by,
+        field_review_id=o.field_review_id,
         retired_at=o.retired_at,
         retired_reason=o.retired_reason,
     )
@@ -812,21 +815,9 @@ async def record_observation(
     item = await _subject_item(ctx, case_id, body)
 
     subject_kind = body.subject_kind
-    definition: MeasureDefinition | None = await ctx.session.scalar(
-        select(MeasureDefinition).where(
-            MeasureDefinition.code == body.measure,
-            MeasureDefinition.subject_kind == subject_kind.value,
-        )
+    definition = await _checked_definition(
+        ctx, body.measure, subject_kind, body.value.type, body.qualifier
     )
-    if definition is None:
-        raise BusinessRuleError(f"'{body.measure}' is not a measure for a {subject_kind.value}")
-    if definition.deprecated_at is not None:
-        raise BusinessRuleError(f"'{body.measure}' is deprecated; new values are not accepted")
-    if body.value.type != definition.value_type:
-        raise BusinessRuleError(
-            f"'{body.measure}' takes a {definition.value_type} value, not {body.value.type}"
-        )
-    await _check_qualifier(ctx, definition, subject_kind, body.qualifier)
     ensure_applicable(body.measure, subject_kind, _item_kind(item))
 
     superseded = await _superseded(ctx, case_id, body)
@@ -925,6 +916,33 @@ async def record_observation(
         ctx, AuditAction.OBSERVATION_RECORDED, "observation", observation.id, case_id, change_set
     )
     return _observation_out(observation)
+
+
+async def _checked_definition(
+    ctx: OperationContext,
+    measure: str,
+    subject_kind: SubjectKind,
+    value_type: str,
+    qualifier: str | None,
+) -> MeasureDefinition:
+    """The checks every new value passes, whatever its source: the measure exists for this
+    kind of item, is not deprecated, takes this type of value, and the qualifier is valid."""
+    definition: MeasureDefinition | None = await ctx.session.scalar(
+        select(MeasureDefinition).where(
+            MeasureDefinition.code == measure,
+            MeasureDefinition.subject_kind == subject_kind.value,
+        )
+    )
+    if definition is None:
+        raise BusinessRuleError(f"'{measure}' is not a measure for a {subject_kind.value}")
+    if definition.deprecated_at is not None:
+        raise BusinessRuleError(f"'{measure}' is deprecated; new values are not accepted")
+    if value_type != definition.value_type:
+        raise BusinessRuleError(
+            f"'{measure}' takes a {definition.value_type} value, not {value_type}"
+        )
+    await _check_qualifier(ctx, definition, subject_kind, qualifier)
+    return definition
 
 
 async def _check_qualifier(
@@ -1105,3 +1123,86 @@ async def withdraw_expenditure(
     )
     assert isinstance(item, ExpenditureItem)  # noqa: S101
     return _expenditure_out(item, (await _expenditure_parties(ctx, [item.id]))[item.id])
+
+
+# --- figures saved from a reviewed document (Phase 2.0, step 2-D) ---------------------------
+
+
+@dataclass(frozen=True)
+class DocumentFigure:
+    """One approved payslip figure, ready to save. ``amount_minor`` is the broker's
+    correction when there is one, otherwise the extracted value."""
+
+    field_review_id: uuid.UUID
+    measure: str
+    qualifier: str | None
+    amount_minor: int
+    period_start: date | None
+    period_end: date | None
+    pay_date: date
+
+
+async def record_document_observations(
+    ctx: OperationContext,
+    case_id: uuid.UUID,
+    income_source_id: uuid.UUID,
+    figures: list[DocumentFigure],
+    frequency: Frequency,
+) -> list[FinancialObservation]:
+    """Save approved document figures as ``source_kind = 'document'`` observations.
+
+    Uses the same checks as :func:`record_observation`, and **validates every figure before
+    adding any**. The caller holds the case lock, runs this in its own transaction, and
+    writes the single audit event; on any error the caller's transaction rolls back, so no
+    partial figures are ever committed. Document figures sit outside the current-value rule
+    (declared and broker entries only) and never supersede anything."""
+    source: IncomeSource | None = await ctx.session.scalar(
+        select(IncomeSource).where(
+            IncomeSource.id == income_source_id, IncomeSource.case_id == case_id
+        )
+    )
+    if source is None:
+        raise BusinessRuleError("The income source is not on this case")
+    _require_not_withdrawn(source)
+    _require_active(await _applicants(ctx, case_id), source.applicant_id)
+
+    checked: list[tuple[DocumentFigure, MeasureDefinition]] = []
+    for figure in figures:  # validation pass: nothing is written yet
+        definition = await _checked_definition(
+            ctx, figure.measure, SubjectKind.INCOME_SOURCE, ValueType.MONEY.value, figure.qualifier
+        )
+        ensure_applicable(figure.measure, SubjectKind.INCOME_SOURCE, source.kind)
+        if figure.amount_minor < 0:
+            raise BusinessRuleError(
+                f"'{figure.measure}' cannot be negative; correct the value or reject the line"
+            )
+        if definition.temporal_kind not in (TemporalKind.FLOW.value, TemporalKind.STOCK.value):
+            raise BusinessRuleError(f"'{figure.measure}' can't be saved from a payslip")
+        checked.append((figure, definition))
+
+    observations = []
+    for figure, definition in checked:  # write pass
+        flow = definition.temporal_kind == TemporalKind.FLOW.value
+        observation = FinancialObservation(
+            tenant_id=ctx.tenant_id,
+            case_id=case_id,
+            income_source_id=source.id,
+            measure=figure.measure,
+            qualifier=figure.qualifier,
+            qualifier_required=definition.qualifier_required,
+            value_type=definition.value_type,
+            temporal_kind=definition.temporal_kind,
+            money_minor=figure.amount_minor,
+            currency="GBP",
+            frequency=frequency.value if flow else None,
+            period_start=figure.period_start if flow else None,
+            period_end=figure.period_end if flow else None,
+            as_of_date=None if flow else figure.pay_date,
+            source_kind=SourceKind.DOCUMENT.value,
+            recorded_by_user_id=ctx.actor.user_id,
+            field_review_id=figure.field_review_id,
+        )
+        ctx.session.add(observation)
+        observations.append(observation)
+    await ctx.session.flush()
+    return observations

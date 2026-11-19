@@ -277,6 +277,20 @@ PROBES: list[Probe] = [
         "/api/v1/cases/{case_id}/documents/{document_id}/extraction",
         EVERYONE,
     ),
+    Probe(
+        "save review",
+        "POST",
+        "/api/v1/cases/{case_id}/documents/{document_id}/review",
+        CASE_WORKERS,
+        lambda s: {
+            "if_match": 1,
+            "json": {
+                "income_source_id": s["income_source_id"],
+                "decisions": [{"ordinal": 1, "decision": "accept"}],
+            },
+        },
+    ),
+    Probe("get review", "GET", "/api/v1/cases/{case_id}/documents/{document_id}/review", EVERYONE),
 ]
 
 # Routes that do not act within a firm and so have no role-based permission.

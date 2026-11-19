@@ -7,7 +7,15 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field
 
-from meip.documents.models import DocumentStatus, DocumentType, FailureCode, ScanStatus
+from meip.core.schemas import InputModel
+from meip.documents.models import (
+    Decision,
+    DocumentStatus,
+    DocumentType,
+    FailureCode,
+    ScanStatus,
+)
+from meip.financial.measures import Frequency
 
 
 class DocumentVersionOut(BaseModel):
@@ -88,3 +96,63 @@ class ExtractionOut(BaseModel):
     missing_required: list[str] = Field(
         description="Required summary fields with no parsed value (pay_date, gross_pay, net_pay)"
     )
+
+
+class FieldDecisionIn(InputModel):
+    ordinal: int = Field(ge=1, description="The extracted field's ordinal")
+    decision: Decision
+    corrected_money_minor: int | None = Field(default=None, description="For money fields")
+    corrected_date: date | None = Field(default=None, description="For date fields")
+    corrected_text: str | None = Field(default=None, max_length=64, description="For text fields")
+    reason: str | None = Field(
+        default=None, max_length=500, description="Required to correct or reject"
+    )
+    measure: str | None = Field(
+        default=None,
+        max_length=48,
+        description="Only for an unrecognised payment or deduction line: the measure to save under",
+    )
+    qualifier: str | None = Field(
+        default=None, max_length=32, description="For bonus and allowance; default 'unspecified'"
+    )
+
+
+class ReviewIn(InputModel):
+    income_source_id: uuid.UUID = Field(
+        description="An existing income source on the case; a payslip never creates one"
+    )
+    frequency: Frequency | None = Field(
+        default=None, description="Needed only when the payslip's frequency can't be read"
+    )
+    decisions: list[FieldDecisionIn] = Field(
+        min_length=1, max_length=500, description="Exactly one decision for every field"
+    )
+
+
+class FieldDecisionOut(BaseModel):
+    ordinal: int
+    section: str
+    field_code: str | None
+    label_text: str
+    raw_text: str
+    extracted_money_minor: int | None
+    extracted_date: date | None
+    extracted_text: str | None
+    decision: Decision
+    corrected_money_minor: int | None
+    corrected_date: date | None
+    corrected_text: str | None
+    reason: str | None
+    measure: str | None
+    qualifier: str | None
+    observation_id: uuid.UUID | None = Field(description="The figure saved from this decision")
+
+
+class ReviewOut(BaseModel):
+    id: uuid.UUID
+    document_id: uuid.UUID
+    income_source_id: uuid.UUID
+    frequency: Frequency
+    reviewed_by_user_id: uuid.UUID | None
+    created_at: datetime
+    decisions: list[FieldDecisionOut]

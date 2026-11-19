@@ -6,9 +6,11 @@ from meip.cases.models import Case
 from meip.core.db import Base
 from meip.documents.models import (
     Document,
+    DocumentReview,
     DocumentVersion,
     ExtractedField,
     ExtractionRun,
+    FieldReview,
     Job,
 )
 from meip.financial.models import (
@@ -33,11 +35,13 @@ __all__ = [
     "Commitment",
     "CommitmentParty",
     "Document",
+    "DocumentReview",
     "DocumentVersion",
     "ExpenditureItem",
     "ExpenditureParty",
     "ExtractedField",
     "ExtractionRun",
+    "FieldReview",
     "FinancialObservation",
     "FirmSettings",
     "IncomeSource",

@@ -43,6 +43,7 @@ AUDITED_ROUTES: dict[Route, str] = {
     ("POST", _F + "/commitments/{commitment_id}/withdrawal"): "financial_item.withdrawn",
     ("POST", _F + "/expenditure/{expenditure_item_id}/withdrawal"): "financial_item.withdrawn",
     ("POST", "/api/v1/cases/{case_id}/documents"): "document.uploaded",
+    ("POST", "/api/v1/cases/{case_id}/documents/{document_id}/review"): "document.reviewed",
     ("POST", _F + "/observations"): "observation.recorded",
     ("POST", _F + "/observations/{observation_id}/retirement"): "observation.retired",
 }
@@ -222,6 +223,43 @@ ACTIONS: dict[Route, Action] = {
         json={"reason": "entered_in_error"},
     ),
     ("POST", "/api/v1/cases/{case_id}/documents"): lambda f, s: f.upload(s["case"]["id"]),
+    ("POST", "/api/v1/cases/{case_id}/documents/{document_id}/review"): lambda f, s: f.request(
+        "POST",
+        f"{_case(s)}/documents/{s['document']['id']}/review",
+        if_match=s["document"]["version"],
+        json={
+            "income_source_id": s["source"]["id"],
+            "decisions": [{"ordinal": o, "decision": "accept"} for o in s["ordinals"]],
+        },
+    ),
+}
+
+
+async def _extracted_payslip(firm: Firm, state: dict[str, Any]) -> None:
+    """Prepare a reviewable document. Upload and processing write their own events, so this
+    runs before the event count is taken."""
+    from meip.documents.processing import run_once
+    from tests.synthetic_docs import PAYSLIPS
+
+    upload = await firm.upload(state["case"]["id"], PAYSLIPS["classic"]()[0].pdf())
+    assert upload.status_code == 201, upload.text
+    app = firm.client._transport.app  # type: ignore[attr-defined] # the test ASGI app
+    worker = (app.state.sessionmaker, app.state.blob_store, app.state.settings)
+    while await run_once(*worker):
+        pass
+    base = f"{_case(state)}/documents/{upload.json()['id']}"
+    state["document"] = (await firm.request("GET", base)).json()
+    extraction = (await firm.request("GET", f"{base}/extraction")).json()
+    state["ordinals"] = [
+        f["ordinal"]
+        for section in ("summary", "payments", "deductions", "year_to_date")
+        for f in extraction[section]
+    ]
+
+
+# Routes whose action needs state that itself writes audit events.
+PREPARE: dict[Route, Callable[[Firm, dict[str, Any]], Awaitable[None]]] = {
+    ("POST", "/api/v1/cases/{case_id}/documents/{document_id}/review"): _extracted_payslip,
 }
 
 
@@ -234,6 +272,8 @@ async def test_mutation_writes_exactly_one_event(
     firm: Firm, audit_count: CountAudit, route: Route
 ) -> None:
     state = await _setup(firm)
+    if route in PREPARE:
+        await PREPARE[route](firm, state)
     before = await audit_count(firm.tenant_id)
     resp = await ACTIONS[route](firm, state)
     assert resp.status_code in (200, 201, 204), resp.text

@@ -451,6 +451,17 @@ class FinancialObservation(Base):
             f"frequency IS NULL OR {check_in('frequency', Frequency)}", name="frequency"
         ),
         CheckConstraint(check_in("source_kind", SourceKind), name="source_kind"),
+        # Every document figure links to the review decision it came from, and only those.
+        CheckConstraint(
+            "(source_kind = 'document') = (field_review_id IS NOT NULL)",
+            name="document_lineage",
+        ),
+        UniqueConstraint("field_review_id"),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "field_review_id"],
+            ["field_reviews.tenant_id", "field_reviews.case_id", "field_reviews.id"],
+            name="fk_financial_observations_field_review",
+        ),
         CheckConstraint(
             f"retired_reason IS NULL OR {check_in('retired_reason', RetiredReason)}",
             name="retired_reason",
@@ -489,6 +500,8 @@ class FinancialObservation(Base):
     supersedes_observation_id: Mapped[uuid.UUID | None] = mapped_column()
     retired_at: Mapped[datetime | None] = mapped_column()
     retired_reason: Mapped[str | None] = mapped_column(String(32))
+    # Set only for source_kind 'document': the broker's decision this figure came from.
+    field_review_id: Mapped[uuid.UUID | None] = mapped_column()
 
     # Fetch the database-computed subject_kind with RETURNING after INSERT *and* UPDATE;
     # otherwise it is expired and would need a lazy load, which async sessions cannot do.

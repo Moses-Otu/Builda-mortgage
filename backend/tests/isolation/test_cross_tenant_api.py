@@ -112,6 +112,18 @@ PROBES: list[tuple[str, str, dict[str, Any]]] = [
     ("GET", "/api/v1/cases/{case_id}/documents/{document_id}", {}),
     ("GET", "/api/v1/cases/{case_id}/documents/{document_id}/content", {}),
     ("GET", "/api/v1/cases/{case_id}/documents/{document_id}/extraction", {}),
+    (
+        "POST",
+        "/api/v1/cases/{case_id}/documents/{document_id}/review",
+        {
+            "if_match": 1,
+            "json": {
+                "income_source_id": "{income_source_id}",
+                "decisions": [{"ordinal": 1, "decision": "accept"}],
+            },
+        },
+    ),
+    ("GET", "/api/v1/cases/{case_id}/documents/{document_id}/review", {}),
     # Not tenant-scoped, but an attacker must not be able to accept someone else's invitation.
     ("POST", "/api/v1/me/invitations/{membership_id}/accept", {}),
 ]

@@ -1346,6 +1346,15 @@
         "title": "DateValue",
         "type": "object"
       },
+      "Decision": {
+        "enum": [
+          "accept",
+          "correct",
+          "reject"
+        ],
+        "title": "Decision",
+        "type": "string"
+      },
       "DocumentOut": {
         "properties": {
           "applicant_id": {
@@ -1446,6 +1455,7 @@
           "ready",
           "extracted",
           "unrecognised",
+          "reviewed",
           "failed"
         ],
         "title": "DocumentStatus",
@@ -2081,6 +2091,271 @@
         ],
         "title": "FailureCode",
         "type": "string"
+      },
+      "FieldDecisionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "corrected_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For date fields",
+            "title": "Corrected Date"
+          },
+          "corrected_money_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For money fields",
+            "title": "Corrected Money Minor"
+          },
+          "corrected_text": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For text fields",
+            "title": "Corrected Text"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/Decision"
+          },
+          "measure": {
+            "anyOf": [
+              {
+                "maxLength": 48,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only for an unrecognised payment or deduction line: the measure to save under",
+            "title": "Measure"
+          },
+          "ordinal": {
+            "description": "The extracted field's ordinal",
+            "minimum": 1.0,
+            "title": "Ordinal",
+            "type": "integer"
+          },
+          "qualifier": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For bonus and allowance; default 'unspecified'",
+            "title": "Qualifier"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Required to correct or reject",
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "ordinal",
+          "decision"
+        ],
+        "title": "FieldDecisionIn",
+        "type": "object"
+      },
+      "FieldDecisionOut": {
+        "properties": {
+          "corrected_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corrected Date"
+          },
+          "corrected_money_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corrected Money Minor"
+          },
+          "corrected_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corrected Text"
+          },
+          "decision": {
+            "$ref": "#/components/schemas/Decision"
+          },
+          "extracted_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extracted Date"
+          },
+          "extracted_money_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extracted Money Minor"
+          },
+          "extracted_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extracted Text"
+          },
+          "field_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Code"
+          },
+          "label_text": {
+            "title": "Label Text",
+            "type": "string"
+          },
+          "measure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measure"
+          },
+          "observation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The figure saved from this decision",
+            "title": "Observation Id"
+          },
+          "ordinal": {
+            "title": "Ordinal",
+            "type": "integer"
+          },
+          "qualifier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qualifier"
+          },
+          "raw_text": {
+            "title": "Raw Text",
+            "type": "string"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "section": {
+            "title": "Section",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ordinal",
+          "section",
+          "field_code",
+          "label_text",
+          "raw_text",
+          "extracted_money_minor",
+          "extracted_date",
+          "extracted_text",
+          "decision",
+          "corrected_money_minor",
+          "corrected_date",
+          "corrected_text",
+          "reason",
+          "measure",
+          "qualifier",
+          "observation_id"
+        ],
+        "title": "FieldDecisionOut",
+        "type": "object"
       },
       "FirmSettingsOut": {
         "properties": {
@@ -3146,6 +3421,19 @@
             ],
             "title": "Expenditure Item Id"
           },
+          "field_review_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For source_kind 'document': the review decision this figure came from",
+            "title": "Field Review Id"
+          },
           "frequency": {
             "anyOf": [
               {
@@ -3517,6 +3805,101 @@
         "title": "RetiredReason",
         "type": "string"
       },
+      "ReviewIn": {
+        "additionalProperties": false,
+        "properties": {
+          "decisions": {
+            "description": "Exactly one decision for every field",
+            "items": {
+              "$ref": "#/components/schemas/FieldDecisionIn"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Decisions",
+            "type": "array"
+          },
+          "frequency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Frequency"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Needed only when the payslip's frequency can't be read"
+          },
+          "income_source_id": {
+            "description": "An existing income source on the case; a payslip never creates one",
+            "format": "uuid",
+            "title": "Income Source Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "income_source_id",
+          "decisions"
+        ],
+        "title": "ReviewIn",
+        "type": "object"
+      },
+      "ReviewOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/FieldDecisionOut"
+            },
+            "title": "Decisions",
+            "type": "array"
+          },
+          "document_id": {
+            "format": "uuid",
+            "title": "Document Id",
+            "type": "string"
+          },
+          "frequency": {
+            "$ref": "#/components/schemas/Frequency"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "income_source_id": {
+            "format": "uuid",
+            "title": "Income Source Id",
+            "type": "string"
+          },
+          "reviewed_by_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed By User Id"
+          }
+        },
+        "required": [
+          "id",
+          "document_id",
+          "income_source_id",
+          "frequency",
+          "reviewed_by_user_id",
+          "created_at",
+          "decisions"
+        ],
+        "title": "ReviewOut",
+        "type": "object"
+      },
       "Role": {
         "enum": [
           "firm_admin",
@@ -3545,7 +3928,8 @@
       "SourceKind": {
         "enum": [
           "declared",
-          "broker_entry"
+          "broker_entry",
+          "document"
         ],
         "title": "SourceKind",
         "type": "string"
@@ -4933,6 +5317,174 @@
           }
         ],
         "summary": "Get the classification and extracted fields",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/documents/{document_id}/review": {
+      "get": {
+        "description": "Each decision with the extracted and corrected values and the figure saved.",
+        "operationId": "get_review_api_v1_cases__case_id__documents__document_id__review_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get the saved review",
+        "tags": [
+          "documents"
+        ]
+      },
+      "post": {
+        "description": "One decision (accept, correct or reject) for every extracted field. Accepted and corrected financial fields are saved as figures on an existing income source; descriptive fields (dates, frequency, tax code) are kept as reviewed evidence. All or nothing. A document is reviewed once: a second submission returns 409 `already-reviewed` with the existing review's ID.",
+        "operationId": "submit_review_api_v1_cases__case_id__documents__document_id__review_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Current ETag of the resource, e.g. \"3\"",
+            "in": "header",
+            "name": "If-Match",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Current ETag of the resource, e.g. \"3\"",
+              "title": "If-Match"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Review the extracted fields and save the approved figures",
         "tags": [
           "documents"
         ]

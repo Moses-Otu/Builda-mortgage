@@ -55,6 +55,9 @@ TENANT_SCOPED: dict[str, frozenset[str]] = {
     # Extraction results: written once by the worker, never changed or deleted.
     "extraction_runs": frozenset({"SELECT", "INSERT"}),
     "extracted_fields": frozenset({"SELECT", "INSERT"}),
+    # Broker reviews and their per-field decisions: written once, never changed or deleted.
+    "document_reviews": frozenset({"SELECT", "INSERT"}),
+    "field_reviews": frozenset({"SELECT", "INSERT"}),
 }
 
 # table -> columns the runtime role may UPDATE through column-level grants only.

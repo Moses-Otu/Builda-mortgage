@@ -20,14 +20,16 @@ from starlette.background import BackgroundTask
 from meip.api.deps import (
     DocumentReadCtx,
     DocumentWriteCtx,
+    FinancialWriteCtx,
+    IfMatch,
     SettingsDep,
     Store,
     etag,
     require_documents_enabled,
 )
-from meip.documents import service
+from meip.documents import review, service
 from meip.documents.models import PDF_MEDIA_TYPE, DocumentType
-from meip.documents.schemas import DocumentOut, ExtractionOut
+from meip.documents.schemas import DocumentOut, ExtractionOut, ReviewIn, ReviewOut
 
 router = APIRouter(
     prefix="/api/v1/cases/{case_id}/documents",
@@ -159,3 +161,38 @@ async def get_extraction(
     case_id: uuid.UUID, document_id: uuid.UUID, ctx: DocumentReadCtx
 ) -> ExtractionOut:
     return await service.get_extraction(ctx, case_id, document_id)
+
+
+@router.post(
+    "/{document_id}/review",
+    response_model=ReviewOut,
+    status_code=status.HTTP_201_CREATED,
+    summary="Review the extracted fields and save the approved figures",
+    description=(
+        "One decision (accept, correct or reject) for every extracted field. Accepted and "
+        "corrected financial fields are saved as figures on an existing income source; "
+        "descriptive fields (dates, frequency, tax code) are kept as reviewed evidence. "
+        "All or nothing. A document is reviewed once: a second submission returns 409 "
+        "`already-reviewed` with the existing review's ID."
+    ),
+)
+async def submit_review(
+    case_id: uuid.UUID,
+    document_id: uuid.UUID,
+    body: ReviewIn,
+    ctx: FinancialWriteCtx,
+    version: IfMatch,
+) -> ReviewOut:
+    out = await review.submit_review(ctx, case_id, document_id, body, version)
+    await ctx.commit()
+    return out
+
+
+@router.get(
+    "/{document_id}/review",
+    response_model=ReviewOut,
+    summary="Get the saved review",
+    description="Each decision with the extracted and corrected values and the figure saved.",
+)
+async def get_review(case_id: uuid.UUID, document_id: uuid.UUID, ctx: DocumentReadCtx) -> ReviewOut:
+    return await review.get_review(ctx, case_id, document_id)

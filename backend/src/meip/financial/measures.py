@@ -75,7 +75,9 @@ class SourceKind(StrEnum):
     """What the applicant says."""
     BROKER_ENTRY = "broker_entry"
     """Entered by the broker, e.g. from a conversation or a document read manually."""
-    # Phase 2 adds 'document' (normalised from extracted evidence, with lineage).
+    DOCUMENT = "document"
+    """Saved from a broker-reviewed document; linked to its review decision. Created only
+    through a document review, never through the observation API."""
 
 
 class RetiredReason(StrEnum):

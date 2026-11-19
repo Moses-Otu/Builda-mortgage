@@ -51,6 +51,8 @@ class DocumentStatus(StrEnum):
     """Identified as a payslip; extracted fields are available for review."""
     UNRECOGNISED = "unrecognised"
     """Not identified as a payslip; a person needs to look at it."""
+    REVIEWED = "reviewed"
+    """A broker reviewed every field and saved the approved figures to the case."""
     FAILED = "failed"
     """Processing stopped; failure_code says why."""
 
@@ -263,6 +265,7 @@ class ExtractedField(Base):
     __tablename__ = "extracted_fields"
     __table_args__ = (
         UniqueConstraint("run_id", "ordinal"),
+        UniqueConstraint("tenant_id", "case_id", "id"),
         ForeignKeyConstraint(
             ["tenant_id", "case_id", "run_id"],
             ["extraction_runs.tenant_id", "extraction_runs.case_id", "extraction_runs.id"],
@@ -317,3 +320,92 @@ class ExtractedField(Base):
     label_x1: Mapped[float] = mapped_column(Float)
     label_y1: Mapped[float] = mapped_column(Float)
     confidence: Mapped[float | None] = mapped_column(Float)
+
+
+class Decision(StrEnum):
+    ACCEPT = "accept"
+    CORRECT = "correct"
+    REJECT = "reject"
+
+
+class DocumentReview(Base):
+    """A broker's review of one extraction run: the income source the payslip is evidence
+    for, and the frequency used. One per run. Insert-only for the runtime role."""
+
+    __tablename__ = "document_reviews"
+    __table_args__ = (
+        UniqueConstraint("run_id"),
+        UniqueConstraint("tenant_id", "case_id", "id"),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "run_id"],
+            ["extraction_runs.tenant_id", "extraction_runs.case_id", "extraction_runs.id"],
+            name="fk_document_reviews_run",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "income_source_id"],
+            ["income_sources.tenant_id", "income_sources.case_id", "income_sources.id"],
+            name="fk_document_reviews_income_source",
+        ),
+        CheckConstraint(
+            "frequency IN ('one_off', 'weekly', 'fortnightly', 'four_weekly', 'monthly', "
+            "'quarterly', 'annual')",
+            name="frequency",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
+    case_id: Mapped[uuid.UUID] = mapped_column()
+    run_id: Mapped[uuid.UUID] = mapped_column()
+    income_source_id: Mapped[uuid.UUID] = mapped_column()
+    frequency: Mapped[str] = mapped_column(String(16))
+    reviewed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
+class FieldReview(Base):
+    """One decision on one extracted field. A correction sits beside the original value,
+    which stays untouched on the field. Insert-only for the runtime role."""
+
+    __tablename__ = "field_reviews"
+    __table_args__ = (
+        UniqueConstraint("review_id", "field_id"),
+        UniqueConstraint("tenant_id", "case_id", "id"),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "review_id"],
+            ["document_reviews.tenant_id", "document_reviews.case_id", "document_reviews.id"],
+            name="fk_field_reviews_review",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "field_id"],
+            ["extracted_fields.tenant_id", "extracted_fields.case_id", "extracted_fields.id"],
+            name="fk_field_reviews_field",
+        ),
+        CheckConstraint(check_in("decision", Decision), name="decision"),
+        CheckConstraint(
+            "num_nonnulls(corrected_money_minor, corrected_date, corrected_text) "
+            "= CASE WHEN decision = 'correct' THEN 1 ELSE 0 END",
+            name="correction",
+        ),
+        CheckConstraint(
+            "decision = 'accept' OR (reason IS NOT NULL AND length(trim(reason)) > 0)",
+            name="reason_required",
+        ),
+        CheckConstraint(
+            "decision <> 'reject' OR (measure IS NULL AND qualifier IS NULL)",
+            name="rejected_saves_nothing",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
+    case_id: Mapped[uuid.UUID] = mapped_column()
+    review_id: Mapped[uuid.UUID] = mapped_column()
+    field_id: Mapped[uuid.UUID] = mapped_column()
+    decision: Mapped[str] = mapped_column(String(8))
+    corrected_money_minor: Mapped[int | None] = mapped_column(BigInteger)
+    corrected_date: Mapped[date | None] = mapped_column(Date)
+    corrected_text: Mapped[str | None] = mapped_column(String(64))
+    reason: Mapped[str | None] = mapped_column(String(500))
+    measure: Mapped[str | None] = mapped_column(String(48))
+    qualifier: Mapped[str | None] = mapped_column(String(32))
