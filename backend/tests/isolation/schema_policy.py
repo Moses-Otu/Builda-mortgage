@@ -50,11 +50,15 @@ TENANT_SCOPED: dict[str, frozenset[str]] = {
     "documents": frozenset({"SELECT", "INSERT"}),
     # Immutable originals: insert-only, and a trigger refuses changes for every role.
     "document_versions": frozenset({"SELECT", "INSERT"}),
+    # Background jobs: enqueued with the upload, finished by the worker (same runtime role).
+    "jobs": frozenset({"SELECT", "INSERT", "UPDATE"}),
 }
 
 # table -> columns the runtime role may UPDATE through column-level grants only.
 COLUMN_UPDATES: dict[str, frozenset[str]] = {
     "financial_observations": frozenset({"retired_at", "retired_reason"}),
+    # Processing outcome only; uploads never change.
+    "documents": frozenset({"status", "failure_code", "page_count", "updated_at", "version"}),
 }
 
 # Platform reference data: no tenant_id, no RLS, read-only for the runtime role, changed

@@ -58,6 +58,24 @@ services:
       azurite:
         condition: service_started
 
+  # Background processing: checks each uploaded original and its PDF structure.
+  worker:
+    build: ./backend
+    command: ["meip-worker"]
+    environment:
+      MEIP_ENV: local
+      MEIP_AUTH_MODE: dev
+      MEIP_DATABASE_URL: postgresql+asyncpg://meip_app:meip_app_local@postgres:5432/meip
+      MEIP_DEV_AUTH_KEY_PATH: /app/.dev/dev_auth_key.pem
+      MEIP_DOCUMENTS_ENABLED: "true"
+      MEIP_BLOB_BACKEND: azure
+      MEIP_BLOB_CONNECTION_STRING: "DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      azurite:
+        condition: service_started
+
 volumes:
   pgdata:
   blobdata:

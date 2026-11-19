@@ -61,3 +61,23 @@ def test_domain_imports_follow_the_rules(package: str) -> None:
             if parts[0] in HTTP_FRAMEWORKS:
                 violations.append(f"{path.relative_to(SRC)} imports {name} (HTTP framework)")
     assert violations == []
+
+
+def test_the_worker_can_reach_no_user_facing_service() -> None:
+    """The worker shares the API's database role (an MVP compromise), so its reach is limited
+    in code instead: it imports no case, applicant, financial, firm, member or document
+    upload service, and no HTTP framework. It can only run the ingest job."""
+    allowed = {
+        "meip.audit",
+        "meip.audit.service",
+        "meip.core.config",
+        "meip.core.db",
+        "meip.core.logging",
+        "meip.documents.models",
+        "meip.documents.pdfcheck",
+        "meip.documents.storage",
+        "meip.tenancy.context",
+        "meip.tenancy.permissions",
+    }
+    imported = {n for n in _imports(SRC / "documents" / "processing.py") if n.startswith("meip")}
+    assert imported <= allowed, imported - allowed

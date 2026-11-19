@@ -160,6 +160,11 @@ UPDATE_OPENAPI_SNAPSHOT=1 uv run pytest tests/integration/test_schema.py
   **Synthetic documents only** until D10 is approved; document routes answer 404
   `feature-disabled` unless `MEIP_DOCUMENTS_ENABLED=true`. Stored originals with no database
   row (after a crash) are listed by `meip-admin find-orphan-blobs`; nothing deletes them.
+- **Processing (Phase 2.0):** each upload queues a job in the same transaction. The worker
+  (`uv run meip-worker`, or the `worker` service in Docker) re-checks the original's hash
+  and opens the PDF in a separate, time-limited process, then marks the document `ready`
+  (with `page_count`) or `failed` (with `failure_code`). Transient failures are retried
+  three times, one minute apart.
 - **Audit:** every mutation writes exactly one `audit_events` row in the same transaction.
   The permanent row holds no direct identifiers and no financial values, though it is still
   pseudonymous personal data (status and role facts about an applicant ID). Amounts,

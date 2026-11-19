@@ -6,7 +6,13 @@ from meip.cases import lifecycle
 from meip.cases.models import STATUS_CHECK, STORABLE_STATUSES, CaseStatus
 from meip.core.errors import ForbiddenError
 from meip.tenancy.models import Role
-from meip.tenancy.permissions import ROLE_PERMISSIONS, Permission, has_permission, require
+from meip.tenancy.permissions import (
+    ROLE_PERMISSIONS,
+    SYSTEM_ONLY,
+    Permission,
+    has_permission,
+    require,
+)
 
 
 class TestLifecycle:
@@ -49,8 +55,31 @@ class TestPermissions:
     def test_every_role_has_a_policy(self) -> None:
         assert set(ROLE_PERMISSIONS) == set(Role)
 
-    def test_firm_admin_has_everything(self) -> None:
-        assert ROLE_PERMISSIONS[Role.FIRM_ADMIN] == frozenset(Permission)
+    def test_firm_admin_permissions_are_exactly_these(self) -> None:
+        """Spelled out as strings so any change, including a new permission, is a
+        deliberate edit here rather than an automatic grant."""
+        assert {p.value for p in ROLE_PERMISSIONS[Role.FIRM_ADMIN]} == {
+            "case:read",
+            "case:create",
+            "case:update",
+            "case:transition",
+            "case:close",
+            "case:assign_adviser",
+            "applicant:write",
+            "financial:write",
+            "member:read",
+            "member:manage",
+            "firm_settings:manage",
+            "audit:read",
+            "document:read",
+            "document:write",
+        }
+
+    def test_every_permission_is_held_by_a_role_or_is_system_only(self) -> None:
+        held = frozenset().union(*ROLE_PERMISSIONS.values())
+        assert held | SYSTEM_ONLY == frozenset(Permission)
+        assert not held & SYSTEM_ONLY
+        assert {Permission.DOCUMENT_PROCESS} == SYSTEM_ONLY
 
     def test_only_firm_admin_manages_members(self) -> None:
         holders = {r for r in Role if has_permission(r, Permission.MEMBER_MANAGE)}

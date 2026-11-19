@@ -54,6 +54,28 @@ def synthetic_pdf(label: str = "") -> bytes:
     )
 
 
+def synthetic_valid_pdf(pages: int = 1, label: str = "", *, encrypted: bool = False) -> bytes:
+    """A structurally valid, blank, SYNTHETIC PDF (never real borrower data), unique per
+    label. ``encrypted`` adds a standard security handler, so PDFium asks for a password."""
+    import io
+
+    import pypdfium2 as pdfium
+
+    document = pdfium.PdfDocument.new()
+    for _ in range(pages):
+        document.new_page(595, 842)
+    buffer = io.BytesIO()
+    document.save(buffer)
+    data = buffer.getvalue()
+    if encrypted:
+        cut = data.find(b"trailer")
+        zeros = b"<" + b"0" * 64 + b">"
+        handler = b"<</Encrypt << /Filter /Standard /V 1 /R 2 /O " + zeros + b" /U "
+        data = data[:cut] + data[cut:].replace(b"<<", handler + zeros + b" /P -4 >> ", 1)
+    marker = f"SYNTHETIC TEST DOCUMENT {label or uuid.uuid4()}".encode()
+    return b"".join([data, b"% ", marker, bytes([10])])
+
+
 def db_url(role: str, database: str, driver: str = "postgresql+asyncpg") -> str:
     url = make_url(ADMIN_URL).set(
         drivername=driver, username=role, password=ROLE_PASSWORDS[role], database=database

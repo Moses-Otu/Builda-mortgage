@@ -1385,6 +1385,17 @@
           "document_type": {
             "$ref": "#/components/schemas/DocumentType"
           },
+          "failure_code": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FailureCode"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why processing stopped, when status is 'failed'"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -1392,6 +1403,18 @@
           },
           "original": {
             "$ref": "#/components/schemas/DocumentVersionOut"
+          },
+          "page_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Known once processing has checked the PDF",
+            "title": "Page Count"
           },
           "status": {
             "$ref": "#/components/schemas/DocumentStatus"
@@ -1410,6 +1433,8 @@
           "created_by_user_id",
           "created_at",
           "version",
+          "failure_code",
+          "page_count",
           "original"
         ],
         "title": "DocumentOut",
@@ -1417,7 +1442,9 @@
       },
       "DocumentStatus": {
         "enum": [
-          "received"
+          "received",
+          "ready",
+          "failed"
         ],
         "title": "DocumentStatus",
         "type": "string"
@@ -1788,6 +1815,19 @@
         },
         "title": "ExpenditureUpdate",
         "type": "object"
+      },
+      "FailureCode": {
+        "enum": [
+          "hash_mismatch",
+          "missing_original",
+          "unreadable_pdf",
+          "encrypted_pdf",
+          "too_many_pages",
+          "timeout",
+          "retries_exhausted"
+        ],
+        "title": "FailureCode",
+        "type": "string"
       },
       "FirmSettingsOut": {
         "properties": {

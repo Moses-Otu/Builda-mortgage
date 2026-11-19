@@ -118,6 +118,17 @@ Single deployable backend codebase (modular monolith) with API and worker proces
     enabling requires a D10 retention-approval reference, the filesystem backend is
     refused, and the storage connection string must use HTTPS and must not be the Azurite
     development account; the service will not start otherwise.
+  - **Processing (step 2-B, minimum viable):** a `jobs` table (RLS, `UNIQUE (kind,
+    document_version_id)`), enqueued in the upload's transaction. Workers claim through one
+    `SECURITY DEFINER` function, `app_claim_job()`, using `FOR UPDATE SKIP LOCKED`, with a
+    10-minute lock. A worker finishes a job in the same transaction as its writes, fenced on
+    the claimed attempt number, so a worker whose claim expired commits nothing. The PDF is
+    opened only in a child process with a timeout and no credentials in its environment.
+    The worker acts as the system actor `worker` with `document:process`, which no user role
+    holds. **MVP compromise:** it connects with the API's database role (`meip_app`), so RLS
+    still applies but the database doesn't narrow it further. A dedicated worker role is a
+    production-readiness item (ROADMAP Stage 4). Role permissions are listed explicitly per
+    role, never as "every permission". No server-side page images: the review screen renders the original with pdf.js.
   - **Downloads are not yet access-logged.** That is a production-readiness requirement
     before real borrower documents are enabled (retention brief R17). The platform cannot tell synthetic from
     real documents, so this is a deployment control, not content inspection.

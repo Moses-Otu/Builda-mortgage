@@ -24,6 +24,8 @@ class Permission(StrEnum):
     # Separate from case permissions so a firm can narrow access to originals later.
     DOCUMENT_READ = "document:read"
     DOCUMENT_WRITE = "document:write"
+    # Background processing. Held by the worker's system actor only, never by a user role.
+    DOCUMENT_PROCESS = "document:process"
 
 
 _READ = {
@@ -41,8 +43,22 @@ _CASE_WORK = {
     Permission.DOCUMENT_WRITE,
 }
 
+# Capabilities only system actors (background workers) may hold.
+SYSTEM_ONLY = frozenset({Permission.DOCUMENT_PROCESS})
+
 ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
-    Role.FIRM_ADMIN: frozenset(Permission),
+    # Listed explicitly, never "every permission": a permission added later is granted to
+    # no role until someone decides who should hold it.
+    Role.FIRM_ADMIN: frozenset(
+        _READ
+        | _CASE_WORK
+        | {
+            Permission.CASE_CLOSE,
+            Permission.CASE_ASSIGN_ADVISER,
+            Permission.MEMBER_MANAGE,
+            Permission.FIRM_SETTINGS_MANAGE,
+        }
+    ),
     Role.ADVISER: frozenset(
         _READ | _CASE_WORK | {Permission.CASE_CLOSE, Permission.CASE_ASSIGN_ADVISER}
     ),

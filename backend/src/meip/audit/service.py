@@ -93,6 +93,8 @@ NON_PERSONAL_FIELDS = frozenset(
         "document_version_id",
         "size_bytes",
         "media_type",
+        "page_count",
+        "failure_code",
     }
 )
 
@@ -117,6 +119,8 @@ class AuditAction(StrEnum):
     OBSERVATION_RECORDED = "observation.recorded"
     OBSERVATION_RETIRED = "observation.retired"
     DOCUMENT_UPLOADED = "document.uploaded"
+    DOCUMENT_PROCESSED = "document.processed"
+    DOCUMENT_PROCESSING_FAILED = "document.processing_failed"
 
 
 @dataclass

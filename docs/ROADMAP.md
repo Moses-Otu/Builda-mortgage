@@ -1,21 +1,28 @@
 # Delivery Roadmap
 
-Each phase follows the same gate: inspect → plan → agree → implement → test → document. A phase is complete only when every acceptance criterion passes. Frontend work arrives in vertical slices from Phase 2 onward rather than as one late phase.
+Revised 2026-11-19. It replaces the earlier 12-phase table: prove the core value with the
+fewest document types, then the broker experience, then pilot.
 
-| Phase | Name | Core outcome | Key acceptance signal |
-|---|---|---|---|
-| **1** | Foundation & core domain | Repo, tooling, FastAPI service, Postgres + migrations, tenants/users/roles, cases, applicants, audit log, RLS tenant isolation, auth abstraction | Cross-tenant access impossible at API and DB level (tested); audit row for every mutation; CI-quality checks green |
-| 2 | Document ingestion & storage | Upload API + Next.js upload/case UI, private blob storage (Azurite locally), SHA-256, immutability, page rendering, file-type/size/malware gate, async job queue | Original byte-identical on retrieval; reject non-PDF/image; job retries idempotent |
-| 3 | Classification & extraction | `DocumentExtractor` + Azure DI adapter, classifier (rules first, LLM fallback), **versioned extraction schemas** for payslip, P60, SA302/tax calc, bank statement, credit report; source anchors | Golden-file tests on synthetic docs; every extracted field has page + region anchor; raw provider output stored |
-| 4 | Financial fact normalisation | `FinancialFact` model, unit/period normalisation (weekly/4-weekly/monthly/annual), tax-year handling, verification status machine | Deterministic normalisation property tests; status changes only via rules or broker |
-| 5 | Income & transactions | Bank transaction parsing, deterministic categorisation rules (+ LLM suggestions flagged as such), income classification incl. variable income | Salary credits matched to payslip net pay; categoriser versioned and reproducible |
-| 6 | Liabilities | Credit report (uploaded) commitments, recurring outgoings (DD/SO) detection, linking report accounts to bank payments | Every liability anchored; unmatched items surfaced, not dropped |
-| 7 | **Reconciliation engine** | Versioned cross-document rule set: payslip YTD continuity, P60 vs final payslip, SA302 vs tax year overview, net pay vs bank credits, declared vs evidenced income/commitments, identity consistency; discrepancies with tolerance + explanation | Each rule unit-tested with pass/fail/edge fixtures; discrepancy cites both sources |
-| 8 | Rules & indicative affordability | Versioned assumption sets (income multiples, stress rate, expenditure model), broker-configurable per tenant, pure calc with stored input snapshot | Same inputs + version → identical output; labelled indicative throughout |
-| 9 | Broker review & approval | Review UI: side-by-side source viewer, accept/correct/reject facts, resolve discrepancies, approve immutable profile snapshot | Corrections audited with reason; approval locks snapshot hash |
-| 10 | Evidence pack | PDF + JSON pack: profile, discrepancies & resolutions, citations with page thumbnails, rule versions, approver | Every figure in pack links to page; pack hash recorded |
-| 11 | Integration & export | Canonical versioned export schema, transactional outbox, signed webhooks, CRM adapter interface | Schema contract tests; at-least-once delivery with idempotency keys |
-| 12 | Hardening & pilot readiness | Bicep IaC (UK South), Key Vault, private endpoints, managed identity, retention/erasure, observability, backup/restore drill, pen test, DPIA | Pilot checklist signed off |
+**Principle:** build the MVP, not the infrastructure around it. If a simpler implementation is
+secure and correct for the MVP, use it. Keep tenant isolation, access control, auditability
+and data integrity. Write future needs down here instead of building them.
+
+**Definition of success:** a broker uploads a payslip, sees correctly extracted figures with
+traceable evidence, reviews and corrects them, and saves approved figures to a case.
+
+Each step still follows: plan → approve → build → test → report → commit.
+
+| Stage | Outcome | Status |
+|---|---|---|
+| Foundation | Tenancy and RLS, roles, cases, applicants, audit, financial model, hardening (Phases 1, 1.1, 1.2) | Done |
+| **1. Finish Phase 2.0** | The payslip workflow end to end: **2-A** upload and storage (done) · **2-B** background processing and safe PDF check (it absorbed the old 2-C) · **2-D** classification and extraction (Azure Document Intelligence layout plus a payslip mapping, with field anchors) · **2-E** review, correct and save to the financial model · **2-F** minimal review screen (pdf.js with highlighted regions) | In progress |
+| **2. Reconciliation engine** | Cross-checks over payslip facts first (period continuity, year-to-date consistency, declared versus evidenced), then the **next most valuable evidence source**, to be chosen when this stage starts (likely bank statements, for net pay against salary credits). Versioned rules; each discrepancy cites both sources. | — |
+| **3. Broker experience** | Review, correct and approve; trace any figure to its evidence; approve an immutable profile snapshot; generate an evidence pack | — |
+| **4. Pilot** | Synthetic-data pilot first. Then **resolve the legal, retention and security gates before any real borrower data:** D10 retention and erasure; provider terms (training and retention exclusions); download access log (R17); storage identity without delete and account hardening (R15, R16); malware scanning; dedicated worker database role (the worker shares the API role as an MVP compromise); resource isolation for the PDF process (no memory cap today); Entra live sign-in; Docker and Azure deployment (IaC, Key Vault, managed identity, private endpoints); backup and restore drill; DPIA; penetration test | — |
+
+Later, only when a pilot shows a need: more document types (P60, SA302, credit reports),
+transaction categorisation, liabilities from credit reports, indicative affordability,
+integrations and export, and an LLM fallback for classification.
 
 ## Decisions needed
 

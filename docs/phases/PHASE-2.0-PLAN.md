@@ -12,6 +12,22 @@ affordability, borrower uploads and LLM use.
 
 Tags: **[V]** verified in the code or docs, **[R]** recommendation, **[D]** needs your decision.
 
+## Amendment (2026-11-19): minimum viable implementation
+
+The MVP principle applies: if a simpler implementation is secure and correct, use it.
+Where this amendment and the sections below differ, the amendment wins.
+
+- **Step 2-C is merged into 2-B.** The worker checks the original and the PDF (page count,
+  encryption, limits) in a child process with a timeout. See
+  [PHASE-2B-PLAN.md](PHASE-2B-PLAN.md), revision 3.
+- **No server-side page images and no `document_pages` table.** The review screen (2-F)
+  shows the original PDF with pdf.js and draws the extracted regions over it. Anchors keep
+  the page number and coordinates.
+- **The queue is minimal:** one claim function, a 10-minute lock and an attempt-number
+  fence; no extra roles, heartbeats or operator commands.
+- Steps now: 2-A (done), 2-B, 2-D, 2-E, 2-F. Deferred hardening is listed under Stage 4 of
+  [ROADMAP.md](../ROADMAP.md).
+
 ## 0. Revision 2: approved decisions and binding requirements
 
 Where this section and the rest of the plan differ, this section wins.

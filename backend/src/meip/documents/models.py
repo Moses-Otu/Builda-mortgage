@@ -17,9 +17,11 @@ from sqlalchemy import (
     CheckConstraint,
     ForeignKey,
     ForeignKeyConstraint,
+    Index,
     Integer,
     String,
     UniqueConstraint,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -37,7 +39,32 @@ class DocumentType(StrEnum):
 
 class DocumentStatus(StrEnum):
     RECEIVED = "received"
-    """Stored and awaiting processing. Later steps add processing states."""
+    """Stored and awaiting processing."""
+    READY = "ready"
+    """The original passed its hash and PDF checks; page_count is known."""
+    FAILED = "failed"
+    """Processing stopped; failure_code says why."""
+
+
+class FailureCode(StrEnum):
+    HASH_MISMATCH = "hash_mismatch"
+    MISSING_ORIGINAL = "missing_original"
+    UNREADABLE_PDF = "unreadable_pdf"
+    ENCRYPTED_PDF = "encrypted_pdf"
+    TOO_MANY_PAGES = "too_many_pages"
+    TIMEOUT = "timeout"
+    RETRIES_EXHAUSTED = "retries_exhausted"
+
+
+class JobKind(StrEnum):
+    DOCUMENT_INGEST = "document.ingest"
+
+
+class JobStatus(StrEnum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    DONE = "done"
+    FAILED = "failed"
 
 
 class ScanStatus(StrEnum):
@@ -59,6 +86,14 @@ class Document(Base):
         ),
         CheckConstraint(check_in("document_type", DocumentType), name="document_type"),
         CheckConstraint(check_in("status", DocumentStatus), name="status"),
+        CheckConstraint(
+            f"failure_code IS NULL OR {check_in('failure_code', FailureCode)}",
+            name="failure_code",
+        ),
+        CheckConstraint(
+            "(status = 'failed') = (failure_code IS NOT NULL)", name="failure_consistency"
+        ),
+        CheckConstraint("page_count IS NULL OR page_count > 0", name="page_count"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
@@ -67,6 +102,8 @@ class Document(Base):
     applicant_id: Mapped[uuid.UUID | None] = mapped_column(index=True)
     document_type: Mapped[str] = mapped_column(String(32))
     status: Mapped[str] = mapped_column(String(32), default=DocumentStatus.RECEIVED.value)
+    failure_code: Mapped[str | None] = mapped_column(String(32))
+    page_count: Mapped[int | None] = mapped_column(Integer)
     created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
@@ -82,6 +119,7 @@ class DocumentVersion(Base):
     __tablename__ = "document_versions"
     __table_args__ = (
         UniqueConstraint("tenant_id", "case_id", "sha256"),
+        UniqueConstraint("tenant_id", "case_id", "id"),
         UniqueConstraint("document_id", "version_number"),
         UniqueConstraint("blob_key"),
         ForeignKeyConstraint(
@@ -110,3 +148,46 @@ class DocumentVersion(Base):
     scan_status: Mapped[str] = mapped_column(String(16), default=ScanStatus.NOT_SCANNED.value)
     uploaded_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     uploaded_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
+class Job(Base):
+    """Background work. Claimed only through ``app_claim_job()`` (SKIP LOCKED); finished by
+    the worker in the same transaction as its writes, fenced on ``attempts``."""
+
+    __tablename__ = "jobs"
+    __table_args__ = (
+        UniqueConstraint("kind", "document_version_id"),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "document_version_id"],
+            [
+                "document_versions.tenant_id",
+                "document_versions.case_id",
+                "document_versions.id",
+            ],
+            name="fk_jobs_document_version",
+        ),
+        CheckConstraint(check_in("kind", JobKind), name="kind"),
+        CheckConstraint(check_in("status", JobStatus), name="status"),
+        CheckConstraint("attempts >= 0", name="attempts"),
+        CheckConstraint(
+            "status <> 'running' OR locked_until IS NOT NULL", name="running_is_locked"
+        ),
+        Index(
+            "ix_jobs_claimable",
+            "run_after",
+            postgresql_where=text("status IN ('queued', 'running')"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
+    case_id: Mapped[uuid.UUID] = mapped_column()
+    kind: Mapped[str] = mapped_column(String(32))
+    document_version_id: Mapped[uuid.UUID] = mapped_column()
+    status: Mapped[str] = mapped_column(String(16), default=JobStatus.QUEUED.value)
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    run_after: Mapped[datetime] = mapped_column(default=utcnow)
+    locked_until: Mapped[datetime | None] = mapped_column()
+    error_code: Mapped[str | None] = mapped_column(String(32))
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)

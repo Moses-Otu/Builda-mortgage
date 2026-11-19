@@ -41,8 +41,10 @@ from meip.documents.models import (
     DocumentStatus,
     DocumentType,
     DocumentVersion,
+    FailureCode,
     ScanStatus,
 )
+from meip.documents.processing import enqueue_ingest
 from meip.documents.schemas import DocumentOut, DocumentVersionOut
 from meip.documents.storage import BlobKey, BlobNotFoundError, BlobStore
 from meip.tenancy.context import OperationContext
@@ -240,6 +242,9 @@ async def store_upload(
             raise
         raise _duplicate(await _existing_document(ctx, case_id, received.sha256)) from exc
 
+    # Same transaction as the upload: no job without its document, no document without its job.
+    await enqueue_ingest(ctx.session, ctx.tenant_id, case_id, version_id)
+
     change_set = audit.creation(
         {
             "document_type": document.document_type,
@@ -281,6 +286,8 @@ def _out(document: Document, original: DocumentVersion) -> DocumentOut:
         created_by_user_id=document.created_by_user_id,
         created_at=document.created_at,
         version=document.version,
+        failure_code=FailureCode(document.failure_code) if document.failure_code else None,
+        page_count=document.page_count,
         original=DocumentVersionOut(
             id=original.id,
             version_number=original.version_number,

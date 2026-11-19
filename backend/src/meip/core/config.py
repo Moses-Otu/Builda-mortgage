@@ -103,6 +103,12 @@ class Settings(BaseSettings):
     blob_connection_string: SecretStr | None = None
     blob_container: str = "documents"
 
+    worker_poll_seconds: float = Field(default=2.0, gt=0)
+    worker_lock_seconds: int = Field(
+        default=600, gt=0, description="How long a claimed job stays locked to one worker"
+    )
+    pdf_check_timeout_seconds: float = Field(default=30.0, gt=0)
+
     @model_validator(mode="after")
     def _validate_documents(self) -> Settings:
         deployed = self.env not in NON_DEPLOYED_ENVIRONMENTS

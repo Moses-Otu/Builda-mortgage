@@ -7,7 +7,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from meip.documents.models import DocumentStatus, DocumentType, ScanStatus
+from meip.documents.models import DocumentStatus, DocumentType, FailureCode, ScanStatus
 
 
 class DocumentVersionOut(BaseModel):
@@ -33,4 +33,8 @@ class DocumentOut(BaseModel):
     created_by_user_id: uuid.UUID | None
     created_at: datetime
     version: int
+    failure_code: FailureCode | None = Field(
+        description="Why processing stopped, when status is 'failed'"
+    )
+    page_count: int | None = Field(description="Known once processing has checked the PDF")
     original: DocumentVersionOut

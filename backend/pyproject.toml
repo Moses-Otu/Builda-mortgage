@@ -16,6 +16,7 @@ dependencies = [
     "pyjwt[crypto]>=2.10",
     "anyio>=4.6",
     "azure-storage-blob>=12.24",
+    "pypdfium2>=4.30",
 ]
 
 [dependency-groups]
@@ -31,6 +32,7 @@ dev = [
 
 [project.scripts]
 meip-admin = "meip.cli:main"
+meip-worker = "meip.documents.processing:main"
 
 [build-system]
 requires = ["hatchling"]
@@ -60,7 +62,7 @@ plugins = ["pydantic.mypy"]
 files = ["src", "tests"]
 
 [[tool.mypy.overrides]]
-module = ["alembic.*"]
+module = ["alembic.*", "pypdfium2.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
