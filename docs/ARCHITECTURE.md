@@ -152,6 +152,11 @@ Single deployable backend codebase (modular monolith) with API and worker proces
     selector: the API checks membership on every request. Development-only sign-in until
     Entra is live. The original is rendered with pdf.js; evidence boxes are placed by one
     tested conversion that refuses to draw when page sizes disagree.
+  - **Broker UI (Phase 2.1):** Tailwind CSS and a small set of owned components (Radix
+    primitives for dialogs, tooltips and menus). The forwarder additionally allows creating
+    cases and applicants (`POST cases`, `POST cases/{id}/applicants`); the API's own
+    permissions decide. Display wording for API codes lives in `lib/labels.ts` and
+    `lib/failures.ts`; the codes are unchanged.
   - **Downloads are not yet access-logged.** That is a production-readiness requirement
     before real borrower documents are enabled (retention brief R17). The platform cannot tell synthetic from
     real documents, so this is a deployment control, not content inspection.

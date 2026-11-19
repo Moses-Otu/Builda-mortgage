@@ -1,10 +1,12 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { type FormEvent, useState } from "react";
 
+import { Alert } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Label, Textarea } from "@/components/ui/input";
+
 export function DevSignInForm() {
-  const router = useRouter();
   const [token, setToken] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -21,7 +23,8 @@ export function DevSignInForm() {
     setBusy(false);
     if (response.status === 204) {
       setToken("");
-      router.push("/");
+      // A full load, so the header and session pick up the new sign-in.
+      window.location.href = "/";
       return;
     }
     const body = (await response.json().catch(() => null)) as { detail?: string } | null;
@@ -29,22 +32,23 @@ export function DevSignInForm() {
   }
 
   return (
-    <form onSubmit={submit} className="stack">
-      <label>
+    <form onSubmit={submit} className="flex flex-col gap-4">
+      <Label>
         Token
-        <textarea
+        <Textarea
           value={token}
           onChange={(e) => setToken(e.target.value)}
           rows={4}
           autoComplete="off"
           spellCheck={false}
           required
+          className="font-mono text-xs"
         />
-      </label>
-      <button type="submit" disabled={busy || !token.trim()}>
+      </Label>
+      <Button type="submit" disabled={busy || !token.trim()}>
         Sign in
-      </button>
-      {error && <p className="error" role="alert">{error}</p>}
+      </Button>
+      {error && <Alert tone="error">{error}</Alert>}
     </form>
   );
 }

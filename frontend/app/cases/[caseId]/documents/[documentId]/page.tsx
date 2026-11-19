@@ -1,28 +1,40 @@
 "use client";
 
-import Link from "next/link";
+import { Check, ChevronDown, Keyboard, Pencil, X } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { Breadcrumbs, Loading, PageContainer, RequireFirm } from "@/components/Page";
 import { type Highlight, PdfView } from "@/components/PdfView";
+import { FieldRow } from "@/components/review/FieldRow";
+import { SavedReview } from "@/components/review/SavedReview";
+import { SaveReviewDialog } from "@/components/review/SaveReviewDialog";
+import { ShortcutsDialog } from "@/components/review/ShortcutsDialog";
+import { caseTitle, useCaseSummary } from "@/components/useCaseSummary";
+import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { useToast } from "@/components/ui/toast";
+import { Tooltip } from "@/components/ui/tooltip";
 import { API, get, postJson } from "@/lib/api";
-import {
-  acceptAll,
-  buildReview,
-  type Draft,
-  type Drafts,
-  FIGURE_CODES,
-  formatMoney,
-  problems,
-  QUALIFIED,
-  savesFigure,
-  valueKind,
-} from "@/lib/decisions";
+import { buildReview, type Draft, type Drafts, problems, savesFigure } from "@/lib/decisions";
+import { measureLabel } from "@/lib/labels";
 import { problemMessage } from "@/lib/problems";
 import {
+  acceptRemaining,
+  decisionCounts,
+  type Filter,
+  isTypingTarget,
+  matchesFilter,
+  payslipFrequency,
+  shortcutFor,
+  step,
+} from "@/lib/review-ui";
+import {
+  type Applicant,
   type DecisionKind,
   type DocumentOut,
-  type ExtractedField,
   type Extraction,
   type IncomeSource,
   type Measure,
@@ -30,6 +42,7 @@ import {
   type Section,
   SECTIONS,
 } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
 const SECTION_TITLES: Record<Section, string> = {
   summary: "Summary",
@@ -37,54 +50,57 @@ const SECTION_TITLES: Record<Section, string> = {
   deductions: "Deductions",
   year_to_date: "Year to date",
 };
-const FREQUENCIES = ["weekly", "fortnightly", "four_weekly", "monthly", "quarterly", "annual"];
+const FILTERS: Array<{ key: Filter; label: string }> = [
+  { key: "all", label: "All" },
+  { key: "undecided", label: "Undecided" },
+  { key: "changed", label: "Corrected or rejected" },
+];
 
-function shownValue(f: ExtractedField): string {
-  const kind = valueKind(f);
-  if (kind === "money") return formatMoney(f.value_money_minor);
-  if (kind === "date") return f.value_date ?? "—";
-  return f.value_text ?? "—";
+export default function ReviewRoute() {
+  const { caseId, documentId } = useParams<{ caseId: string; documentId: string }>();
+  return <RequireFirm>{() => <ReviewPage caseId={caseId} documentId={documentId} />}</RequireFirm>;
 }
 
-export default function ReviewPage() {
-  const { caseId, documentId } = useParams<{ caseId: string; documentId: string }>();
+function ReviewPage({ caseId, documentId }: { caseId: string; documentId: string }) {
+  const toast = useToast();
+  const summary = useCaseSummary(caseId);
   const base = `cases/${caseId}/documents/${documentId}`;
   const [document, setDocument] = useState<DocumentOut | null>(null);
   const [extraction, setExtraction] = useState<Extraction | null>(null);
   const [review, setReview] = useState<ReviewOut | null>(null);
-  const [sources, setSources] = useState<IncomeSource[]>([]);
+  const [allSources, setAllSources] = useState<IncomeSource[]>([]);
+  const [applicants, setApplicants] = useState<Applicant[]>([]);
   const [measures, setMeasures] = useState<Measure[]>([]);
   const [drafts, setDrafts] = useState<Drafts>({});
   const [selected, setSelected] = useState<number | null>(null);
+  const [hovered, setHovered] = useState<number | null>(null);
+  const [filter, setFilter] = useState<Filter>("all");
+  const [collapsed, setCollapsed] = useState<Set<Section>>(new Set());
   const [incomeSourceId, setIncomeSourceId] = useState("");
   const [frequency, setFrequency] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [saveOpen, setSaveOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const load = useCallback(async () => {
     const d = await get<DocumentOut>(base);
     if (!d.ok) {
-      setMessage(problemMessage(d.status, d.problem));
+      setLoadError(problemMessage(d.status, d.problem));
       return;
     }
     setDocument(d.data);
-    const [x, s, m] = await Promise.all([
+    const [x, s, a, m] = await Promise.all([
       get<Extraction>(`${base}/extraction`),
       get<IncomeSource[]>(`cases/${caseId}/financial/income-sources`),
+      get<Applicant[]>(`cases/${caseId}/applicants`),
       get<Measure[]>("financial/measures"),
     ]);
     if (x.ok) setExtraction(x.data);
-    if (s.ok) {
-      const usable = s.data.filter(
-        (src) =>
-          !src.withdrawn_at && (!d.data.applicant_id || src.applicant_id === d.data.applicant_id),
-      );
-      setSources(usable);
-      setIncomeSourceId((current) => current || usable[0]?.id || "");
-    }
-    if (m.ok) {
-      setMeasures(m.data.filter((x) => x.subject_kind === "income_source" && x.value_type === "money"));
-    }
+    if (s.ok) setAllSources(s.data);
+    if (a.ok) setApplicants(a.data);
+    if (m.ok) setMeasures(m.data.filter((y) => y.subject_kind === "income_source" && y.value_type === "money"));
     if (d.data.status === "reviewed") {
       const r = await get<ReviewOut>(`${base}/review`);
       if (r.ok) setReview(r.data);
@@ -94,6 +110,26 @@ export default function ReviewPage() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const sources = useMemo(
+    () =>
+      allSources.filter(
+        (src) => !src.withdrawn_at && (!document?.applicant_id || src.applicant_id === document.applicant_id),
+      ),
+    [allSources, document],
+  );
+  useEffect(() => {
+    setIncomeSourceId((current) => (sources.some((s) => s.id === current) ? current : (sources[0]?.id ?? "")));
+  }, [sources]);
+
+  const applicantName = useMemo(() => {
+    const a = applicants.find((x) => x.id === document?.applicant_id);
+    return a ? `${a.first_name} ${a.last_name}` : null;
+  }, [applicants, document]);
+  const sourceName = useCallback(
+    (s: IncomeSource) => `${s.name ?? "Employment income"}${applicantName ? ` — ${applicantName}` : ""}`,
+    [applicantName],
+  );
 
   const fields = useMemo(
     () => (extraction ? SECTIONS.flatMap((section) => extraction[section]) : []),
@@ -111,279 +147,334 @@ export default function ReviewPage() {
     [fields],
   );
   const openProblems = useMemo(() => problems(fields, drafts), [fields, drafts]);
+  const counts = useMemo(() => decisionCounts(fields, drafts, openProblems), [fields, drafts, openProblems]);
   const figures = fields.filter((f) => savesFigure(f, drafts[f.ordinal] ?? {})).length;
+  const visible = useMemo(
+    () =>
+      fields.filter(
+        (f) =>
+          matchesFilter(f, drafts, openProblems, filter) &&
+          !collapsed.has(SECTIONS.find((s) => extraction?.[s].includes(f)) ?? "summary"),
+      ),
+    [fields, drafts, openProblems, filter, collapsed, extraction],
+  );
+  const decisionsByOrdinal = useMemo(() => {
+    const out: Record<number, DecisionKind | undefined> = {};
+    if (review) for (const d of review.decisions) out[d.ordinal] = d.decision;
+    else for (const f of fields) out[f.ordinal] = drafts[f.ordinal]?.decision;
+    return out;
+  }, [review, fields, drafts]);
 
-  function update(ordinal: number, change: Partial<Draft>) {
+  const update = useCallback((ordinal: number, change: Partial<Draft>) => {
     setDrafts((current) => ({ ...current, [ordinal]: { ...current[ordinal], ...change } }));
+  }, []);
+
+  /** Select a field and bring its row into view (the PDF scrolls to the box by itself). */
+  const select = useCallback((ordinal: number | null) => {
+    setSelected(ordinal);
+    if (ordinal === null) return;
+    requestAnimationFrame(() =>
+      window.document.querySelector(`[data-field="${ordinal}"]`)?.scrollIntoView({ block: "nearest", behavior: "smooth" }),
+    );
+  }, []);
+
+  const order = useMemo(() => visible.map((f) => f.ordinal), [visible]);
+  const moveNext = useCallback(() => select(step(order, selected, 1)), [order, selected, select]);
+
+  // Keyboard shortcuts (not while typing, and not while a dialog is open).
+  useEffect(() => {
+    if (review || !extraction) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (isTypingTarget(event.target as HTMLElement | null)) return;
+      if (window.document.querySelector('[role="dialog"]')) return;
+      const action = shortcutFor(event);
+      if (!action) return;
+      event.preventDefault();
+      if (action === "help") return setHelpOpen(true);
+      if (action === "next") return select(step(order, selected, 1));
+      if (action === "previous") return select(step(order, selected, -1));
+      const target = selected ?? order[0] ?? null;
+      if (target === null) return;
+      update(target, { decision: action });
+      if (action === "accept") {
+        select(step(order, target, 1));
+      } else {
+        select(target);
+        requestAnimationFrame(() =>
+          window.document.querySelector<HTMLInputElement>(`[data-field="${target}"] [data-first-input]`)?.focus(),
+        );
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [review, extraction, order, selected, select, update]);
+
+  async function addIncomeSource() {
+    if (!document?.applicant_id) return;
+    const result = await postJson<IncomeSource>(`cases/${caseId}/financial/income-sources`, {
+      applicant_id: document.applicant_id,
+      kind: "employment",
+    });
+    if (result.ok) {
+      toast("success", "Employment income source added.");
+      await load();
+    } else {
+      setSaveError(problemMessage(result.status, result.problem));
+    }
   }
 
   async function save() {
     if (!document || !incomeSourceId) return;
     setSaving(true);
-    setMessage(null);
+    setSaveError(null);
     const body = buildReview(fields, drafts, incomeSourceId, frequency || undefined);
     const result = await postJson<ReviewOut>(`${base}/review`, body, document.version);
     setSaving(false);
     if (result.ok) {
+      setSaveOpen(false);
       setReview(result.data);
+      toast("success", `Review saved. ${figures} figure${figures === 1 ? "" : "s"} added to the case.`);
       await load();
       return;
     }
-    setMessage(problemMessage(result.status, result.problem));
-    if (result.status === 409) await load(); // show the review that already exists
+    if (result.status === 409) {
+      setSaveOpen(false);
+      toast("error", problemMessage(result.status, result.problem));
+      await load(); // show the review that already exists
+      return;
+    }
+    setSaveError(problemMessage(result.status, result.problem));
   }
 
-  if (!document) return <main>{message ? <p className="error">{message}</p> : "Loading…"}</main>;
+  const crumbs = [
+    { label: "Cases", href: "/" },
+    { label: caseTitle(summary, caseId), href: `/cases/${caseId}` },
+    { label: document?.original.original_filename ?? "Payslip" },
+  ];
+
+  if (loadError) {
+    return (
+      <PageContainer>
+        <Breadcrumbs items={crumbs} />
+        <Alert tone="error" title="This payslip can't be shown">
+          {loadError}
+        </Alert>
+      </PageContainer>
+    );
+  }
+  if (!document) return <Loading />;
+
+  const reviewedSource = review ? allSources.find((s) => s.id === review.income_source_id) : undefined;
 
   return (
-    <main>
-      <p>
-        <Link href={`/cases/${caseId}`}>← Case</Link>
-      </p>
-      <h1>{review ? "Saved review" : "Review payslip"}</h1>
-      {extraction && (
-        <p className="note">
-          Extracted by <strong>{extraction.provider}</strong> ({extraction.schema_version}).
-          {extraction.provider === "synthetic-fixture" && " Synthetic test data."} Confidence
-          is an indicator from the provider and never approves a value.
-        </p>
-      )}
-      {message && <p className="error" role="alert">{message}</p>}
+    <main className="mx-auto flex h-[calc(100vh-3.5rem)] w-full max-w-[1600px] flex-col px-6 pt-4 pb-4">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <Breadcrumbs items={crumbs} />
+          <h1 className="flex items-center gap-3 text-xl font-semibold tracking-tight">
+            {review ? "Saved review" : "Review payslip"}
+            {applicantName && <span className="text-base font-normal text-slate-500">{applicantName}</span>}
+          </h1>
+        </div>
+        {extraction && (
+          <p className="text-xs text-slate-500">
+            Extracted by <span className="font-medium text-slate-700">{extraction.provider}</span> ·{" "}
+            {extraction.schema_version}
+            {extraction.provider === "synthetic-fixture" && " · synthetic test data"} · confidence is an indicator
+            only
+          </p>
+        )}
+      </div>
 
-      <div className="review">
-        <div className="viewer">
+      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+        <div className="min-h-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
           <PdfView
             url={`${API}/${base}/content`}
             highlights={highlights}
             selected={selected}
-            onSelect={setSelected}
+            hovered={hovered}
+            decisions={decisionsByOrdinal}
+            onSelect={select}
+            onHover={setHovered}
           />
         </div>
 
-        <div>
+        <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
           {review ? (
-            <SavedReview review={review} onSelect={setSelected} selected={selected} />
+            <div className="min-h-0 flex-1 overflow-auto">
+              <SavedReview
+                review={review}
+                sourceName={reviewedSource ? sourceName(reviewedSource) : "the income source"}
+                selected={selected}
+                hovered={hovered}
+                onSelect={select}
+                onHover={setHovered}
+              />
+            </div>
           ) : !extraction ? (
-            <p className="note">No extraction for this document.</p>
+            <div className="p-4">
+              <Alert tone="info">No extracted figures for this document yet.</Alert>
+            </div>
           ) : (
             <>
-              {extraction.missing_required.length > 0 && (
-                <p className="warn">
-                  Not found on the payslip: {extraction.missing_required.join(", ")}.
+              <div className="flex flex-col gap-3 border-b border-slate-200 bg-white p-4">
+                <div className="flex items-center gap-3">
+                  <Progress value={counts.complete} max={counts.total} label="Fields decided" className="flex-1" />
+                  <span className="text-sm font-medium tabular-nums text-slate-700">
+                    {counts.complete} of {counts.total} decided
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone="success">
+                    <Check /> {counts.accepted}
+                  </Badge>
+                  <Badge tone="warning">
+                    <Pencil /> {counts.corrected}
+                  </Badge>
+                  <Badge tone="danger">
+                    <X /> {counts.rejected}
+                  </Badge>
+                  <div className="ml-auto flex items-center gap-1.5">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={counts.accepted + counts.corrected + counts.rejected === counts.total}
+                      onClick={() => setDrafts((d) => acceptRemaining(fields, d))}
+                    >
+                      <Check /> Accept remaining
+                    </Button>
+                    <Tooltip content="Keyboard shortcuts (?)">
+                      <Button size="icon" variant="ghost" onClick={() => setHelpOpen(true)} aria-label="Keyboard shortcuts">
+                        <Keyboard />
+                      </Button>
+                    </Tooltip>
+                  </div>
+                </div>
+                <div className="flex gap-1 rounded-lg bg-slate-100 p-1 text-sm" role="tablist" aria-label="Show fields">
+                  {FILTERS.map((f) => (
+                    <button
+                      key={f.key}
+                      role="tab"
+                      aria-selected={filter === f.key}
+                      onClick={() => setFilter(f.key)}
+                      className={cn(
+                        "flex-1 rounded-md px-2 py-1 transition-colors",
+                        filter === f.key ? "bg-white font-medium text-slate-900 shadow-xs" : "text-slate-600 hover:text-slate-900",
+                      )}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-auto p-4">
+                {extraction.missing_required.length > 0 && (
+                  <Alert tone="warning" title="Not found on the payslip" className="mb-4">
+                    {extraction.missing_required.map(measureLabel).join(", ")}
+                  </Alert>
+                )}
+                <div className="flex flex-col gap-5">
+                  {SECTIONS.map((section) => {
+                    const all = extraction[section];
+                    if (all.length === 0) return null;
+                    const shown = all.filter((f) => matchesFilter(f, drafts, openProblems, filter));
+                    const done = all.filter((f) => !openProblems.has(f.ordinal)).length;
+                    const isCollapsed = collapsed.has(section);
+                    if (shown.length === 0 && filter !== "all") return null;
+                    return (
+                      <section key={section} className="flex flex-col gap-2">
+                        <button
+                          type="button"
+                          aria-expanded={!isCollapsed}
+                          onClick={() =>
+                            setCollapsed((c) => {
+                              const next = new Set(c);
+                              if (next.has(section)) next.delete(section);
+                              else next.add(section);
+                              return next;
+                            })
+                          }
+                          className="flex items-center gap-2 text-left text-xs font-semibold tracking-wide text-slate-500 uppercase hover:text-slate-800"
+                        >
+                          <ChevronDown className={cn("size-4 transition-transform", isCollapsed && "-rotate-90")} />
+                          {SECTION_TITLES[section]}
+                          <span
+                            className={cn(
+                              "rounded-full px-1.5 py-px font-medium tabular-nums normal-case",
+                              done === all.length ? "bg-accept-soft text-accept" : "bg-slate-200 text-slate-600",
+                            )}
+                          >
+                            {done}/{all.length}
+                          </span>
+                        </button>
+                        {!isCollapsed &&
+                          shown.map((f) => (
+                            <FieldRow
+                              key={f.ordinal}
+                              field={f}
+                              draft={drafts[f.ordinal] ?? {}}
+                              problem={openProblems.get(f.ordinal) ?? null}
+                              selected={selected === f.ordinal}
+                              hovered={hovered === f.ordinal}
+                              measures={measures}
+                              onSelect={() => select(f.ordinal)}
+                              onHover={(on) => setHovered(on ? f.ordinal : null)}
+                              onChange={(change) => update(f.ordinal, change)}
+                              onNext={moveNext}
+                            />
+                          ))}
+                      </section>
+                    );
+                  })}
+                  {visible.length === 0 && filter !== "all" && (
+                    <p className="py-8 text-center text-sm text-slate-500">
+                      {filter === "undecided" ? "Every field has a complete decision." : "Nothing corrected or rejected."}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3 border-t border-slate-200 bg-white p-4">
+                <p className="flex-1 text-sm text-slate-600">
+                  {openProblems.size > 0
+                    ? `${openProblems.size} field${openProblems.size === 1 ? "" : "s"} still need${openProblems.size === 1 ? "s" : ""} a complete decision.`
+                    : `Ready to save ${figures} figure${figures === 1 ? "" : "s"}.`}
                 </p>
-              )}
-              <div className="row" style={{ marginBottom: "0.5rem" }}>
-                <button className="secondary" onClick={() => setDrafts((d) => acceptAll(fields, d))}>
-                  Accept all
-                </button>
-                <span className="note">
-                  {fields.length - openProblems.size} of {fields.length} fields decided
-                </span>
-              </div>
-              {SECTIONS.map((section) =>
-                extraction[section].length === 0 ? null : (
-                  <section key={section}>
-                    <h3>{SECTION_TITLES[section]}</h3>
-                    {extraction[section].map((f) => (
-                      <FieldRow
-                        key={f.ordinal}
-                        field={f}
-                        draft={drafts[f.ordinal] ?? {}}
-                        problem={openProblems.get(f.ordinal) ?? null}
-                        selected={selected === f.ordinal}
-                        measures={measures}
-                        onSelect={() => setSelected(f.ordinal)}
-                        onChange={(change) => update(f.ordinal, change)}
-                      />
-                    ))}
-                  </section>
-                ),
-              )}
-              <div className="savebar">
-                <label>
-                  Income source
-                  <select value={incomeSourceId} onChange={(e) => setIncomeSourceId(e.target.value)}>
-                    {sources.length === 0 && <option value="">None: add one on the case page</option>}
-                    {sources.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.name ?? s.kind}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Frequency
-                  <select value={frequency} onChange={(e) => setFrequency(e.target.value)}>
-                    <option value="">As shown on the payslip</option>
-                    {FREQUENCIES.map((f) => (
-                      <option key={f} value={f}>
-                        {f.replace("_", "-")}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button
-                  onClick={save}
-                  disabled={saving || openProblems.size > 0 || !incomeSourceId}
-                  title={openProblems.size > 0 ? "Every field needs a complete decision" : undefined}
+                <Button
+                  size="lg"
+                  disabled={openProblems.size > 0}
+                  onClick={() => {
+                    setSaveError(null);
+                    setSaveOpen(true);
+                  }}
                 >
-                  Save review ({figures} figure{figures === 1 ? "" : "s"})
-                </button>
+                  Review and save…
+                </Button>
               </div>
+
+              <SaveReviewDialog
+                open={saveOpen}
+                onOpenChange={setSaveOpen}
+                counts={counts}
+                figures={figures}
+                sources={sources}
+                sourceName={sourceName}
+                incomeSourceId={incomeSourceId}
+                onIncomeSource={setIncomeSourceId}
+                frequency={frequency}
+                onFrequency={setFrequency}
+                payslipFrequency={payslipFrequency(fields, drafts)}
+                onAddSource={() => void addIncomeSource()}
+                saving={saving}
+                error={saveError}
+                onSave={() => void save()}
+              />
             </>
           )}
         </div>
       </div>
+      <ShortcutsDialog open={helpOpen} onOpenChange={setHelpOpen} />
     </main>
-  );
-}
-
-function FieldRow(props: {
-  field: ExtractedField;
-  draft: Draft;
-  problem: string | null;
-  selected: boolean;
-  measures: Measure[];
-  onSelect: () => void;
-  onChange: (change: Partial<Draft>) => void;
-}) {
-  const { field: f, draft, problem, selected, measures, onSelect, onChange } = props;
-  const kind = valueKind(f);
-  const effectiveMeasure = f.field_code && FIGURE_CODES.has(f.field_code) ? f.field_code : draft.measure;
-  const qualifiers = measures.find((m) => m.code === effectiveMeasure)?.qualifiers ?? [];
-  const choices: DecisionKind[] = ["accept", "correct", "reject"];
-
-  return (
-    <div className={`field${selected ? " selected" : ""}`} data-field={f.ordinal}>
-      <div className="head" onClick={onSelect}>
-        <div>
-          <div className="label">{f.label_text}</div>
-          <div className="meta">
-            {f.field_code ?? "unrecognised line"} · printed “{f.raw_text}” · page{" "}
-            {f.value_evidence.page_number}
-            {f.confidence !== null && ` · confidence ${(f.confidence * 100).toFixed(0)}% (indicator)`}
-          </div>
-        </div>
-        <div className="value">{shownValue(f)}</div>
-      </div>
-      <div className="choices" role="radiogroup" aria-label={`Decision for ${f.label_text}`}>
-        {choices.map((choice) => (
-          <label key={choice}>
-            <input
-              type="radio"
-              name={`decision-${f.ordinal}`}
-              checked={draft.decision === choice}
-              onChange={() => onChange({ decision: choice })}
-            />
-            {choice[0]?.toUpperCase() + choice.slice(1)}
-          </label>
-        ))}
-      </div>
-      {draft.decision === "correct" && (
-        <div className="row" style={{ marginTop: "0.4rem" }}>
-          <input
-            type={kind === "date" ? "date" : "text"}
-            inputMode={kind === "money" ? "decimal" : undefined}
-            placeholder={kind === "money" ? "1,234.56" : "Corrected value"}
-            value={draft.corrected ?? ""}
-            onChange={(e) => onChange({ corrected: e.target.value })}
-            aria-label="Corrected value"
-          />
-        </div>
-      )}
-      {(draft.decision === "correct" || draft.decision === "reject") && (
-        <div className="row" style={{ marginTop: "0.4rem" }}>
-          <input
-            style={{ flex: 1 }}
-            placeholder="Reason"
-            value={draft.reason ?? ""}
-            maxLength={500}
-            onChange={(e) => onChange({ reason: e.target.value })}
-            aria-label="Reason"
-          />
-        </div>
-      )}
-      {draft.decision !== "reject" && f.field_code === null && (
-        <label style={{ marginTop: "0.4rem" }}>
-          Save as (optional)
-          <select value={draft.measure ?? ""} onChange={(e) => onChange({ measure: e.target.value || undefined })}>
-            <option value="">Don&apos;t save as a figure</option>
-            {measures.map((m) => (
-              <option key={m.code} value={m.code}>
-                {m.code}
-              </option>
-            ))}
-          </select>
-        </label>
-      )}
-      {draft.decision !== "reject" && effectiveMeasure && QUALIFIED.has(effectiveMeasure) && (
-        <label style={{ marginTop: "0.4rem" }}>
-          Type
-          <select value={draft.qualifier ?? ""} onChange={(e) => onChange({ qualifier: e.target.value || undefined })}>
-            <option value="">Unspecified</option>
-            {qualifiers
-              .filter((q) => q !== "unspecified")
-              .map((q) => (
-                <option key={q} value={q}>
-                  {q}
-                </option>
-              ))}
-          </select>
-        </label>
-      )}
-      {problem && draft.decision && <div className="problem">{problem}</div>}
-    </div>
-  );
-}
-
-function SavedReview(props: {
-  review: ReviewOut;
-  selected: number | null;
-  onSelect: (ordinal: number) => void;
-}) {
-  const { review, selected, onSelect } = props;
-  const show = (money: number | null, date: string | null, text: string | null) =>
-    money !== null ? formatMoney(money) : (date ?? text ?? "—");
-  return (
-    <div>
-      <p className="ok">
-        Saved {new Date(review.created_at).toLocaleString("en-GB")} · frequency {review.frequency} ·{" "}
-        {review.decisions.filter((d) => d.observation_id).length} figures saved. Later corrections
-        go through the case&apos;s financial records.
-      </p>
-      <table>
-        <thead>
-          <tr>
-            <th>Field</th>
-            <th>Extracted</th>
-            <th>Decision</th>
-            <th>Saved figure</th>
-          </tr>
-        </thead>
-        <tbody>
-          {review.decisions.map((d) => (
-            <tr
-              key={d.ordinal}
-              onClick={() => onSelect(d.ordinal)}
-              style={selected === d.ordinal ? { background: "#eef4fb" } : undefined}
-            >
-              <td>
-                {d.label_text}
-                <div className="note">{d.field_code ?? "unrecognised line"}</div>
-              </td>
-              <td>{show(d.extracted_money_minor, d.extracted_date, d.extracted_text)}</td>
-              <td>
-                {d.decision}
-                {d.decision === "correct" && (
-                  <div>→ {show(d.corrected_money_minor, d.corrected_date, d.corrected_text)}</div>
-                )}
-                {d.reason && <div className="note">“{d.reason}”</div>}
-              </td>
-              <td>{d.observation_id ? `yes${d.measure ? ` (${d.measure})` : ""}` : "no"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
   );
 }

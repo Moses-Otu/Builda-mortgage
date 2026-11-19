@@ -8,7 +8,9 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const ROUTES: Array<[method: string, pattern: string]> = [
   ["GET", "me"],
   ["GET", "cases"],
+  ["POST", "cases"], // new case (Phase 2.1, U2); the API requires case:create
   ["GET", `cases/${ID}/applicants`],
+  ["POST", `cases/${ID}/applicants`], // add applicant (Phase 2.1, U2); applicant:write
   ["GET", `cases/${ID}/financial/income-sources`],
   ["POST", `cases/${ID}/financial/income-sources`],
   ["GET", `cases/${ID}/financial/observations`],

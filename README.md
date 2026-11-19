@@ -86,9 +86,10 @@ uv run uvicorn meip.main:app --reload
 
 ## Review screen (frontend)
 
-A minimal Next.js screen for reviewing synthetic payslips (Phase 2.0, step 2-E). It talks
-only to its own server, which forwards an allowlist of API calls with the token from an
-httpOnly cookie. Run the API and the worker locally first (see above), then:
+A Next.js broker screen for synthetic payslips (step 2-E, redesigned in Phase 2.1): create a
+case and applicant, upload a payslip, review its figures beside the original (keyboard
+shortcuts: press `?`), and save. It talks only to its own server, which forwards an
+allowlist of API calls with the token from an httpOnly cookie. Run the API and the worker locally first (see above), then:
 
 ```bash
 cd frontend

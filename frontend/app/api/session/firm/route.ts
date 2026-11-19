@@ -8,6 +8,14 @@ import { type NextRequest, NextResponse } from "next/server";
 import { apiBaseUrl, FIRM_COOKIE, SESSION_COOKIE_OPTIONS, TOKEN_COOKIE } from "@/lib/server-config";
 import type { Me } from "@/lib/types";
 
+/** Which firm the session currently acts within (the cookie is httpOnly, so the page asks).
+ * Only the ID the browser itself chose; still not proof of access. */
+export async function GET(): Promise<Response> {
+  const jar = await cookies();
+  if (!jar.get(TOKEN_COOKIE)?.value) return NextResponse.json({ detail: "Sign in first" }, { status: 401 });
+  return NextResponse.json({ tenant_id: jar.get(FIRM_COOKIE)?.value ?? null });
+}
+
 export async function POST(request: NextRequest): Promise<Response> {
   const jar = await cookies();
   const token = jar.get(TOKEN_COOKIE)?.value;

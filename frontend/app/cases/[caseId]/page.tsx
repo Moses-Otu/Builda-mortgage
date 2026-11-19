@@ -1,32 +1,50 @@
 "use client";
 
+import {
+  ArrowRight,
+  Briefcase,
+  Check,
+  FileText,
+  FileUp,
+  Loader2,
+  Plus,
+  UserRound,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type DragEvent, useCallback, useEffect, useRef, useState } from "react";
 
+import { AddApplicantDialog } from "@/components/AddApplicantDialog";
+import { Breadcrumbs, Loading, PageContainer, RequireFirm } from "@/components/Page";
+import { caseTitle, useCaseSummary } from "@/components/useCaseSummary";
+import { Alert } from "@/components/ui/alert";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label, Select } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast";
 import { get, postJson, uploadPdf } from "@/lib/api";
+import { caseSteps, type Step } from "@/lib/case-steps";
+import { documentStatusView } from "@/lib/failures";
+import { caseStatusLabel, formatBytes, formatDateTime, purposeLabel } from "@/lib/labels";
 import { problemMessage } from "@/lib/problems";
 import type { Applicant, DocumentOut, IncomeSource } from "@/lib/types";
+import { cn } from "@/lib/utils";
 
-const PROCESSING = new Set(["received", "ready"]);
-const STATUS_TEXT: Record<string, string> = {
-  received: "Processing",
-  ready: "Extracting",
-  extracted: "Ready to review",
-  unrecognised: "Not recognised as a payslip",
-  reviewed: "Reviewed",
-  failed: "Failed",
-};
-
-export default function CasePage() {
+export default function CasePageRoute() {
   const { caseId } = useParams<{ caseId: string }>();
-  const [applicants, setApplicants] = useState<Applicant[]>([]);
+  return <RequireFirm>{() => <CasePage caseId={caseId} />}</RequireFirm>;
+}
+
+function CasePage({ caseId }: { caseId: string }) {
+  const toast = useToast();
+  const summary = useCaseSummary(caseId);
+  const [applicants, setApplicants] = useState<Applicant[] | null>(null);
   const [sources, setSources] = useState<IncomeSource[]>([]);
   const [documents, setDocuments] = useState<DocumentOut[]>([]);
   const [applicantId, setApplicantId] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [message, setMessage] = useState<{ kind: "error" | "ok"; text: string } | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const [a, s, d] = await Promise.all([
@@ -35,13 +53,14 @@ export default function CasePage() {
       get<DocumentOut[]>(`cases/${caseId}/documents`),
     ]);
     if (!a.ok) {
-      setMessage({ kind: "error", text: problemMessage(a.status, a.problem) });
+      setError(problemMessage(a.status, a.problem));
       return;
     }
-    setApplicants(a.data);
-    setApplicantId((current) => current || a.data[0]?.id || "");
+    const active = a.data.filter((x) => x.status !== "removed");
+    setApplicants(active);
+    setApplicantId((current) => current || active[0]?.id || "");
     if (s.ok) setSources(s.data);
-    if (d.ok) setDocuments(d.data);
+    if (d.ok) setDocuments([...d.data].sort((x, y) => y.created_at.localeCompare(x.created_at)));
   }, [caseId]);
 
   useEffect(() => {
@@ -50,26 +69,10 @@ export default function CasePage() {
 
   // Refresh while any document is still being processed.
   useEffect(() => {
-    if (!documents.some((d) => PROCESSING.has(d.status))) return;
+    if (!documents.some((d) => documentStatusView(d.status, d.failure_code).busy)) return;
     const timer = setInterval(() => void load(), 3000);
     return () => clearInterval(timer);
   }, [documents, load]);
-
-  async function upload(event: FormEvent) {
-    event.preventDefault();
-    if (!file || !applicantId) return;
-    setBusy(true);
-    const result = await uploadPdf<DocumentOut>(caseId, file, applicantId);
-    setBusy(false);
-    if (result.ok) {
-      setMessage({ kind: "ok", text: "Uploaded. Processing has started." });
-      setFile(null);
-      (event.target as HTMLFormElement).reset();
-      await load();
-    } else {
-      setMessage({ kind: "error", text: problemMessage(result.status, result.problem) });
-    }
-  }
 
   async function addIncomeSource() {
     if (!applicantId) return;
@@ -78,115 +81,328 @@ export default function CasePage() {
       kind: "employment",
     });
     if (result.ok) {
-      setMessage({ kind: "ok", text: "Employment income source added." });
+      toast("success", "Employment income source added.");
       await load();
     } else {
-      setMessage({ kind: "error", text: problemMessage(result.status, result.problem) });
+      toast("error", problemMessage(result.status, result.problem));
     }
   }
 
+  const title = caseTitle(summary, caseId);
+  const crumbs = [{ label: "Cases", href: "/" }, { label: title }];
+
+  if (error) {
+    return (
+      <PageContainer>
+        <Breadcrumbs items={crumbs} />
+        <Alert tone="error" title="This case can't be shown">
+          {error}
+        </Alert>
+      </PageContainer>
+    );
+  }
+  if (!applicants) return <Loading />;
+
   const nameOf = (id: string | null) => {
     const a = applicants.find((x) => x.id === id);
-    return a ? `${a.first_name} ${a.last_name}` : "—";
+    return a ? `${a.first_name} ${a.last_name}` : "Unknown applicant";
   };
+  const activeSources = sources.filter((s) => !s.withdrawn_at);
+  const steps = caseSteps(sources, documents);
 
   return (
-    <main>
-      <p>
-        <Link href="/">← Cases</Link>
-      </p>
-      <h1>Case</h1>
-      {message && (
-        <p className={message.kind} role="status">
-          {message.text}
-        </p>
-      )}
-
-      <div className="row" style={{ alignItems: "stretch" }}>
-        <form className="card stack" onSubmit={upload} style={{ flex: "1 1 320px" }}>
-          <h2 style={{ marginTop: 0 }}>Upload a payslip</h2>
-          <label>
-            Applicant
-            <select value={applicantId} onChange={(e) => setApplicantId(e.target.value)}>
-              {applicants.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.first_name} {a.last_name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            PDF (synthetic documents only)
-            <input
-              type="file"
-              accept="application/pdf"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            />
-          </label>
-          <button type="submit" disabled={!file || !applicantId || busy}>
-            Upload
-          </button>
-        </form>
-
-        <div className="card stack" style={{ flex: "1 1 320px" }}>
-          <h2 style={{ marginTop: 0 }}>Income sources</h2>
-          {sources.filter((s) => !s.withdrawn_at).length === 0 && (
-            <p className="note">None yet. A payslip is evidence of an income source.</p>
-          )}
-          <ul>
-            {sources
-              .filter((s) => !s.withdrawn_at)
-              .map((s) => (
-                <li key={s.id}>
-                  {s.name ?? s.kind} — {nameOf(s.applicant_id)}
-                </li>
-              ))}
-          </ul>
-          <button className="secondary" onClick={addIncomeSource} disabled={!applicantId}>
-            Add employment income source for the selected applicant
-          </button>
+    <PageContainer>
+      <Breadcrumbs items={crumbs} />
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight">
+            {title}
+            {summary && <Badge tone="info">{caseStatusLabel(summary.status)}</Badge>}
+          </h1>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
+            {summary && (
+              <span className="inline-flex items-center gap-1.5">
+                <Briefcase className="size-3.5" /> {purposeLabel(summary.purpose)}
+              </span>
+            )}
+            {applicants.map((a) => (
+              <span
+                key={a.id}
+                className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-0.5 text-slate-700"
+              >
+                <UserRound className="size-3.5 text-slate-400" /> {a.first_name} {a.last_name}
+              </span>
+            ))}
+          </div>
         </div>
+        <AddApplicantDialog caseId={caseId} onAdded={() => void load()} />
       </div>
 
-      <h2>Documents</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>File</th>
-            <th>Applicant</th>
-            <th>Status</th>
-            <th>Uploaded</th>
-            <th />
-          </tr>
-        </thead>
-        <tbody>
-          {documents.length === 0 && (
-            <tr>
-              <td colSpan={5} className="note">
-                No documents yet.
-              </td>
-            </tr>
-          )}
-          {documents.map((d) => (
-            <tr key={d.id}>
-              <td>{d.original.original_filename ?? "document.pdf"}</td>
-              <td>{nameOf(d.applicant_id)}</td>
-              <td>
-                <span className={`status ${d.status}`}>{STATUS_TEXT[d.status] ?? d.status}</span>
-                {d.failure_code && <span className="note"> ({d.failure_code})</span>}
-              </td>
-              <td>{new Date(d.created_at).toLocaleString("en-GB")}</td>
-              <td>
-                {(d.status === "extracted" || d.status === "reviewed") && (
-                  <Link href={`/cases/${caseId}/documents/${d.id}`}>
-                    {d.status === "extracted" ? "Review" : "View review"}
-                  </Link>
+      {applicants.length === 0 ? (
+        <Alert tone="info" title="Add an applicant first">
+          Payslips are filed under an applicant. Use “Add applicant” to add one.
+        </Alert>
+      ) : (
+        <>
+          <StepStrip steps={steps} />
+
+          <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+            <Card>
+              <CardHeader>
+                <div>
+                  <CardTitle>Payslips</CardTitle>
+                  <CardDescription>Upload a payslip, then review its figures.</CardDescription>
+                </div>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4">
+                <UploadZone
+                  caseId={caseId}
+                  applicants={applicants}
+                  applicantId={applicantId}
+                  onApplicant={setApplicantId}
+                  onUploaded={() => void load()}
+                />
+                <DocumentList caseId={caseId} documents={documents} nameOf={nameOf} />
+              </CardContent>
+            </Card>
+
+            <Card className="self-start">
+              <CardHeader>
+                <div>
+                  <CardTitle>Income sources</CardTitle>
+                  <CardDescription>Reviewed payslip figures are saved against one.</CardDescription>
+                </div>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-3">
+                {activeSources.length === 0 && (
+                  <p className="rounded-lg border border-dashed border-slate-300 px-3 py-4 text-center text-sm text-slate-500">
+                    None yet.
+                  </p>
                 )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </main>
+                {activeSources.map((s) => (
+                  <div key={s.id} className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2.5">
+                    <span className="grid size-8 place-items-center rounded-md bg-brand-50 text-brand-600">
+                      <Briefcase className="size-4" />
+                    </span>
+                    <div className="text-sm">
+                      <p className="font-medium">{s.name ?? "Employment income"}</p>
+                      <p className="text-slate-500">{nameOf(s.applicant_id)}</p>
+                    </div>
+                  </div>
+                ))}
+                <Button variant="secondary" onClick={addIncomeSource} disabled={!applicantId}>
+                  <Plus /> Add employment income
+                  {applicants.length > 1 && ` for ${nameOf(applicantId).split(" ")[0]}`}
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </>
+      )}
+    </PageContainer>
+  );
+}
+
+function StepStrip({ steps }: { steps: Step[] }) {
+  return (
+    <ol className="grid gap-3 sm:grid-cols-3">
+      {steps.map((step, i) => (
+        <li
+          key={step.key}
+          className={cn(
+            "flex items-start gap-3 rounded-xl border bg-white p-4",
+            step.state === "current" ? "border-brand-500 ring-3 ring-brand-500/15" : "border-slate-200",
+          )}
+        >
+          <span
+            className={cn(
+              "grid size-7 shrink-0 place-items-center rounded-full text-sm font-semibold",
+              step.state === "done" && "bg-accept text-white",
+              step.state === "current" && "bg-brand-600 text-white",
+              step.state === "upcoming" && "bg-slate-100 text-slate-500",
+            )}
+          >
+            {step.state === "done" ? <Check className="size-4" /> : i + 1}
+          </span>
+          <div className="text-sm">
+            <p className={cn("font-medium", step.state === "upcoming" && "text-slate-500")}>{step.title}</p>
+            <p className="text-slate-500">{step.detail}</p>
+          </div>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function UploadZone(props: {
+  caseId: string;
+  applicants: Applicant[];
+  applicantId: string;
+  onApplicant: (id: string) => void;
+  onUploaded: () => void;
+}) {
+  const { caseId, applicants, applicantId, onApplicant, onUploaded } = props;
+  const toast = useToast();
+  const input = useRef<HTMLInputElement>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  function pick(candidate: File | undefined) {
+    setError(null);
+    if (!candidate) return;
+    if (candidate.type !== "application/pdf" && !candidate.name.toLowerCase().endsWith(".pdf")) {
+      setError("Only PDF files can be uploaded.");
+      return;
+    }
+    setFile(candidate);
+  }
+
+  function onDrop(event: DragEvent) {
+    event.preventDefault();
+    setDragging(false);
+    pick(event.dataTransfer.files[0]);
+  }
+
+  function clear() {
+    setFile(null);
+    if (input.current) input.current.value = "";
+  }
+
+  async function upload() {
+    if (!file || !applicantId) return;
+    setBusy(true);
+    setError(null);
+    const result = await uploadPdf<DocumentOut>(caseId, file, applicantId);
+    setBusy(false);
+    if (result.ok) {
+      toast("success", "Uploaded. Processing has started.");
+      clear();
+      onUploaded();
+    } else {
+      setError(problemMessage(result.status, result.problem));
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-3">
+      {applicants.length > 1 && (
+        <Label className="max-w-xs">
+          File under
+          <Select value={applicantId} onChange={(e) => onApplicant(e.target.value)}>
+            {applicants.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.first_name} {a.last_name}
+              </option>
+            ))}
+          </Select>
+        </Label>
+      )}
+      {file ? (
+        <div className="flex items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 p-4">
+          <span className="grid size-10 place-items-center rounded-lg bg-white text-brand-600">
+            <FileText className="size-5" />
+          </span>
+          <div className="min-w-0 flex-1 text-sm">
+            <p className="truncate font-medium">{file.name}</p>
+            <p className="text-slate-500">
+              {formatBytes(file.size)}
+              {applicants.length === 1 && applicants[0] && ` · for ${applicants[0].first_name} ${applicants[0].last_name}`}
+            </p>
+          </div>
+          <Button variant="ghost" size="icon" onClick={clear} aria-label="Remove file" disabled={busy}>
+            <X />
+          </Button>
+          <Button onClick={upload} disabled={busy || !applicantId}>
+            {busy ? <Loader2 className="animate-spin" /> : <FileUp />} Upload
+          </Button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={() => input.current?.click()}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setDragging(true);
+          }}
+          onDragLeave={() => setDragging(false)}
+          onDrop={onDrop}
+          className={cn(
+            "flex flex-col items-center gap-2 rounded-xl border-2 border-dashed px-6 py-8 text-center transition-colors",
+            dragging ? "border-brand-500 bg-brand-50" : "border-slate-300 hover:border-brand-500 hover:bg-slate-50",
+          )}
+        >
+          <span className="grid size-10 place-items-center rounded-full bg-brand-50 text-brand-600">
+            <FileUp className="size-5" />
+          </span>
+          <span className="text-sm font-medium">Drop a payslip PDF here, or click to choose</span>
+          <span className="text-xs text-slate-500">Synthetic documents only · upload the file exactly as generated</span>
+        </button>
+      )}
+      <input
+        ref={input}
+        type="file"
+        accept="application/pdf,.pdf"
+        className="sr-only"
+        tabIndex={-1}
+        aria-label="Choose a PDF"
+        onChange={(e) => pick(e.target.files?.[0])}
+      />
+      {error && <Alert tone="error">{error}</Alert>}
+    </div>
+  );
+}
+
+function DocumentList(props: {
+  caseId: string;
+  documents: DocumentOut[];
+  nameOf: (id: string | null) => string;
+}) {
+  const { caseId, documents, nameOf } = props;
+  if (documents.length === 0) {
+    return <p className="py-2 text-center text-sm text-slate-500">No payslips uploaded yet.</p>;
+  }
+  return (
+    <ul className="flex flex-col gap-2">
+      {documents.map((d) => {
+        const view = documentStatusView(d.status, d.failure_code);
+        const href = `/cases/${caseId}/documents/${d.id}`;
+        const canOpen = d.status === "extracted" || d.status === "reviewed";
+        return (
+          <li key={d.id} className="rounded-xl border border-slate-200 p-4">
+            <div className="flex items-center gap-3">
+              <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500">
+                <FileText className="size-5" />
+              </span>
+              <div className="min-w-0 flex-1 text-sm">
+                <p className="truncate font-medium">{d.original.original_filename ?? "payslip.pdf"}</p>
+                <p className="text-slate-500">
+                  {nameOf(d.applicant_id)} · {formatDateTime(d.created_at)}
+                  {d.page_count !== null && ` · ${d.page_count} page${d.page_count === 1 ? "" : "s"}`}
+                </p>
+              </div>
+              <Badge tone={view.tone}>
+                {view.busy && <Loader2 className="animate-spin" />}
+                {view.label}
+              </Badge>
+              {canOpen && (
+                <Button asChild size="sm" variant={d.status === "extracted" ? "primary" : "secondary"}>
+                  <Link href={href}>
+                    {d.status === "extracted" ? "Review" : "View review"} <ArrowRight />
+                  </Link>
+                </Button>
+              )}
+            </div>
+            {view.explanation && (
+              <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                {view.explanation}
+                {view.supportCode && <span className="ml-1 font-mono text-xs text-slate-400">({view.supportCode})</span>}
+              </p>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }

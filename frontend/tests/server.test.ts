@@ -19,12 +19,21 @@ describe("forwarder allowlist", () => {
     ["GET", `cases/${CASE}/documents/${DOC}/extraction`],
     ["POST", `cases/${CASE}/documents/${DOC}/review`],
     ["get", `cases/${CASE}/documents/${DOC}/review`],
+    ["POST", "cases"], // Phase 2.1 (U2): new case
+    ["POST", `cases/${CASE}/applicants`], // Phase 2.1 (U2): add applicant
   ])("allows %s %s", (method, path) => expect(isAllowed(method, split(path))).toBe(true));
 
   it.each([
     ["DELETE", `cases/${CASE}/documents/${DOC}`], // method not allowed
-    ["POST", "cases"], // a route the screen doesn't use
     ["POST", "members"],
+    // Phase 2.1 allows creating cases and applicants, and nothing next to them:
+    ["PATCH", `cases/${CASE}`],
+    ["POST", `cases/${CASE}`],
+    ["POST", `cases/${CASE}/transitions`],
+    ["POST", `cases/${CASE}/applicants/${DOC}`],
+    ["POST", `cases/${CASE}/applicants/${DOC}/removal`],
+    ["DELETE", `cases/${CASE}/applicants`],
+    ["POST", `cases/not-a-uuid/applicants`],
     ["GET", `cases/${CASE}/events`],
     ["POST", `cases/${CASE}/financial/income-sources/${DOC}/withdrawal`],
     ["GET", `cases/../me`],

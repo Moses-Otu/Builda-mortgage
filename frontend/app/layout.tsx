@@ -1,28 +1,29 @@
 import type { Metadata } from "next";
-import Link from "next/link";
+import { Inter } from "next/font/google";
 import type { ReactNode } from "react";
+
+import { AppHeader } from "@/components/AppHeader";
+import { Providers } from "@/components/Providers";
 
 import "./globals.css";
 
+// Self-hosted by Next.js at build time: the browser loads it from this app (CSP font-src 'self').
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
+
 export const metadata: Metadata = {
-  title: "Payslip review",
+  title: "Evidence review",
   description: "Review extracted payslip figures (synthetic data only)",
   robots: { index: false, follow: false },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en-GB">
-      <body>
-        <header className="topbar">
-          <Link href="/" className="brand">
-            Payslip review
-          </Link>
-          <span className="badge" title="Only synthetic documents may be used until D10 is approved">
-            Synthetic data only
-          </span>
-        </header>
-        {children}
+    <html lang="en-GB" className={inter.variable}>
+      <body className="min-h-screen">
+        <Providers>
+          <AppHeader />
+          {children}
+        </Providers>
       </body>
     </html>
   );
