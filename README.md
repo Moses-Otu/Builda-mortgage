@@ -84,6 +84,35 @@ uv run alembic upgrade head
 uv run uvicorn meip.main:app --reload
 ```
 
+## Review screen (frontend)
+
+A minimal Next.js screen for reviewing synthetic payslips (Phase 2.0, step 2-E). It talks
+only to its own server, which forwards an allowlist of API calls with the token from an
+httpOnly cookie. Run the API and the worker locally first (see above), then:
+
+```bash
+cd frontend
+npm install
+```
+
+Create `frontend/.env.local` (git-ignored) containing:
+
+```
+MEIP_UI_DEV_SIGN_IN=true
+MEIP_API_URL=http://localhost:8000
+```
+
+```bash
+npm run dev
+```
+
+Open http://localhost:3000/dev-sign-in and paste a token from `meip-admin dev-token`. The
+development sign-in exists only with `MEIP_UI_DEV_SIGN_IN=true` and never in a production
+build. A synthetic payslip to upload: `uv run python scripts/make_synthetic_payslip.py`
+(from `backend/`).
+
+Frontend checks: `npm test` (vitest), `npm run typecheck`, `npm run lint`, `npm run build`.
+
 ## Quality checks
 
 ```bash

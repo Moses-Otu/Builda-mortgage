@@ -175,6 +175,15 @@ async def get_extraction(
         "All or nothing. A document is reviewed once: a second submission returns 409 "
         "`already-reviewed` with the existing review's ID."
     ),
+    responses={
+        404: {"description": "Case or document not found"},
+        409: {
+            "description": "`already-reviewed` (with `existing_review_id`), or the document "
+            "is not extracted"
+        },
+        412: {"description": "If-Match does not match the document's current version"},
+        428: {"description": "If-Match header missing"},
+    },
 )
 async def submit_review(
     case_id: uuid.UUID,

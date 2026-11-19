@@ -145,6 +145,13 @@ Single deployable backend codebase (modular monolith) with API and worker proces
     the case lock; duplicates are refused by status and `UNIQUE (run_id)`. Document figures
     sit outside the current-value rule, and deciding which figure counts is reconciliation
     (Stage 2).
+  - **Review screen (step 2-E):** Next.js 15 in `frontend/`. The browser talks only to the
+    Next.js server, whose single route handler forwards an explicit allowlist of API calls,
+    adding the bearer token and firm from httpOnly, Secure, SameSite=Strict cookies (no
+    CORS, no token in page JavaScript). The firm is chosen from `/me`, but it is only a
+    selector: the API checks membership on every request. Development-only sign-in until
+    Entra is live. The original is rendered with pdf.js; evidence boxes are placed by one
+    tested conversion that refuses to draw when page sizes disagree.
   - **Downloads are not yet access-logged.** That is a production-readiness requirement
     before real borrower documents are enabled (retention brief R17). The platform cannot tell synthetic from
     real documents, so this is a deployment control, not content inspection.

@@ -26,7 +26,18 @@ ALLOWED: dict[str, set[str]] = {
     "applicants": {"core", "applicants", "cases", "audit", "tenancy"},
     "financial": {"core", "financial", "applicants", "cases", "audit", "tenancy"},
     # documents may save reviewed figures through the financial service; never the reverse.
-    "documents": {"core", "documents", "applicants", "cases", "audit", "tenancy", "financial"},
+    # documents may also import the model registry (meip.models) so the standalone worker can
+    # resolve foreign keys; it holds no services.
+    "documents": {
+        "core",
+        "documents",
+        "applicants",
+        "cases",
+        "audit",
+        "tenancy",
+        "financial",
+        "models",
+    },
 }
 HTTP_FRAMEWORKS = {"fastapi", "starlette"}
 
@@ -78,6 +89,8 @@ def test_the_worker_can_reach_no_user_facing_service() -> None:
         "meip.documents.models",
         "meip.documents.pdfcheck",
         "meip.documents.storage",
+        # The model registry only (no services): lets the standalone worker resolve foreign keys.
+        "meip.models",
         "meip.tenancy.context",
         "meip.tenancy.permissions",
     }

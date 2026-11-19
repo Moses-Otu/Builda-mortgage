@@ -454,14 +454,28 @@ async def run_worker(
     settings: Settings,
     stop: asyncio.Event,
 ) -> None:
-    """Process jobs until ``stop`` is set; the current job always finishes first."""
+    """Process jobs until ``stop`` is set; the current job always finishes first.
+
+    An error that escapes a job (for example in its retry bookkeeping) is logged by type and
+    the loop carries on: one bad job must not stop processing for everyone. The job's lock
+    expires and it is claimed again, counting towards its attempts."""
     while not stop.is_set():
-        if not await run_once(sessionmaker, store, settings):
+        try:
+            worked = await run_once(sessionmaker, store, settings)
+        except Exception as exc:  # logged by type; the loop must survive
+            _log.error("worker_loop_error", error_type=type(exc).__name__)
+            worked = False
+        if not worked:
             with contextlib.suppress(TimeoutError):
                 await asyncio.wait_for(stop.wait(), timeout=settings.worker_poll_seconds)
 
 
 def main() -> int:
+    # Register every table, as the API does through its routers. Documents, jobs and runs have
+    # foreign keys to cases, applicants, tenants and users; without the full registry the
+    # standalone worker cannot resolve them and fails every job (found in the 2-E walkthrough).
+    import meip.models  # noqa: F401
+
     settings = get_settings()
     configure_logging(settings.log_level, settings.log_json)
     if not settings.documents_enabled:  # fail closed, like the API

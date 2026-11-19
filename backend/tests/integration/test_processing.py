@@ -422,3 +422,68 @@ def test_the_pdf_child_process_gets_no_secrets(
 
     assert check_pdf(tmp_dir / "x.pdf", 5).pages == 1
     assert not [k for k in seen["env"] if k.startswith("MEIP_")]
+
+
+def test_the_standalone_worker_registers_every_table() -> None:
+    """Regression (2-E walkthrough): run as ``meip-worker``, the worker imported only the
+    document models, so foreign keys to cases, applicants and users could not be resolved
+    and every job failed. Checked in fresh interpreters that load only the worker module."""
+    resolve = "[fk.column for t in Base.metadata.tables.values() for fk in t.foreign_keys]"
+    bare = chr(10).join(
+        ["import meip.documents.processing", "from meip.core.db import Base", resolve]
+    )
+    fixed = chr(10).join(
+        [
+            "import inspect",
+            "import meip.documents.processing as worker",
+            "assert 'import meip.models' in inspect.getsource(worker.main)",
+            "import meip.models",
+            "from meip.core.db import Base",
+            resolve,
+            "print('ok')",
+        ]
+    )
+    env = {k: v for k, v in os.environ.items() if not k.startswith("MEIP_")}
+
+    def run(code: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(  # noqa: S603 - fixed interpreter and code
+            [sys.executable, "-c", code],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+
+    without = run(bare)
+    assert "NoReferencedTableError" in without.stderr  # the failure the fix addresses
+    result = run(fixed)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "ok"
+
+
+async def test_the_worker_loop_survives_an_error_that_escapes_a_job(
+    worker: Worker, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression (2-E walkthrough): an exception outside a job's own error handling ended
+    the worker process. The loop now logs it and keeps going."""
+    from structlog.testing import capture_logs
+
+    calls = 0
+    stop = asyncio.Event()
+
+    async def flaky(*args: Any) -> bool:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise RuntimeError("escaped a job")
+        stop.set()
+        return False
+
+    monkeypatch.setattr(processing, "run_once", flaky)
+    with capture_logs() as logs:
+        await asyncio.wait_for(run_worker(*worker, stop), timeout=10)
+    assert calls == 2  # it carried on after the error
+    assert [e for e in logs if e["event"] == "worker_loop_error"] == [
+        {"event": "worker_loop_error", "error_type": "RuntimeError", "log_level": "error"}
+    ]
