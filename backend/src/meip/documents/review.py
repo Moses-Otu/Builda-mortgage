@@ -26,7 +26,9 @@ from meip.audit import service as audit
 from meip.audit.service import AuditAction
 from meip.cases.service import get_case, require_editable
 from meip.core.errors import BusinessRuleError, ConflictError, NotFoundError, VersionConflictError
+from meip.documents import statement_review
 from meip.documents.models import (
+    BankAccount,
     Decision,
     Document,
     DocumentReview,
@@ -194,8 +196,7 @@ async def submit_review(
     # The case lock serialises every write to the case, including concurrent reviews.
     require_editable(await get_case(ctx, case_id, for_update=True))
     document, _, run = await _load(ctx, case_id, document_id)
-    if document.document_type != DocumentType.PAYSLIP.value:
-        raise ConflictError("Only payslips can be reviewed here; statement confirmation is 2B-2")
+    is_statement = document.document_type == DocumentType.BANK_STATEMENT.value
     # "Already reviewed" comes first: a duplicate or concurrent submission carries the same,
     # now stale, If-Match, and must learn that the review exists rather than get a 412.
     if document.status == DocumentStatus.REVIEWED.value and run is not None:
@@ -230,6 +231,15 @@ async def submit_review(
         raise BusinessRuleError(f"Unknown fields: {unknown}")
     if missing:
         raise BusinessRuleError(f"Every field needs a decision; missing: {missing}")
+    if is_statement:
+        confirmed = await statement_review.confirm_statement(
+            ctx, case_id, document, run, fields, decisions, body
+        )
+        return await _out(ctx, confirmed.review, fields, document.id)
+    if body.income_source_id is None:
+        raise BusinessRuleError("A payslip review needs income_source_id")
+    if body.bank_account_id is not None or body.new_account is not None:
+        raise BusinessRuleError("A payslip is reviewed against an income source, not an account")
     decided = []
     for ordinal, f in by_ordinal.items():
         measure, qualifier = _check_decision(f, decisions[ordinal])
@@ -402,11 +412,19 @@ async def _out(
                 observation_id=observations.get(r.id),
             )
         )
+    bank_account = integrity = None
+    if review.bank_account_id is not None:
+        account = await ctx.session.get(BankAccount, review.bank_account_id)
+        if account is not None:
+            bank_account = await statement_review.account_out(ctx, account)
+        integrity = await statement_review.confirmed_integrity(ctx, review, fields)
     return ReviewOut(
         id=review.id,
         document_id=document_id,
         income_source_id=review.income_source_id,
-        frequency=Frequency(review.frequency),
+        frequency=Frequency(review.frequency) if review.frequency else None,
+        bank_account=bank_account,
+        integrity=integrity,
         reviewed_by_user_id=review.reviewed_by_user_id,
         created_at=review.created_at,
         decisions=decisions,

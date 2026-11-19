@@ -273,6 +273,7 @@ function UploadZone(props: {
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [documentType, setDocumentType] = useState<"payslip" | "bank_statement">("payslip");
 
   function pick(candidate: File | undefined) {
     setError(null);
@@ -299,7 +300,7 @@ function UploadZone(props: {
     if (!file || !applicantId) return;
     setBusy(true);
     setError(null);
-    const result = await uploadPdf<DocumentOut>(caseId, file, applicantId);
+    const result = await uploadPdf<DocumentOut>(caseId, file, applicantId, documentType);
     setBusy(false);
     if (result.ok) {
       toast("success", "Uploaded. Processing has started.");
@@ -312,18 +313,30 @@ function UploadZone(props: {
 
   return (
     <div className="flex flex-col gap-3">
-      {applicants.length > 1 && (
-        <Label className="max-w-xs">
-          File under
-          <Select value={applicantId} onChange={(e) => onApplicant(e.target.value)}>
-            {applicants.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.first_name} {a.last_name}
-              </option>
-            ))}
+      <div className="flex flex-wrap gap-3">
+        <Label className="w-56">
+          Document type
+          <Select
+            value={documentType}
+            onChange={(e) => setDocumentType(e.target.value as "payslip" | "bank_statement")}
+          >
+            <option value="payslip">Payslip</option>
+            <option value="bank_statement">Bank statement</option>
           </Select>
         </Label>
-      )}
+        {applicants.length > 1 && (
+          <Label className="w-56">
+            File under
+            <Select value={applicantId} onChange={(e) => onApplicant(e.target.value)}>
+              {applicants.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.first_name} {a.last_name}
+                </option>
+              ))}
+            </Select>
+          </Label>
+        )}
+      </div>
       {file ? (
         <div className="flex items-center gap-3 rounded-xl border border-brand-200 bg-brand-50 p-4">
           <span className="grid size-10 place-items-center rounded-lg bg-white text-brand-600">
@@ -361,7 +374,7 @@ function UploadZone(props: {
           <span className="grid size-10 place-items-center rounded-full bg-brand-50 text-brand-600">
             <FileUp className="size-5" />
           </span>
-          <span className="text-sm font-medium">Drop a payslip PDF here, or click to choose</span>
+          <span className="text-sm font-medium">Drop a {documentType === "bank_statement" ? "bank statement" : "payslip"} PDF here, or click to choose</span>
           <span className="text-xs text-slate-500">Synthetic documents only · upload the file exactly as generated</span>
         </button>
       )}
@@ -395,9 +408,13 @@ function DocumentList(props: {
         const isStatement = d.document_type === "bank_statement";
         const status = documentStatusView(d.status, d.failure_code);
         const view =
-          isStatement && d.status === "extracted" ? { ...status, label: "Extracted", tone: "info" as const } : status;
+          isStatement && d.status === "extracted"
+            ? { ...status, label: "Ready to confirm" }
+            : isStatement && d.status === "reviewed"
+              ? { ...status, label: "Confirmed" }
+              : status;
         const href = `/cases/${caseId}/documents/${d.id}`;
-        const canOpen = !isStatement && (d.status === "extracted" || d.status === "reviewed");
+        const canOpen = d.status === "extracted" || d.status === "reviewed";
         return (
           <li key={d.id} className="rounded-xl border border-slate-200 p-4">
             <div className="flex items-center gap-3">
@@ -421,7 +438,7 @@ function DocumentList(props: {
               {canOpen && (
                 <Button asChild size="sm" variant={d.status === "extracted" ? "primary" : "secondary"}>
                   <Link href={href}>
-                    {d.status === "extracted" ? "Review" : "View review"} <ArrowRight />
+                    {d.status === "extracted" ? (isStatement ? "Confirm" : "Review") : "View"} <ArrowRight />
                   </Link>
                 </Button>
               )}

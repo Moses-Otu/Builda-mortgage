@@ -38,8 +38,9 @@ export async function uploadPdf<T>(
   caseId: string,
   file: File,
   applicantId: string,
+  documentType: "payslip" | "bank_statement" = "payslip",
 ): Promise<Result<T>> {
-  const query = new URLSearchParams({ document_type: "payslip", applicant_id: applicantId });
+  const query = new URLSearchParams({ document_type: documentType, applicant_id: applicantId });
   return read<T>(
     await fetch(`${API}/cases/${caseId}/documents?${query.toString()}`, {
       method: "POST",

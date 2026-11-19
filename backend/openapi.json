@@ -1,6 +1,49 @@
 {
   "components": {
     "schemas": {
+      "AccountMatchOut": {
+        "description": "Which confirmed account this statement appears to belong to (a suggestion only).",
+        "properties": {
+          "account_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Id"
+          },
+          "same_ending_account_ids": {
+            "description": "Other accounts on the case with the same last 4 digits but a different or unknown fingerprint: shown as different accounts, never merged",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Same Ending Account Ids",
+            "type": "array"
+          },
+          "status": {
+            "description": "existing: the fingerprint matches an account on the case; new: it matches none; unverified: the statement doesn't print the full number",
+            "enum": [
+              "existing",
+              "new",
+              "unverified"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "account_id",
+          "same_ending_account_ids"
+        ],
+        "title": "AccountMatchOut",
+        "type": "object"
+      },
       "AcknowledgementIn": {
         "additionalProperties": false,
         "properties": {
@@ -555,6 +598,74 @@
           "changes"
         ],
         "title": "AuditEventOut",
+        "type": "object"
+      },
+      "BankAccountOut": {
+        "description": "Never the account number or sort code: the last 4 digits only, and whether a keyed\nfingerprint confirms the account's identity.",
+        "properties": {
+          "account_ending": {
+            "title": "Account Ending",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "fingerprinted": {
+            "description": "True when a statement printed the full number, so its identity is verified by the keyed fingerprint; false when it relies on the broker's assignment",
+            "title": "Fingerprinted",
+            "type": "boolean"
+          },
+          "holders": {
+            "items": {
+              "$ref": "#/components/schemas/HolderOut"
+            },
+            "title": "Holders",
+            "type": "array"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "joint": {
+            "description": "Two or more holders",
+            "title": "Joint",
+            "type": "boolean"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "statement_document_ids": {
+            "description": "Confirmed statements",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Statement Document Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "account_ending",
+          "label",
+          "fingerprinted",
+          "joint",
+          "holders",
+          "statement_document_ids",
+          "created_at"
+        ],
+        "title": "BankAccountOut",
         "type": "object"
       },
       "CaseCreate": {
@@ -2224,6 +2335,17 @@
       },
       "ExtractionOut": {
         "properties": {
+          "account_match": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AccountMatchOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Bank statements: the suggested account"
+          },
           "classification": {
             "description": "'payslip', 'bank_statement' or 'unrecognised'",
             "title": "Classification",
@@ -2244,6 +2366,17 @@
             },
             "title": "Deductions",
             "type": "array"
+          },
+          "integrity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IntegrityOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Bank statements: the balance checks on the extracted values"
           },
           "markers": {
             "description": "Classification marker groups found (names only)",
@@ -2792,6 +2925,42 @@
         "title": "HealthOut",
         "type": "object"
       },
+      "HolderIn": {
+        "additionalProperties": false,
+        "properties": {
+          "applicant_id": {
+            "description": "An active applicant on the case",
+            "format": "uuid",
+            "title": "Applicant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "applicant_id"
+        ],
+        "title": "HolderIn",
+        "type": "object"
+      },
+      "HolderOut": {
+        "properties": {
+          "added_at": {
+            "format": "date-time",
+            "title": "Added At",
+            "type": "string"
+          },
+          "applicant_id": {
+            "format": "uuid",
+            "title": "Applicant Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "applicant_id",
+          "added_at"
+        ],
+        "title": "HolderOut",
+        "type": "object"
+      },
       "IncomeKind": {
         "enum": [
           "employment",
@@ -3123,6 +3292,58 @@
           }
         },
         "title": "IncomeSourceUpdate",
+        "type": "object"
+      },
+      "IntegrityOut": {
+        "description": "Mathematical validation of a statement: separate from the broker's confirmation.",
+        "properties": {
+          "break_row": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The first row where the running balance breaks",
+            "title": "Break Row"
+          },
+          "running": {
+            "enum": [
+              "passed",
+              "discrepancy",
+              "not_run"
+            ],
+            "title": "Running",
+            "type": "string"
+          },
+          "running_message": {
+            "title": "Running Message",
+            "type": "string"
+          },
+          "totals": {
+            "enum": [
+              "passed",
+              "discrepancy",
+              "not_run"
+            ],
+            "title": "Totals",
+            "type": "string"
+          },
+          "totals_message": {
+            "title": "Totals Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "totals",
+          "totals_message",
+          "running",
+          "running_message",
+          "break_row"
+        ],
+        "title": "IntegrityOut",
         "type": "object"
       },
       "InvitationOut": {
@@ -3514,6 +3735,41 @@
           "amount_minor"
         ],
         "title": "MoneyValue",
+        "type": "object"
+      },
+      "NewAccountIn": {
+        "additionalProperties": false,
+        "description": "A bank account confirmed for the first time, with the applicants who hold it.",
+        "properties": {
+          "holder_ids": {
+            "description": "Applicants on the case who hold the account (two or more: joint)",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Holder Ids",
+            "type": "array"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional, e.g. 'Current account'",
+            "title": "Label"
+          }
+        },
+        "required": [
+          "holder_ids"
+        ],
+        "title": "NewAccountIn",
         "type": "object"
       },
       "ObservationCreate": {
@@ -4131,7 +4387,21 @@
       },
       "ReviewIn": {
         "additionalProperties": false,
+        "description": "A payslip review (``income_source_id``, optional ``frequency``) or a bank statement\nconfirmation (``bank_account_id`` **or** ``new_account``), by the document's type.",
         "properties": {
+          "bank_account_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Statements: an existing account on the case",
+            "title": "Bank Account Id"
+          },
           "decisions": {
             "description": "Exactly one decision for every field",
             "items": {
@@ -4151,17 +4421,34 @@
                 "type": "null"
               }
             ],
-            "description": "Needed only when the payslip's frequency can't be read"
+            "description": "Payslips: needed only when the frequency can't be read"
           },
           "income_source_id": {
-            "description": "An existing income source on the case; a payslip never creates one",
-            "format": "uuid",
-            "title": "Income Source Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Payslips: an existing income source on the case (a payslip never creates one)",
+            "title": "Income Source Id"
+          },
+          "new_account": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NewAccountIn"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Statements: a new account and its holders"
           }
         },
         "required": [
-          "income_source_id",
           "decisions"
         ],
         "title": "ReviewIn",
@@ -4169,6 +4456,17 @@
       },
       "ReviewOut": {
         "properties": {
+          "bank_account": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BankAccountOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Statements"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -4187,7 +4485,15 @@
             "type": "string"
           },
           "frequency": {
-            "$ref": "#/components/schemas/Frequency"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Frequency"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Payslips"
           },
           "id": {
             "format": "uuid",
@@ -4195,9 +4501,28 @@
             "type": "string"
           },
           "income_source_id": {
-            "format": "uuid",
-            "title": "Income Source Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Payslips",
+            "title": "Income Source Id"
+          },
+          "integrity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IntegrityOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Statements: the balance checks on the confirmed values. Confirmation never clears a discrepancy"
           },
           "reviewed_by_user_id": {
             "anyOf": [
@@ -5393,6 +5718,151 @@
         "summary": "Remove an applicant from the case",
         "tags": [
           "applicants"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/bank-accounts": {
+      "get": {
+        "description": "Each account with its holders (the case's applicants), whether it is joint, and its confirmed statements.",
+        "operationId": "list_accounts_api_v1_cases__case_id__bank_accounts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BankAccountOut"
+                  },
+                  "title": "Response List Accounts Api V1 Cases  Case Id  Bank Accounts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List the case's bank accounts",
+        "tags": [
+          "bank accounts"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/bank-accounts/{account_id}/holders": {
+      "post": {
+        "description": "An applicant on the case who also holds the account (making it joint). Holders are added, never changed or removed. Audited.",
+        "operationId": "add_holder_api_v1_cases__case_id__bank_accounts__account_id__holders_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "account_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Account Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HolderIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BankAccountOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Case or account not found"
+          },
+          "409": {
+            "description": "The applicant already holds the account"
+          },
+          "422": {
+            "description": "Not an active applicant on the case, or a closed case"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Add a holder to an account",
+        "tags": [
+          "bank accounts"
         ]
       }
     },

@@ -199,8 +199,11 @@ UPDATE_OPENAPI_SNAPSHOT=1 uv run pytest tests/integration/test_schema.py
   and box; it refuses statements with several accounts, a foreign currency or no table.
   The full account number and sort code are never stored in columns; a keyed fingerprint
   (`MEIP_ACCOUNT_FINGERPRINT_KEY`, fixed development key locally) tells accounts apart. They
-  remain in the original and the raw provider output. Statement confirmation and the bank
-  checks arrive in 2B-2 and 2B-3. Demo statements: `bank_statement_series()` in
+  remain in the original and the raw provider output. **Confirmation (2B-2):**
+  `POST …/documents/{id}/review` with the summary decisions and either `bank_account_id` or
+  `new_account: {holder_ids, label}`; accounts are listed by `GET …/bank-accounts` and gain
+  holders through `POST …/bank-accounts/{id}/holders`. Confirming saves no figures and never
+  clears a balance discrepancy. The bank checks arrive in 2B-3. Demo statements: `bank_statement_series()` in
   `tests/synthetic_docs.py`.
 - **Tests and `.env`:** the suite sets `MEIP_ENV_FILE` to empty (in `tests/__init__.py`), so a
   local `backend/.env` never leaks into tests. Outside tests, `MEIP_ENV_FILE` chooses the

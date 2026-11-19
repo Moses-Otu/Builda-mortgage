@@ -8,6 +8,7 @@ import { Breadcrumbs, Loading, PageContainer, RequireFirm } from "@/components/P
 import { type Highlight, PdfView } from "@/components/PdfView";
 import { FieldRow } from "@/components/review/FieldRow";
 import { SavedReview } from "@/components/review/SavedReview";
+import { StatementReview } from "@/components/statement/StatementReview";
 import { SaveReviewDialog } from "@/components/review/SaveReviewDialog";
 import { ShortcutsDialog } from "@/components/review/ShortcutsDialog";
 import { caseTitle, useCaseSummary } from "@/components/useCaseSummary";
@@ -58,7 +59,21 @@ const FILTERS: Array<{ key: Filter; label: string }> = [
 
 export default function ReviewRoute() {
   const { caseId, documentId } = useParams<{ caseId: string; documentId: string }>();
-  return <RequireFirm>{() => <ReviewPage caseId={caseId} documentId={documentId} />}</RequireFirm>;
+  return <RequireFirm>{() => <DocumentScreen caseId={caseId} documentId={documentId} />}</RequireFirm>;
+}
+
+/** Payslips are reviewed; bank statements are confirmed (Stage 2-B): a different screen. */
+function DocumentScreen({ caseId, documentId }: { caseId: string; documentId: string }) {
+  const [type, setType] = useState<string | null>(null);
+  useEffect(() => {
+    void (async () => {
+      const d = await get<DocumentOut>(`cases/${caseId}/documents/${documentId}`);
+      setType(d.ok ? d.data.document_type : "payslip"); // on error, the payslip screen shows it
+    })();
+  }, [caseId, documentId]);
+  if (type === null) return <Loading />;
+  if (type === "bank_statement") return <StatementReview caseId={caseId} documentId={documentId} />;
+  return <ReviewPage caseId={caseId} documentId={documentId} />;
 }
 
 function ReviewPage({ caseId, documentId }: { caseId: string; documentId: string }) {

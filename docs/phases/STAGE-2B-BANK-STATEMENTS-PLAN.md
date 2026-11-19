@@ -2,7 +2,8 @@
 
 Status: **Revision 2 approved; decisions C1–C7 approved as recommended (2026-11-19). Built step
 by step, each reviewed before the next: 2B-0 and 2B-1 implemented (see
-[STAGE-2B-1-REPORT.md](STAGE-2B-1-REPORT.md)); 2B-2 and 2B-3 not started.** · Date: 2026-11-19 · Roadmap: [Stage 2](../ROADMAP.md) · Baseline:
+[STAGE-2B-1-REPORT.md](STAGE-2B-1-REPORT.md)); 2B-2 implemented (see
+[STAGE-2B-2-REPORT.md](STAGE-2B-2-REPORT.md)); 2B-3 not started.** · Date: 2026-11-19 · Roadmap: [Stage 2](../ROADMAP.md) · Baseline:
 `85324f4` (Stage 2-A)
 
 **Revision 2** applies your eight refinements. The three-step delivery and the scope

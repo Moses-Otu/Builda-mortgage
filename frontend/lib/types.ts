@@ -104,6 +104,68 @@ export interface Extraction {
   deductions: ExtractedField[];
   year_to_date: ExtractedField[];
   missing_required: string[];
+  // Bank statements (Stage 2-B)
+  transactions?: Transaction[];
+  integrity?: Integrity | null;
+  account_match?: AccountMatch | null;
+}
+
+export interface Cell {
+  text: string;
+  page: number;
+  box: [number, number, number, number];
+}
+
+export interface Transaction {
+  row_number: number;
+  kind: "transaction" | "brought_forward" | "carried_forward" | "unparsed";
+  posted_on: string | null;
+  description: string;
+  description_truncated: boolean;
+  paid_in_minor: number | null;
+  paid_out_minor: number | null;
+  balance_minor: number | null;
+  cells: {
+    date: Cell | null;
+    date_inherited: boolean;
+    description: Cell[];
+    paid_out: Cell | null;
+    paid_in: Cell | null;
+    balance: Cell | null;
+    other: Cell[];
+  };
+  row_evidence: Evidence;
+  page_width: number;
+  page_height: number;
+  unit: string;
+}
+
+export type CheckOutcome = "passed" | "discrepancy" | "not_run";
+
+/** Mathematical validation of a statement: separate from the broker's confirmation. */
+export interface Integrity {
+  totals: CheckOutcome;
+  totals_message: string;
+  running: CheckOutcome;
+  running_message: string;
+  break_row: number | null;
+}
+
+export interface AccountMatch {
+  status: "existing" | "new" | "unverified";
+  account_id: Uuid | null;
+  same_ending_account_ids: Uuid[];
+}
+
+export interface BankAccount {
+  id: Uuid;
+  account_ending: string;
+  label: string | null;
+  fingerprinted: boolean;
+  joint: boolean;
+  holders: { applicant_id: Uuid; added_at: string }[];
+  statement_document_ids: Uuid[];
+  created_at: string;
 }
 
 export type Section = "summary" | "payments" | "deductions" | "year_to_date";
@@ -123,8 +185,10 @@ export interface FieldDecisionIn {
 }
 
 export interface ReviewIn {
-  income_source_id: Uuid;
+  income_source_id?: Uuid;
   frequency?: string;
+  bank_account_id?: Uuid;
+  new_account?: { holder_ids: Uuid[]; label?: string | null };
   decisions: FieldDecisionIn[];
 }
 
@@ -150,8 +214,10 @@ export interface FieldDecisionOut {
 export interface ReviewOut {
   id: Uuid;
   document_id: Uuid;
-  income_source_id: Uuid;
-  frequency: string;
+  income_source_id: Uuid | null;
+  frequency: string | null;
+  bank_account?: BankAccount | null;
+  integrity?: Integrity | null;
   created_at: string;
   decisions: FieldDecisionOut[];
 }

@@ -53,13 +53,25 @@ export function SavedReview(props: {
       <div className="flex items-start gap-3 rounded-lg border border-green-200 bg-accept-soft p-3 text-sm">
         <CircleCheck className="mt-0.5 size-4 shrink-0 text-accept" />
         <div className="text-green-950">
-          <p className="font-medium">
-            Reviewed {formatDateTime(review.created_at)} · {saved} figure{saved === 1 ? "" : "s"} saved
-          </p>
-          <p className="opacity-80">
-            Saved to {sourceName}, {frequencyLabel(review.frequency).toLowerCase()}. Later corrections go through the
-            case&apos;s financial records.
-          </p>
+          {review.frequency ? (
+            <>
+              <p className="font-medium">
+                Reviewed {formatDateTime(review.created_at)} · {saved} figure{saved === 1 ? "" : "s"} saved
+              </p>
+              <p className="opacity-80">
+                Saved to {sourceName}, {frequencyLabel(review.frequency).toLowerCase()}. Later corrections go
+                through the case&apos;s financial records.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="font-medium">Confirmed {formatDateTime(review.created_at)} · no figures saved</p>
+              <p className="opacity-80">
+                Confirmed to {sourceName}. Confirming records that the extracted information matches the
+                document; it doesn&apos;t change the balance checks.
+              </p>
+            </>
+          )}
         </div>
       </div>
 

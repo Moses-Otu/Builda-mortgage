@@ -47,6 +47,7 @@ AUDITED_ROUTES: dict[Route, str] = {
     ("POST", _F + "/observations"): "observation.recorded",
     ("POST", _F + "/observations/{observation_id}/retirement"): "observation.retired",
     ("POST", _C + "/checks/{finding_key}/acknowledgement"): "check.acknowledged",
+    ("POST", _C + "/bank-accounts/{account_id}/holders"): "bank_account.holder_added",
 }
 
 
@@ -238,6 +239,11 @@ ACTIONS: dict[Route, Action] = {
         f"{_case(s)}/checks/{s['finding_key']}/acknowledgement",
         json={"note": "Seen; client to explain"},
     ),
+    ("POST", _C + "/bank-accounts/{account_id}/holders"): lambda f, s: f.request(
+        "POST",
+        f"{_case(s)}/bank-accounts/{s['account_id']}/holders",
+        json={"applicant_id": s["second"]["id"]},
+    ),
 }
 
 
@@ -277,10 +283,42 @@ async def _discrepancy(firm: Firm, state: dict[str, Any]) -> None:
     )
 
 
+async def _confirmed_account(firm: Firm, state: dict[str, Any]) -> None:
+    """A synthetic statement confirmed to a new account held by the first applicant."""
+    from meip.documents.processing import run_once
+    from tests.synthetic_docs import bank_statement_series, payslip_series, salaries_from
+
+    statement = bank_statement_series(salaries_from(payslip_series(months=1)), months=1)[0]
+    upload = await firm.upload(
+        state["case"]["id"], statement.document.pdf(), document_type="bank_statement"
+    )
+    assert upload.status_code == 201, upload.text
+    app = firm.client._transport.app  # type: ignore[attr-defined] # the test ASGI app
+    while await run_once(app.state.sessionmaker, app.state.blob_store, app.state.settings):
+        pass
+    base = f"{_case(state)}/documents/{upload.json()['id']}"
+    document = (await firm.request("GET", base)).json()
+    extraction = (await firm.request("GET", f"{base}/extraction")).json()
+    review = await firm.request(
+        "POST",
+        f"{base}/review",
+        if_match=document["version"],
+        json={
+            "decisions": [
+                {"ordinal": f["ordinal"], "decision": "accept"} for f in extraction["summary"]
+            ],
+            "new_account": {"holder_ids": [state["applicant"]["id"]]},
+        },
+    )
+    assert review.status_code == 201, review.text
+    state["account_id"] = review.json()["bank_account"]["id"]
+
+
 # Routes whose action needs state that itself writes audit events.
 PREPARE: dict[Route, Callable[[Firm, dict[str, Any]], Awaitable[None]]] = {
     ("POST", "/api/v1/cases/{case_id}/documents/{document_id}/review"): _extracted_payslip,
     ("POST", _C + "/checks/{finding_key}/acknowledgement"): _discrepancy,
+    ("POST", _C + "/bank-accounts/{account_id}/holders"): _confirmed_account,
 }
 
 

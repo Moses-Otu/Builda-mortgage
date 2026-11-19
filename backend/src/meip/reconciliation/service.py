@@ -126,6 +126,8 @@ async def _load(
 
     payslips: list[rules.Payslip] = []
     for review, version_id, document_id in reviews:
+        if review.income_source_id is None or review.frequency is None:
+            continue  # a bank statement confirmation, not a payslip review
         if review.income_source_id not in sources:
             continue  # withdrawn income source: its figures are retired too
         figures: list[rules.Figure] = []

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -136,6 +137,12 @@ class ExtractionOut(BaseModel):
     transactions: list[TransactionOut] = Field(
         default_factory=list, description="Bank statements only: every printed table row"
     )
+    integrity: IntegrityOut | None = Field(
+        default=None, description="Bank statements: the balance checks on the extracted values"
+    )
+    account_match: AccountMatchOut | None = Field(
+        default=None, description="Bank statements: the suggested account"
+    )
 
 
 class FieldDecisionIn(InputModel):
@@ -157,15 +164,88 @@ class FieldDecisionIn(InputModel):
     )
 
 
+class NewAccountIn(InputModel):
+    """A bank account confirmed for the first time, with the applicants who hold it."""
+
+    holder_ids: list[uuid.UUID] = Field(
+        min_length=1,
+        max_length=10,
+        description="Applicants on the case who hold the account (two or more: joint)",
+    )
+    label: str | None = Field(
+        default=None, max_length=100, description="Optional, e.g. 'Current account'"
+    )
+
+
 class ReviewIn(InputModel):
-    income_source_id: uuid.UUID = Field(
-        description="An existing income source on the case; a payslip never creates one"
+    """A payslip review (``income_source_id``, optional ``frequency``) or a bank statement
+    confirmation (``bank_account_id`` **or** ``new_account``), by the document's type."""
+
+    income_source_id: uuid.UUID | None = Field(
+        default=None,
+        description="Payslips: an existing income source on the case (a payslip never creates one)",
     )
     frequency: Frequency | None = Field(
-        default=None, description="Needed only when the payslip's frequency can't be read"
+        default=None, description="Payslips: needed only when the frequency can't be read"
+    )
+    bank_account_id: uuid.UUID | None = Field(
+        default=None, description="Statements: an existing account on the case"
+    )
+    new_account: NewAccountIn | None = Field(
+        default=None, description="Statements: a new account and its holders"
     )
     decisions: list[FieldDecisionIn] = Field(
         min_length=1, max_length=500, description="Exactly one decision for every field"
+    )
+
+
+class HolderIn(InputModel):
+    applicant_id: uuid.UUID = Field(description="An active applicant on the case")
+
+
+class HolderOut(BaseModel):
+    applicant_id: uuid.UUID
+    added_at: datetime
+
+
+class BankAccountOut(BaseModel):
+    """Never the account number or sort code: the last 4 digits only, and whether a keyed
+    fingerprint confirms the account's identity."""
+
+    id: uuid.UUID
+    account_ending: str
+    label: str | None
+    fingerprinted: bool = Field(
+        description="True when a statement printed the full number, so its identity is "
+        "verified by the keyed fingerprint; false when it relies on the broker's assignment"
+    )
+    joint: bool = Field(description="Two or more holders")
+    holders: list[HolderOut]
+    statement_document_ids: list[uuid.UUID] = Field(description="Confirmed statements")
+    created_at: datetime
+
+
+class IntegrityOut(BaseModel):
+    """Mathematical validation of a statement: separate from the broker's confirmation."""
+
+    totals: Literal["passed", "discrepancy", "not_run"]
+    totals_message: str
+    running: Literal["passed", "discrepancy", "not_run"]
+    running_message: str
+    break_row: int | None = Field(description="The first row where the running balance breaks")
+
+
+class AccountMatchOut(BaseModel):
+    """Which confirmed account this statement appears to belong to (a suggestion only)."""
+
+    status: Literal["existing", "new", "unverified"] = Field(
+        description="existing: the fingerprint matches an account on the case; new: it "
+        "matches none; unverified: the statement doesn't print the full number"
+    )
+    account_id: uuid.UUID | None
+    same_ending_account_ids: list[uuid.UUID] = Field(
+        description="Other accounts on the case with the same last 4 digits but a different "
+        "or unknown fingerprint: shown as different accounts, never merged"
     )
 
 
@@ -191,8 +271,14 @@ class FieldDecisionOut(BaseModel):
 class ReviewOut(BaseModel):
     id: uuid.UUID
     document_id: uuid.UUID
-    income_source_id: uuid.UUID
-    frequency: Frequency
+    income_source_id: uuid.UUID | None = Field(description="Payslips")
+    frequency: Frequency | None = Field(description="Payslips")
+    bank_account: BankAccountOut | None = Field(default=None, description="Statements")
+    integrity: IntegrityOut | None = Field(
+        default=None,
+        description="Statements: the balance checks on the confirmed values. Confirmation "
+        "never clears a discrepancy",
+    )
     reviewed_by_user_id: uuid.UUID | None
     created_at: datetime
     decisions: list[FieldDecisionOut]

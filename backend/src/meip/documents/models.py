@@ -415,9 +415,68 @@ class Decision(StrEnum):
     REJECT = "reject"
 
 
+class BankAccount(Base):
+    """A bank account on a case, as confirmed by a broker (Stage 2-B). Holds only the last 4
+    digits and the keyed fingerprint of the first statement that carried one: never the
+    account number or sort code. Two accounts can share their last 4 digits; the fingerprint
+    (unique per case) keeps them apart. Insert-only for the runtime role."""
+
+    __tablename__ = "bank_accounts"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "case_id", "id"),
+        UniqueConstraint("tenant_id", "case_id", "fingerprint"),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id"], ["cases.tenant_id", "cases.id"], name="fk_bank_accounts_case"
+        ),
+        CheckConstraint("account_ending ~ '^[0-9]{4}$'", name="account_ending"),
+        CheckConstraint(
+            "fingerprint IS NULL OR fingerprint ~ '^[0-9a-f]{64}$'", name="fingerprint"
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
+    case_id: Mapped[uuid.UUID] = mapped_column()
+    account_ending: Mapped[str] = mapped_column(String(4))
+    fingerprint: Mapped[str | None] = mapped_column(String(64))
+    label: Mapped[str | None] = mapped_column(String(100))
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
+class BankAccountHolder(Base):
+    """An applicant on the case who holds the account, as stated by the broker. One holder is
+    a sole account; two or more a joint account (derived, never typed in). Holders are the
+    case's applicants: names printed on statements are never extracted. Insert-only."""
+
+    __tablename__ = "bank_account_holders"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "account_id"],
+            ["bank_accounts.tenant_id", "bank_accounts.case_id", "bank_accounts.id"],
+            name="fk_bank_account_holders_account",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "applicant_id"],
+            ["applicants.tenant_id", "applicants.case_id", "applicants.id"],
+            name="fk_bank_account_holders_applicant",
+        ),
+    )
+
+    account_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    applicant_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
+    case_id: Mapped[uuid.UUID] = mapped_column()
+    added_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
 class DocumentReview(Base):
-    """A broker's review of one extraction run: the income source the payslip is evidence
-    for, and the frequency used. One per run. Insert-only for the runtime role."""
+    """A broker's review of one extraction run. One per run. Insert-only for the runtime role.
+
+    Either a **payslip review** (the income source it is evidence for and the frequency used)
+    or a **statement confirmation** (the bank account it belongs to); a CHECK allows exactly
+    one shape."""
 
     __tablename__ = "document_reviews"
     __table_args__ = (
@@ -433,10 +492,20 @@ class DocumentReview(Base):
             ["income_sources.tenant_id", "income_sources.case_id", "income_sources.id"],
             name="fk_document_reviews_income_source",
         ),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "bank_account_id"],
+            ["bank_accounts.tenant_id", "bank_accounts.case_id", "bank_accounts.id"],
+            name="fk_document_reviews_bank_account",
+        ),
         CheckConstraint(
             "frequency IN ('one_off', 'weekly', 'fortnightly', 'four_weekly', 'monthly', "
             "'quarterly', 'annual')",
             name="frequency",
+        ),
+        CheckConstraint(
+            "(income_source_id IS NOT NULL AND frequency IS NOT NULL AND bank_account_id IS NULL)"
+            " OR (income_source_id IS NULL AND frequency IS NULL AND bank_account_id IS NOT NULL)",
+            name="payslip_or_statement",
         ),
     )
 
@@ -444,8 +513,9 @@ class DocumentReview(Base):
     tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
     case_id: Mapped[uuid.UUID] = mapped_column()
     run_id: Mapped[uuid.UUID] = mapped_column()
-    income_source_id: Mapped[uuid.UUID] = mapped_column()
-    frequency: Mapped[str] = mapped_column(String(16))
+    income_source_id: Mapped[uuid.UUID | None] = mapped_column()
+    frequency: Mapped[str | None] = mapped_column(String(16))
+    bank_account_id: Mapped[uuid.UUID | None] = mapped_column()
     reviewed_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
 

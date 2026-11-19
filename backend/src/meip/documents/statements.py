@@ -455,6 +455,148 @@ def _table_row(
     return out
 
 
+# --- mathematical validation (pure; shown at confirmation, reused by bank-checks/1) ---------
+
+BALANCE_ALLOWANCE = 1  # pence
+
+
+class Check(StrEnum):
+    PASSED = "passed"
+    DISCREPANCY = "discrepancy"
+    NOT_RUN = "not_run"
+
+
+@dataclass(frozen=True)
+class SimpleRow:
+    """A stored or extracted row reduced to what the balance checks need."""
+
+    row_number: int
+    kind: str
+    paid_in: int | None
+    paid_out: int | None
+    balance: int | None
+    posted_on: date | None = None
+
+
+@dataclass(frozen=True)
+class Integrity:
+    """Whether the statement's numbers are internally consistent. This is **validation**,
+    separate from the broker's confirmation that the extraction matches the document."""
+
+    totals: Check
+    totals_message: str
+    running: Check
+    running_message: str
+    totals_difference: int | None = None
+    break_row: int | None = None
+    break_difference: int | None = None
+
+    def codes(self) -> dict[str, str]:
+        return {"totals": self.totals.value, "running": self.running.value}
+
+
+def _gbp(minor: int) -> str:
+    sign = "-" if minor < 0 else ""
+    pounds, pence = divmod(abs(minor), 100)
+    return f"{sign}£{pounds:,}.{pence:02d}"
+
+
+def integrity(
+    opening: int | None,
+    closing: int | None,
+    rows: list[SimpleRow],
+    *,
+    total_in: int | None = None,
+    total_out: int | None = None,
+) -> Integrity:
+    """``totals``: opening + money in - money out = closing (and the printed totals, when
+    given, match the rows). ``running``: each printed running balance follows from the
+    previous printed balance and the rows between. A statement without running balances
+    makes the row-by-row check **not available**, never failed. Any unreadable row makes
+    both checks not run: they can't be relied on."""
+    unparsed = [r.row_number for r in rows if r.kind == "unparsed"]
+    if unparsed:
+        reason = (
+            f"row {unparsed[0]} couldn't be read, so the balances can't be relied on"
+            if len(unparsed) == 1
+            else f"{len(unparsed)} rows couldn't be read, so the balances can't be relied on"
+        )
+        return Integrity(Check.NOT_RUN, reason, Check.NOT_RUN, reason)
+
+    txns = [r for r in rows if r.kind == "transaction"]
+    paid_in = sum(r.paid_in or 0 for r in txns)
+    paid_out = sum(r.paid_out or 0 for r in txns)
+
+    if opening is None or closing is None:
+        totals, totals_msg, diff = (
+            Check.NOT_RUN,
+            "the opening or closing balance is missing",
+            None,
+        )
+    else:
+        expected = opening + paid_in - paid_out
+        diff = closing - expected
+        problems = []
+        if abs(diff) > BALANCE_ALLOWANCE:
+            problems.append(
+                f"opening {_gbp(opening)} + money in {_gbp(paid_in)} - money out "
+                f"{_gbp(paid_out)} is {_gbp(expected)}, but the closing balance is "
+                f"{_gbp(closing)} ({_gbp(abs(diff))} unaccounted for)"
+            )
+        if total_in is not None and abs(total_in - paid_in) > BALANCE_ALLOWANCE:
+            problems.append(
+                f"the printed total paid in is {_gbp(total_in)}; the rows add to {_gbp(paid_in)}"
+            )
+        if total_out is not None and abs(total_out - paid_out) > BALANCE_ALLOWANCE:
+            problems.append(
+                f"the printed total paid out is {_gbp(total_out)}; the rows add to {_gbp(paid_out)}"
+            )
+        if problems:
+            totals, totals_msg = Check.DISCREPANCY, "; ".join(problems)
+        else:
+            totals = Check.PASSED
+            totals_msg = f"opening {_gbp(opening)} + money in - money out = closing {_gbp(closing)}"
+
+    printed = [r for r in rows if r.balance is not None]
+    if not printed:
+        return Integrity(
+            totals,
+            totals_msg,
+            Check.NOT_RUN,
+            "this statement doesn't show running balances, so the row-by-row check isn't "
+            "available; the totals are checked instead",
+            totals_difference=diff,
+        )
+    running: int | None = opening
+    for r in rows:
+        if r.kind == "transaction" and running is not None:
+            running += (r.paid_in or 0) - (r.paid_out or 0)
+        if r.balance is None:
+            continue
+        if running is not None and abs(r.balance - running) > BALANCE_ALLOWANCE:
+            gap = r.balance - running
+            when = f" ({r.posted_on:%d %b})" if r.posted_on else ""
+            return Integrity(
+                totals,
+                totals_msg,
+                Check.DISCREPANCY,
+                f"the running balance breaks at row {r.row_number}{when}: it shows "
+                f"{_gbp(r.balance)}, but the rows before it give {_gbp(running)} "
+                f"({_gbp(abs(gap))} unaccounted for: a row may be missing or misread)",
+                totals_difference=diff,
+                break_row=r.row_number,
+                break_difference=gap,
+            )
+        running = r.balance
+    return Integrity(
+        totals,
+        totals_msg,
+        Check.PASSED,
+        f"every printed running balance follows from the rows before it ({len(printed)} balances)",
+        totals_difference=diff,
+    )
+
+
 def account_fingerprint(
     key: bytes, sort_code: str | None, account_number: str | None
 ) -> str | None:

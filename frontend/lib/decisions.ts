@@ -4,8 +4,17 @@
 
 import type { DecisionKind, ExtractedField, FieldDecisionIn, ReviewIn } from "./types";
 
-const DATE_CODES = new Set(["pay_date", "pay_period_start", "pay_period_end"]);
-const TEXT_CODES = new Set(["pay_frequency", "tax_code"]);
+// Payslip fields, then bank statement summary fields (Stage 2-B).
+const DATE_CODES = new Set([
+  "pay_date",
+  "pay_period_start",
+  "pay_period_end",
+  "statement_period_start",
+  "statement_period_end",
+]);
+const TEXT_CODES = new Set(["pay_frequency", "tax_code", "account_ending"]);
+/** Statement balances can be negative (an overdrawn account). */
+export const SIGNED_CODES = new Set(["opening_balance", "closing_balance"]);
 /** Fields saved as financial figures (the same list the server uses). */
 export const FIGURE_CODES = new Set([
   "gross_pay",
@@ -52,6 +61,21 @@ export function parseMoney(text: string): number | null {
   return pounds * 100 + pence;
 }
 
+/** Like parseMoney, but a balance may be overdrawn: "-500.00", "-£500.00" or "(500.00)". */
+export function parseSignedMoney(text: string): number | null {
+  const trimmed = text.trim();
+  const bracketed = /^\((.*)\)$/.exec(trimmed);
+  const negative = bracketed !== null || trimmed.startsWith("-");
+  const body = bracketed ? (bracketed[1] ?? "") : trimmed.replace(/^-/, "");
+  const amount = parseMoney(body);
+  if (amount === null) return null;
+  return negative ? -amount : amount;
+}
+
+function moneyOf(field: Pick<ExtractedField, "field_code">, text: string): number | null {
+  return field.field_code && SIGNED_CODES.has(field.field_code) ? parseSignedMoney(text) : parseMoney(text);
+}
+
 function isIsoDate(text: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;
   const date = new Date(`${text}T00:00:00Z`);
@@ -73,7 +97,8 @@ export function draftProblem(field: ExtractedField, draft: Draft | undefined): s
     const value = (draft.corrected ?? "").trim();
     const kind = valueKind(field);
     if (!value) return "Enter the corrected value";
-    if (kind === "money" && parseMoney(value) === null) return "Enter an amount such as 1,234.56";
+    if (kind === "money" && moneyOf(field, value) === null) return "Enter an amount such as 1,234.56";
+    if (field.field_code === "account_ending" && !/^\d{4}$/.test(value)) return "Enter the last 4 digits";
     if (kind === "date" && !isIsoDate(value)) return "Enter a valid date";
     if (!reason) return "Give a reason for the correction";
   }
@@ -101,13 +126,9 @@ export function problems(fields: ExtractedField[], drafts: Drafts): Map<number, 
   return found;
 }
 
-export function buildReview(
-  fields: ExtractedField[],
-  drafts: Drafts,
-  incomeSourceId: string,
-  frequency?: string,
-): ReviewIn {
-  const decisions: FieldDecisionIn[] = fields.map((field) => {
+/** One complete decision per field, as the API takes them. Throws if any is incomplete. */
+export function buildDecisions(fields: ExtractedField[], drafts: Drafts): FieldDecisionIn[] {
+  return fields.map((field) => {
     const draft = drafts[field.ordinal];
     if (!draft?.decision || draftProblem(field, draft)) {
       throw new Error(`Field ${field.ordinal} has no complete decision`);
@@ -118,7 +139,7 @@ export function buildReview(
     if (draft.decision === "correct") {
       const value = (draft.corrected ?? "").trim();
       const kind = valueKind(field);
-      if (kind === "money") out.corrected_money_minor = parseMoney(value) ?? undefined;
+      if (kind === "money") out.corrected_money_minor = moneyOf(field, value) ?? undefined;
       else if (kind === "date") out.corrected_date = value;
       else out.corrected_text = value;
     }
@@ -128,7 +149,15 @@ export function buildReview(
     }
     return out;
   });
-  const review: ReviewIn = { income_source_id: incomeSourceId, decisions };
+}
+
+export function buildReview(
+  fields: ExtractedField[],
+  drafts: Drafts,
+  incomeSourceId: string,
+  frequency?: string,
+): ReviewIn {
+  const review: ReviewIn = { income_source_id: incomeSourceId, decisions: buildDecisions(fields, drafts) };
   if (frequency) review.frequency = frequency;
   return review;
 }

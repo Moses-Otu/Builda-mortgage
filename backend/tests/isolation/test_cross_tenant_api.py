@@ -125,6 +125,12 @@ PROBES: list[tuple[str, str, dict[str, Any]]] = [
     ),
     ("GET", "/api/v1/cases/{case_id}/documents/{document_id}/review", {}),
     ("GET", "/api/v1/cases/{case_id}/checks", {}),
+    ("GET", "/api/v1/cases/{case_id}/bank-accounts", {}),
+    (
+        "POST",
+        "/api/v1/cases/{case_id}/bank-accounts/{account_id}/holders",
+        {"json": {"applicant_id": "{applicant_id}"}},
+    ),
     (
         "POST",
         "/api/v1/cases/{case_id}/checks/{finding_key}/acknowledgement",
@@ -188,6 +194,7 @@ async def victim(make_firm: MakeFirm) -> tuple[Firm, dict[str, str]]:
         "expenditure_item_id": spend.json()["id"],
         "observation_id": observation.json()["id"],
         "finding_key": "a" * 64,
+        "account_id": "00000000-0000-7000-8000-00000000000b",
     }
     return firm, ids
 

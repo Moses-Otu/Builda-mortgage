@@ -52,6 +52,13 @@ const MEASURES: Record<string, string> = {
   pay_frequency: "Pay frequency",
   tax_code: "Tax code",
   total_deductions: "Total deductions",
+  account_ending: "Account ending",
+  statement_period_start: "Period start",
+  statement_period_end: "Period end",
+  opening_balance: "Opening balance",
+  closing_balance: "Closing balance",
+  total_paid_in: "Total paid in",
+  total_paid_out: "Total paid out",
 };
 
 const humanise = (code: string) => {

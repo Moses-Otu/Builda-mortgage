@@ -5,6 +5,8 @@ from meip.audit.models import AuditEvent, AuditEventDetail
 from meip.cases.models import Case
 from meip.core.db import Base
 from meip.documents.models import (
+    BankAccount,
+    BankAccountHolder,
     Document,
     DocumentReview,
     DocumentVersion,
@@ -32,6 +34,8 @@ __all__ = [
     "Applicant",
     "AuditEvent",
     "AuditEventDetail",
+    "BankAccount",
+    "BankAccountHolder",
     "Base",
     "Case",
     "CheckAcknowledgement",

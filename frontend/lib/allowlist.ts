@@ -21,6 +21,9 @@ const ROUTES: Array<[method: string, pattern: string]> = [
   ["POST", `cases/${ID}/financial/observations`],
   // Stage 2-A: reconciliation checks, and acknowledging a discrepancy (financial:write).
   ["GET", `cases/${ID}/checks`],
+  // Stage 2-B: bank accounts confirmed from statements, and adding a holder.
+  ["GET", `cases/${ID}/bank-accounts`],
+  ["POST", `cases/${ID}/bank-accounts/${ID}/holders`],
   ["POST", `cases/${ID}/checks/${KEY}/acknowledgement`],
   ["GET", "financial/measures"],
   ["GET", `cases/${ID}/documents`],

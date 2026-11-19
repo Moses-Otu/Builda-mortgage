@@ -239,15 +239,23 @@ async def test_statements_may_have_more_pages_than_payslips(case: Case, worker: 
     assert too_long["failure_code"] == "too_many_pages"
 
 
-async def test_statements_cannot_be_reviewed_as_payslips(case: Case, worker: Worker) -> None:
+async def test_a_statement_is_not_reviewed_against_an_income_source(
+    case: Case, worker: Worker
+) -> None:
+    """Statements are confirmed to a bank account (2B-2), never to an income source."""
     doc = await case.upload(worker, series()[0].document.pdf())
+    summary = (await case.extraction(doc))["summary"]
     resp = await case.firm.request(
         "POST",
         f"{case.base}/documents/{doc['id']}/review",
         if_match=doc["version"],
-        json={"income_source_id": doc["id"], "decisions": [{"ordinal": 1, "decision": "accept"}]},
+        json={
+            "income_source_id": doc["id"],
+            "decisions": [{"ordinal": f["ordinal"], "decision": "accept"} for f in summary],
+        },
     )
-    assert resp.status_code == 409
+    assert resp.status_code == 422
+    assert "bank account" in resp.json()["detail"]
 
 
 async def test_extraction_audit_and_logs_hold_no_statement_content(

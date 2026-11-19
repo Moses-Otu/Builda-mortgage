@@ -35,6 +35,7 @@ from meip.core.errors import (
 )
 from meip.core.ids import uuid7
 from meip.core.logging import get_logger
+from meip.documents import statement_review
 from meip.documents.extraction import REQUIRED_FIELDS
 from meip.documents.models import (
     PDF_MEDIA_TYPE,
@@ -464,6 +465,21 @@ async def get_extraction(
         year_to_date=by_section["year_to_date"],
         missing_required=[c for c in required if c not in parsed],
         transactions=transactions,
+        integrity=(
+            await statement_review.extracted_integrity(ctx, run.id, fields)
+            if is_statement
+            else None
+        ),
+        account_match=(
+            await statement_review.account_match(
+                ctx,
+                case_id,
+                run,
+                next((f.value_text for f in fields if f.field_code == "account_ending"), None),
+            )
+            if is_statement
+            else None
+        ),
     )
 
 

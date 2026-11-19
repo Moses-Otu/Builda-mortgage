@@ -291,6 +291,15 @@ PROBES: list[Probe] = [
         },
     ),
     Probe("get review", "GET", "/api/v1/cases/{case_id}/documents/{document_id}/review", EVERYONE),
+    # --- bank accounts (Stage 2-B) -------------------------------------------------------------
+    Probe("list bank accounts", "GET", "/api/v1/cases/{case_id}/bank-accounts", EVERYONE),
+    Probe(
+        "add account holder",
+        "POST",
+        "/api/v1/cases/{case_id}/bank-accounts/{account_id}/holders",
+        CASE_WORKERS,
+        lambda s: {"json": {"applicant_id": s["applicant_id"]}},
+    ),
     # --- reconciliation checks (Stage 2-A) ---------------------------------------------------
     Probe("run checks", "GET", "/api/v1/cases/{case_id}/checks", EVERYONE),
     Probe(
@@ -383,6 +392,7 @@ async def _state(firm: Firm) -> State:
         "member_version": 2,  # invited (1) -> accepted (2)
         "adviser_membership_id": str(firm.members[adviser]),
         "finding_key": "0" * 64,  # not a current finding: allowed roles get 409, not 403
+        "account_id": "00000000-0000-7000-8000-00000000000a",  # none: allowed roles get 404
     }
 
 

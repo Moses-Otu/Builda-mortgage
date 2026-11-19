@@ -81,6 +81,14 @@ NON_PERSONAL_FIELDS = frozenset(
         "retired_reason",
         "withdrawal_reason",
         "retired_observation_ids",
+        # statement confirmation (Stage 2-B): the account, holder count and the codes of the
+        # balance checks shown at confirmation (never amounts, numbers or descriptions)
+        "bank_account_id",
+        "account_created",
+        "holder_count",
+        "fingerprint_status",
+        "integrity_totals",
+        "integrity_running",
         # reconciliation: which versioned rule and finding (a hash) was acknowledged
         "rule_code",
         "ruleset_version",
@@ -143,6 +151,7 @@ class AuditAction(StrEnum):
     DOCUMENT_UNRECOGNISED = "document.unrecognised"
     DOCUMENT_REVIEWED = "document.reviewed"
     CHECK_ACKNOWLEDGED = "check.acknowledged"
+    BANK_ACCOUNT_HOLDER_ADDED = "bank_account.holder_added"
 
 
 @dataclass

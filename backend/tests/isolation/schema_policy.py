@@ -57,6 +57,10 @@ TENANT_SCOPED: dict[str, frozenset[str]] = {
     "extracted_fields": frozenset({"SELECT", "INSERT"}),
     # Bank statement rows (Stage 2-B): written once by the worker, never changed or deleted.
     "extracted_transactions": frozenset({"SELECT", "INSERT"}),
+    # Bank accounts confirmed by brokers, and their holders (Stage 2-B): written once; a
+    # holder is added as a new row, never changed or removed by the application.
+    "bank_accounts": frozenset({"SELECT", "INSERT"}),
+    "bank_account_holders": frozenset({"SELECT", "INSERT"}),
     # Broker reviews and their per-field decisions: written once, never changed or deleted.
     "document_reviews": frozenset({"SELECT", "INSERT"}),
     "field_reviews": frozenset({"SELECT", "INSERT"}),

@@ -170,6 +170,16 @@ Single deployable backend codebase (modular monolith) with API and worker proces
     (`MEIP_ACCOUNT_FINGERPRINT_KEY`; a fixed development key in local and test). They remain
     in the original PDF and the raw provider output, which are classed together for
     retention. Statements may have up to 20 pages (payslips 10).
+  - **Statement confirmation (2B-2):** `documents/statement_review.py`. The same review route
+    takes a statement body: one decision per summary field and either an existing
+    `bank_account_id` or a `new_account` with holders (the case's applicants; two or more is
+    joint). `document_reviews` is either a payslip review or a statement confirmation (a
+    CHECK). `bank_accounts` hold the last 4 digits and the fingerprint (unique per case);
+    the fingerprint suggests the account and refuses mismatches, the broker confirms. No
+    financial figures are created. **Confirmation is not validation:** the balance checks
+    (`statements.integrity`: totals, and the running balance row by row, "not available"
+    without printed balances) are computed separately, shown before confirming, recorded as
+    codes in the audit event, and never cleared by confirming.
   - **Reconciliation (Stage 2-A):** module `reconciliation`. Six deterministic checks
     (`payslip-checks/1`) are **pure functions** over the case's current reviewed payslip
     figures, reviewed pay dates and periods, and the declared basic salary. They run **in the
