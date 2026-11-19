@@ -192,6 +192,26 @@ Single deployable backend codebase (modular monolith) with API and worker proces
     The only stored data is `check_acknowledgements` (insert-only for the runtime role, RLS,
     one audit event with the note in the erasable details). **Acknowledging is not resolving
     or approving:** it changes no figure and the finding stays a discrepancy.
+  - **Bank checks (Stage 2-B, 2B-3):** a second, separately versioned rule set
+    (`bank-checks/1`, `reconciliation/bank_rules.py`), also pure and computed in the request,
+    over **confirmed** statements (summary values as confirmed, the chosen account and its
+    holders, the extracted rows) and the reviewed payslips. `BANK-TOTALS` and `BANK-RUNNING`
+    reuse `statements.integrity`, the same function the confirmation screen uses. `BANK-GAP`
+    compares consecutive statements of one account, and says when continuity rests on the
+    broker's assignment rather than a fingerprint. `SALARY-CREDIT` looks for each payslip's
+    net pay among credits on any confirmed statement on the case within a versioned window
+    (3 days before, 5 after). It has four outcomes:
+    - exact (passed, or a discrepancy when the payslip's applicant doesn't hold the account);
+    - multiple, including one credit that is the only candidate for two payslips;
+    - near (within 10 %, never treated as received);
+    - none.
+
+    It is not run when no confirmed statement covers the window, or a row in it couldn't be
+    read. Matching never uses the description. A case with no confirmed statement has no
+    bank findings. Keys include the account's holders and the statements searched, so adding
+    a holder or a statement gives a new finding. Acknowledgements reuse
+    `check_acknowledgements`, recording the finding's own rule set. No financial figures are
+    created from transactions.
   - **Downloads are not yet access-logged.** That is a production-readiness requirement
     before real borrower documents are enabled (retention brief R17). The platform cannot tell synthetic from
     real documents, so this is a deployment control, not content inspection.

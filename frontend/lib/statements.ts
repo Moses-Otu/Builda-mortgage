@@ -46,6 +46,17 @@ export function cellEvidence(cell: Cell): Evidence {
 /** Transaction highlights use ordinals above any field's, so rows and fields never collide. */
 export const ROW_ORDINAL_BASE = 10_000;
 
+/** The highlight a check's evidence link selects: `?row=<n>` (a statement row) or
+ * `?field=<ordinal>` (a summary field). Null when there is no valid target. */
+export function linkedOrdinal(search: string): number | null {
+  const params = new URLSearchParams(search);
+  const row = Number(params.get("row"));
+  if (params.has("row") && Number.isInteger(row) && row > 0) return ROW_ORDINAL_BASE + row;
+  const field = Number(params.get("field"));
+  if (params.has("field") && Number.isInteger(field) && field > 0 && field < ROW_ORDINAL_BASE) return field;
+  return null;
+}
+
 export function holdersText(account: BankAccount, nameOf: (id: string) => string): string {
   const names = account.holders.map((h) => nameOf(h.applicant_id));
   const list = names.length > 1 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : (names[0] ?? "");

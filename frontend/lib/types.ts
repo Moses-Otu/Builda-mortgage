@@ -231,17 +231,20 @@ export interface Measure {
   qualifiers: string[];
 }
 
-// --- reconciliation checks (Stage 2-A) ---
+// --- reconciliation checks (Stage 2-A payslips, Stage 2-B bank statements) ---
 
 export type FindingStatus = "passed" | "discrepancy" | "not_run";
 
 export interface CheckEvidence {
-  source_kind: "document" | "declared";
+  /** document: a payslip field · declared: a declared figure · statement: a confirmed statement
+   * value · transaction: one printed statement row (description verbatim in value_text). */
+  source_kind: "document" | "declared" | "statement" | "transaction";
   observation_id: Uuid | null;
   field_review_id: Uuid | null;
   document_id: Uuid | null;
   document_label: string | null;
   field_ordinal: number | null;
+  row_number?: number | null;
   label: string;
   measure: string | null;
   value_minor: number | null;
@@ -255,22 +258,45 @@ export interface Acknowledgement {
   acknowledged_at: string;
 }
 
+export type MatchOutcome = "exact" | "multiple" | "near" | "none";
+
+/** For a salary credit: whose payslip, which account the money arrived in, and the row. */
+export interface Relationship {
+  payslip_applicant_id: Uuid;
+  account_id: Uuid;
+  account_ending: string;
+  account_label: string | null;
+  joint: boolean;
+  holder_ids: Uuid[];
+  applicant_holds_account: boolean;
+  filing_applicant_id: Uuid | null;
+  document_id: Uuid;
+  row_number: number;
+}
+
 export interface Finding {
   key: string;
+  ruleset_version: string;
   rule_code: string;
   status: FindingStatus;
   title: string;
   message: string;
-  income_source_id: Uuid;
-  applicant_id: Uuid;
+  income_source_id: Uuid | null;
+  applicant_id: Uuid | null;
+  bank_account_id?: Uuid | null;
+  document_id?: Uuid | null;
+  /** SALARY-CREDIT only. A near match is never treated as received. */
+  match_outcome?: MatchOutcome | null;
+  relationship?: Relationship | null;
   amounts: Record<string, number>;
   evidence: CheckEvidence[];
   acknowledgement: Acknowledgement | null;
 }
 
 export interface Checks {
-  ruleset_version: string;
-  parameters: Record<string, unknown>;
+  ruleset_versions: string[];
+  /** Each rule set's thresholds, by version. */
+  parameters: Record<string, Record<string, unknown>>;
   findings: Finding[];
 }
 

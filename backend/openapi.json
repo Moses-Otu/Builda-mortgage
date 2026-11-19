@@ -1127,18 +1127,30 @@
             "type": "array"
           },
           "parameters": {
-            "additionalProperties": true,
-            "description": "The rule set's thresholds. The 2 % declared-basic threshold is an initial product assumption, not a regulatory or lender standard.",
+            "additionalProperties": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "description": "Each rule set's thresholds, by version. The 2 % declared-basic threshold, the salary match window and the near-match band are initial product assumptions, not regulatory or lender standards.",
             "title": "Parameters",
             "type": "object"
           },
-          "ruleset_version": {
-            "title": "Ruleset Version",
-            "type": "string"
+          "ruleset_versions": {
+            "examples": [
+              [
+                "payslip-checks/1",
+                "bank-checks/1"
+              ]
+            ],
+            "items": {
+              "type": "string"
+            },
+            "title": "Ruleset Versions",
+            "type": "array"
           }
         },
         "required": [
-          "ruleset_version",
+          "ruleset_versions",
           "parameters",
           "findings"
         ],
@@ -1823,7 +1835,7 @@
         "type": "object"
       },
       "EvidenceOut": {
-        "description": "One cited input. Document evidence resolves to the payslip and field (and so to the\nhighlighted box on the original); declared evidence is the applicant's declared figure.",
+        "description": "One cited input. Document evidence resolves to the payslip and field (and so to the\nhighlighted box on the original); declared evidence is the applicant's declared figure.\nStatement evidence is a confirmed statement value (by field ordinal); transaction evidence\nis one printed row of a statement (by row number), with its description verbatim.",
         "properties": {
           "document_id": {
             "anyOf": [
@@ -1901,10 +1913,23 @@
             ],
             "title": "Observation Id"
           },
+          "row_number": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Number"
+          },
           "source_kind": {
             "enum": [
               "document",
-              "declared"
+              "declared",
+              "statement",
+              "transaction"
             ],
             "title": "Source Kind",
             "type": "string"
@@ -2758,9 +2783,42 @@
             "type": "object"
           },
           "applicant_id": {
-            "format": "uuid",
-            "title": "Applicant Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applicant Id"
+          },
+          "bank_account_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set for bank checks about one account",
+            "title": "Bank Account Id"
+          },
+          "document_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The statement a bank finding is about, when there is one",
+            "title": "Document Id"
           },
           "evidence": {
             "items": {
@@ -2770,21 +2828,65 @@
             "type": "array"
           },
           "income_source_id": {
-            "format": "uuid",
-            "title": "Income Source Id",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set for payslip checks and salary credits",
+            "title": "Income Source Id"
           },
           "key": {
             "description": "Fingerprint of the rule-set version, rule and cited inputs",
             "title": "Key",
             "type": "string"
           },
+          "match_outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "exact",
+                  "multiple",
+                  "near",
+                  "none"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "SALARY-CREDIT only. A near match is never treated as received.",
+            "title": "Match Outcome"
+          },
           "message": {
             "title": "Message",
             "type": "string"
           },
+          "relationship": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RelationshipOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "rule_code": {
             "title": "Rule Code",
+            "type": "string"
+          },
+          "ruleset_version": {
+            "examples": [
+              "payslip-checks/1",
+              "bank-checks/1"
+            ],
+            "title": "Ruleset Version",
             "type": "string"
           },
           "status": {
@@ -2803,12 +2905,11 @@
         },
         "required": [
           "key",
+          "ruleset_version",
           "rule_code",
           "status",
           "title",
           "message",
-          "income_source_id",
-          "applicant_id",
           "evidence"
         ],
         "title": "FindingOut",
@@ -4366,6 +4467,87 @@
         "title": "PropertyUse",
         "type": "string"
       },
+      "RelationshipOut": {
+        "description": "For a salary credit: whose payslip, which account the money arrived in (sole or joint,\nand its holders), who the statement was filed under, and the matched row.",
+        "properties": {
+          "account_ending": {
+            "title": "Account Ending",
+            "type": "string"
+          },
+          "account_id": {
+            "format": "uuid",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "account_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Label"
+          },
+          "applicant_holds_account": {
+            "title": "Applicant Holds Account",
+            "type": "boolean"
+          },
+          "document_id": {
+            "format": "uuid",
+            "title": "Document Id",
+            "type": "string"
+          },
+          "filing_applicant_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filing Applicant Id"
+          },
+          "holder_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Holder Ids",
+            "type": "array"
+          },
+          "joint": {
+            "title": "Joint",
+            "type": "boolean"
+          },
+          "payslip_applicant_id": {
+            "format": "uuid",
+            "title": "Payslip Applicant Id",
+            "type": "string"
+          },
+          "row_number": {
+            "title": "Row Number",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "payslip_applicant_id",
+          "account_id",
+          "account_ending",
+          "account_label",
+          "joint",
+          "holder_ids",
+          "applicant_holds_account",
+          "filing_applicant_id",
+          "document_id",
+          "row_number"
+        ],
+        "title": "RelationshipOut",
+        "type": "object"
+      },
       "RemovalReason": {
         "enum": [
           "added_in_error",
@@ -5868,7 +6050,7 @@
     },
     "/api/v1/cases/{case_id}/checks": {
       "get": {
-        "description": "Runs the versioned rule set (`payslip-checks/1`) over the case's current reviewed payslips and declared figures, and returns every finding: `passed`, `discrepancy` (values, difference and both sources cited) or `not_run` (with the reason). Nothing is stored. The checks never decide anything about the case.",
+        "description": "Runs both versioned rule sets over the case's current data: `payslip-checks/1` (reviewed payslips and declared figures) and `bank-checks/1` (confirmed bank statements: totals, running balance, gaps between statements, and whether each payslip's net pay arrived). Returns every finding: `passed`, `discrepancy` (values, difference and the sources cited) or `not_run` (with the reason). Each finding names its rule set. Nothing is stored. The checks never decide anything about the case, and a near salary match is never treated as received.",
         "operationId": "get_checks_api_v1_cases__case_id__checks_get",
         "parameters": [
           {
@@ -5924,7 +6106,7 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Run the payslip checks",
+        "summary": "Run the checks",
         "tags": [
           "checks"
         ]

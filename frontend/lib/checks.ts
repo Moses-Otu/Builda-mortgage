@@ -1,8 +1,32 @@
 // The case page's Checks card: grouping, counts, evidence links and the declared salary.
 // Display only: the findings, their statuses and keys come from the API unchanged.
+// Two rule sets: payslip-checks (Stage 2-A) and bank-checks (Stage 2-B), shown in separate
+// sections.
 
 import { parseMoney } from "./decisions";
-import type { CheckEvidence, Finding, Observation } from "./types";
+import type { CheckEvidence, Finding, MatchOutcome, Observation } from "./types";
+
+export const PAYSLIP_RULESET = "payslip-checks";
+export const BANK_RULESET = "bank-checks";
+
+/** The findings of one rule set family ("bank-checks" matches "bank-checks/1"). */
+export function ofRuleset(findings: Finding[], family: string): Finding[] {
+  return findings.filter((f) => f.ruleset_version.split("/")[0] === family);
+}
+
+/** A short label for a salary match outcome. Exact needs none: the status says it. */
+export function outcomeLabel(outcome: MatchOutcome | null | undefined): string | null {
+  switch (outcome) {
+    case "near":
+      return "Near match · not confirmed";
+    case "multiple":
+      return "More than one possible credit";
+    case "none":
+      return "No credit found";
+    default:
+      return null;
+  }
+}
 
 export interface CheckGroups {
   /** Discrepancies not yet acknowledged, first. */
@@ -36,15 +60,21 @@ export function checksSummary(groups: CheckGroups): string {
   return parts.join(" · ");
 }
 
-/** Where an evidence chip goes: the payslip's review screen with that field selected. */
+/** Where an evidence chip goes: the document's screen with that field (?field=) or statement
+ * row (?row=) selected. */
 export function evidenceHref(caseId: string, e: CheckEvidence): string | null {
-  if (e.source_kind !== "document" || !e.document_id) return null;
-  const field = e.field_ordinal !== null ? `?field=${e.field_ordinal}` : "";
-  return `/cases/${caseId}/documents/${e.document_id}${field}`;
+  if (e.source_kind === "declared" || !e.document_id) return null;
+  const base = `/cases/${caseId}/documents/${e.document_id}`;
+  if (e.source_kind === "transaction") return e.row_number ? `${base}?row=${e.row_number}` : base;
+  return e.field_ordinal !== null ? `${base}?field=${e.field_ordinal}` : base;
 }
 
 export function evidenceLabel(e: CheckEvidence): string {
   if (e.source_kind === "declared") return e.label;
+  if (e.source_kind === "statement" || e.source_kind === "transaction") {
+    const where = e.document_label ? e.document_label.replace(/ statement$/, "") : "Statement";
+    return `${where} statement · ${e.label}`;
+  }
   const where = e.document_label ? e.document_label.replace(/ payslip$/, "") : "Payslip";
   return `${where} · ${e.label}`;
 }

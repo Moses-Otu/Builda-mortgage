@@ -8,7 +8,10 @@ import {
   evidenceHref,
   evidenceLabel,
   groupFindings,
+  ofRuleset,
+  outcomeLabel,
 } from "@/lib/checks";
+import { linkedOrdinal, ROW_ORDINAL_BASE } from "@/lib/statements";
 import type { CheckEvidence, Finding, Observation } from "@/lib/types";
 
 const CASE = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b";
@@ -19,6 +22,7 @@ const KEY = "a".repeat(64);
 function finding(status: Finding["status"], acknowledged = false, key = KEY): Finding {
   return {
     key,
+    ruleset_version: "payslip-checks/1",
     rule_code: "YTD-GROSS",
     status,
     title: "t",
@@ -81,6 +85,48 @@ describe("evidence", () => {
     const declared = evidence({ source_kind: "declared", document_id: null, label: "Declared basic salary (annual)" });
     expect(evidenceHref(CASE, declared)).toBeNull();
     expect(evidenceLabel(declared)).toBe("Declared basic salary (annual)");
+  });
+});
+
+describe("bank statement checks", () => {
+  it("separates the two rule sets", () => {
+    const bank = { ...finding("discrepancy"), ruleset_version: "bank-checks/1", rule_code: "SALARY-CREDIT" };
+    const all = [finding("passed"), bank];
+    expect(ofRuleset(all, "payslip-checks")).toEqual([all[0]]);
+    expect(ofRuleset(all, "bank-checks")).toEqual([bank]);
+    expect(ofRuleset(all, "bank")).toEqual([]);
+  });
+
+  it("labels salary outcomes, never presenting a near match as received", () => {
+    expect(outcomeLabel("near")).toBe("Near match · not confirmed");
+    expect(outcomeLabel("multiple")).toBe("More than one possible credit");
+    expect(outcomeLabel("none")).toBe("No credit found");
+    expect(outcomeLabel("exact")).toBeNull();
+    expect(outcomeLabel(null)).toBeNull();
+  });
+
+  it("links a statement row to the statement with the row selected", () => {
+    const row = evidence({
+      source_kind: "transaction",
+      document_label: "June 2026 statement",
+      field_ordinal: null,
+      row_number: 7,
+      label: "Credit, 30 Jun 2026",
+    });
+    expect(evidenceHref(CASE, row)).toBe(`/cases/${CASE}/documents/${DOC}?row=7`);
+    expect(evidenceLabel(row)).toBe("June 2026 statement · Credit, 30 Jun 2026");
+    const value = evidence({ source_kind: "statement", document_label: "June 2026 statement", field_ordinal: 4, label: "Opening balance" });
+    expect(evidenceHref(CASE, value)).toBe(`/cases/${CASE}/documents/${DOC}?field=4`);
+    expect(evidenceLabel(value)).toBe("June 2026 statement · Opening balance");
+  });
+
+  it("selects the linked row or field when the statement opens", () => {
+    expect(linkedOrdinal("?row=7")).toBe(ROW_ORDINAL_BASE + 7);
+    expect(linkedOrdinal("?field=4")).toBe(4);
+    expect(linkedOrdinal("?row=7&field=4")).toBe(ROW_ORDINAL_BASE + 7);
+    for (const bad of ["", "?row=0", "?row=-2", "?row=x", "?field=1.5", `?field=${ROW_ORDINAL_BASE}`]) {
+      expect(linkedOrdinal(bad)).toBeNull();
+    }
   });
 });
 

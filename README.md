@@ -203,7 +203,7 @@ UPDATE_OPENAPI_SNAPSHOT=1 uv run pytest tests/integration/test_schema.py
   `POST …/documents/{id}/review` with the summary decisions and either `bank_account_id` or
   `new_account: {holder_ids, label}`; accounts are listed by `GET …/bank-accounts` and gain
   holders through `POST …/bank-accounts/{id}/holders`. Confirming saves no figures and never
-  clears a balance discrepancy. The bank checks arrive in 2B-3. Demo statements: `bank_statement_series()` in
+  clears a balance discrepancy. **Checks (2B-3):** see below. Demo statements: `bank_statement_series()` in
   `tests/synthetic_docs.py`.
 - **Tests and `.env`:** the suite sets `MEIP_ENV_FILE` to empty (in `tests/__init__.py`), so a
   local `backend/.env` never leaks into tests. Outside tests, `MEIP_ENV_FILE` chooses the
@@ -225,9 +225,16 @@ UPDATE_OPENAPI_SNAPSHOT=1 uv run pytest tests/integration/test_schema.py
   `source_kind = 'document'` figures linked to their decision; dates, frequency and tax code
   stay as reviewed evidence. All or nothing; a document is reviewed once (409 with the
   existing review afterwards). Later corrections use the financial endpoints.
-- **Checks (Stage 2-A):** `GET /api/v1/cases/{id}/checks` runs rule set `payslip-checks/1`
-  over the current reviewed payslips and declared basic salary, in the request; nothing is
-  stored. Findings are `passed`, `discrepancy` (both sources cited) or `not_run` (with the
+- **Checks (Stage 2-A and 2B-3):** `GET /api/v1/cases/{id}/checks` runs two rule sets in the
+  request; nothing is stored. `payslip-checks/1` covers the current reviewed payslips and the
+  declared basic salary. `bank-checks/1` covers confirmed bank statements: `BANK-TOTALS`,
+  `BANK-RUNNING` ("not available" without printed balances, never failed), `BANK-GAP`
+  between statements of one account, and `SALARY-CREDIT`. That last one checks whether each
+  payslip's net pay arrived within 3 days before to 5 after the pay date, with four
+  outcomes: exact, multiple, near (within 10 %, **never treated as received**) or none. It
+  also explains which applicant, account (sole or joint, holders) and row are involved. The
+  response lists `ruleset_versions`, and `parameters` by version; each finding names its
+  `ruleset_version`. Findings are `passed`, `discrepancy` (both sources cited) or `not_run` (with the
   reason), each with a key that changes whenever any cited input or the rule set changes.
   `POST …/checks/{key}/acknowledgement` (`financial:write`) records a note against a current
   discrepancy. **Acknowledging is not resolving or approving:** no figure changes and the

@@ -20,7 +20,16 @@ import { FieldHint, Label, Textarea } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { Tooltip } from "@/components/ui/tooltip";
 import { get, postJson } from "@/lib/api";
-import { checksSummary, evidenceHref, evidenceLabel, groupFindings } from "@/lib/checks";
+import {
+  BANK_RULESET,
+  checksSummary,
+  evidenceHref,
+  evidenceLabel,
+  groupFindings,
+  ofRuleset,
+  outcomeLabel,
+  PAYSLIP_RULESET,
+} from "@/lib/checks";
 import { formatDateTime } from "@/lib/labels";
 import { problemMessage } from "@/lib/problems";
 import type { Checks, Finding } from "@/lib/types";
@@ -48,6 +57,10 @@ export function ChecksCard({ caseId, refreshKey }: { caseId: string; refreshKey:
   }, [load, refreshKey]);
 
   const groups = checks ? groupFindings(checks.findings) : null;
+  const payslipFindings = checks ? ofRuleset(checks.findings, PAYSLIP_RULESET) : [];
+  const bankFindings = checks ? ofRuleset(checks.findings, BANK_RULESET) : [];
+  const versionOf = (family: string) =>
+    checks?.ruleset_versions.find((v) => v.split("/")[0] === family) ?? family;
 
   return (
     <Card>
@@ -55,41 +68,38 @@ export function ChecksCard({ caseId, refreshKey }: { caseId: string; refreshKey:
         <div>
           <CardTitle className="flex items-center gap-2">
             Checks
-            {checks && (
-              <Tooltip content="A versioned set of deterministic checks over the reviewed payslips. They never decide anything about the case.">
-                <span tabIndex={0} className="font-mono text-xs font-normal text-slate-400">
-                  {checks.ruleset_version}
-                </span>
-              </Tooltip>
-            )}
           </CardTitle>
-          <CardDescription>{groups ? checksSummary(groups) : "Comparing the reviewed payslips…"}</CardDescription>
+          <CardDescription>{groups ? checksSummary(groups) : "Comparing the reviewed documents…"}</CardDescription>
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         {error && <Alert tone="error">{error}</Alert>}
         {groups && checks && checks.findings.length === 0 && (
           <p className="rounded-lg border border-dashed border-slate-300 px-3 py-4 text-center text-sm text-slate-500">
-            Nothing to check yet. Review a payslip, or declare a basic salary.
+            Nothing to check yet. Review a payslip, confirm a bank statement, or declare a basic salary.
           </p>
         )}
-        {groups?.open.map((f) => (
-          <FindingRow key={f.key} caseId={caseId} finding={f} onAcknowledge={() => setAcknowledging(f)} />
-        ))}
-        {groups?.acknowledged.map((f) => <FindingRow key={f.key} caseId={caseId} finding={f} />)}
-        {groups && groups.notRun.length > 0 && (
-          <Collapsible title={`Could not run (${groups.notRun.length})`} icon={<CircleDashed className="size-4 text-slate-400" />}>
-            {groups.notRun.map((f) => (
-              <FindingRow key={f.key} caseId={caseId} finding={f} compact />
-            ))}
-          </Collapsible>
+        {payslipFindings.length > 0 && (
+          <FindingSection
+            title="Payslips"
+            version={versionOf(PAYSLIP_RULESET)}
+            explanation="Deterministic checks over the reviewed payslips and declared figures. They never decide anything about the case."
+            caseId={caseId}
+            findings={payslipFindings}
+            onAcknowledge={setAcknowledging}
+            headed={bankFindings.length > 0}
+          />
         )}
-        {groups && groups.passed.length > 0 && (
-          <Collapsible title={`Passed (${groups.passed.length})`} icon={<CircleCheck className="size-4 text-accept" />}>
-            {groups.passed.map((f) => (
-              <FindingRow key={f.key} caseId={caseId} finding={f} compact />
-            ))}
-          </Collapsible>
+        {bankFindings.length > 0 && (
+          <FindingSection
+            title="Bank statements"
+            version={versionOf(BANK_RULESET)}
+            explanation="Deterministic checks over the confirmed statements: totals, running balance, gaps between statements, and whether each payslip's net pay arrived. A near match is never treated as received."
+            caseId={caseId}
+            findings={bankFindings}
+            onAcknowledge={setAcknowledging}
+            headed
+          />
         )}
       </CardContent>
       {acknowledging && (
@@ -104,6 +114,63 @@ export function ChecksCard({ caseId, refreshKey }: { caseId: string; refreshKey:
         />
       )}
     </Card>
+  );
+}
+
+function FindingSection(props: {
+  title: string;
+  version: string;
+  explanation: string;
+  caseId: string;
+  findings: Finding[];
+  onAcknowledge: (f: Finding) => void;
+  headed: boolean;
+}) {
+  const { title, version, explanation, caseId, findings, onAcknowledge, headed } = props;
+  const groups = groupFindings(findings);
+  return (
+    <section className="flex flex-col gap-3" aria-label={title}>
+      {headed && (
+        <div className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-200 pb-1.5">
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800">
+            {title}
+            <Tooltip content={explanation}>
+              <span tabIndex={0} className="font-mono text-xs font-normal text-slate-400">
+                {version}
+              </span>
+            </Tooltip>
+          </h3>
+          <span className="text-xs text-slate-500">{checksSummary(groups)}</span>
+        </div>
+      )}
+      {!headed && (
+        <Tooltip content={explanation}>
+          <span tabIndex={0} className="self-start font-mono text-xs text-slate-400">
+            {version}
+          </span>
+        </Tooltip>
+      )}
+      {groups.open.map((f) => (
+        <FindingRow key={f.key} caseId={caseId} finding={f} onAcknowledge={() => onAcknowledge(f)} />
+      ))}
+      {groups.acknowledged.map((f) => (
+        <FindingRow key={f.key} caseId={caseId} finding={f} />
+      ))}
+      {groups.notRun.length > 0 && (
+        <Collapsible title={`Could not run (${groups.notRun.length})`} icon={<CircleDashed className="size-4 text-slate-400" />}>
+          {groups.notRun.map((f) => (
+            <FindingRow key={f.key} caseId={caseId} finding={f} compact />
+          ))}
+        </Collapsible>
+      )}
+      {groups.passed.length > 0 && (
+        <Collapsible title={`Passed (${groups.passed.length})`} icon={<CircleCheck className="size-4 text-accept" />}>
+          {groups.passed.map((f) => (
+            <FindingRow key={f.key} caseId={caseId} finding={f} compact />
+          ))}
+        </Collapsible>
+      )}
+    </section>
   );
 }
 
@@ -151,6 +218,7 @@ function FindingRow(props: { caseId: string; finding: Finding; compact?: boolean
             {discrepancy && (
               <Badge tone="warning">{f.acknowledgement ? "Discrepancy · acknowledged" : "Discrepancy"}</Badge>
             )}
+            {outcomeLabel(f.match_outcome) && <Badge tone="neutral">{outcomeLabel(f.match_outcome)}</Badge>}
           </p>
           <p className="mt-0.5 text-slate-600">{f.message}</p>
           {!compact && f.evidence.length > 0 && (

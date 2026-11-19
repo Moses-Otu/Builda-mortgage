@@ -138,8 +138,9 @@ async def test_a_clean_series_passes_every_check(case: Case, worker: Worker) -> 
     await case.reviewed_series(worker, months=4)
     await case.declare_basic(45_000)
     checks = await case.checks()
-    assert checks["ruleset_version"] == "payslip-checks/1"
-    assert checks["parameters"]["declared_basic_threshold_pct"] == "2.0"
+    assert checks["ruleset_versions"] == ["payslip-checks/1", "bank-checks/1"]
+    assert checks["parameters"]["payslip-checks/1"]["declared_basic_threshold_pct"] == "2.0"
+    assert all(f["ruleset_version"] == "payslip-checks/1" for f in checks["findings"])
     assert statuses(checks, "PAY-ARITH") == ["passed"] * 4
     for rule in ("PERIOD-GAP", "PERIOD-DUP", "YTD-GROSS", "YTD-TAX", "DECLARED-BASIC"):
         assert statuses(checks, rule) == ["passed"], rule

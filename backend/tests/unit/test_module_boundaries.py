@@ -39,10 +39,12 @@ ALLOWED: dict[str, set[str]] = {
         "models",
     },
     # reconciliation reads reviewed documents and financial figures (never writes them) and
-    # stores only acknowledgements; nothing imports reconciliation except the API.
+    # stores only acknowledgements; nothing imports reconciliation except the API. Since 2B-3
+    # it also reads applicants' names, for the bank checks' relationship messages.
     "reconciliation": {
         "core",
         "reconciliation",
+        "applicants",
         "audit",
         "cases",
         "tenancy",

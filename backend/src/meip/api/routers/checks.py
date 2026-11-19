@@ -20,12 +20,15 @@ FindingKey = Annotated[str, Path(pattern=r"^[0-9a-f]{64}$", description="A findi
 @router.get(
     "",
     response_model=ChecksOut,
-    summary="Run the payslip checks",
+    summary="Run the checks",
     description=(
-        "Runs the versioned rule set (`payslip-checks/1`) over the case's current reviewed "
-        "payslips and declared figures, and returns every finding: `passed`, `discrepancy` "
-        "(values, difference and both sources cited) or `not_run` (with the reason). Nothing "
-        "is stored. The checks never decide anything about the case."
+        "Runs both versioned rule sets over the case's current data: `payslip-checks/1` "
+        "(reviewed payslips and declared figures) and `bank-checks/1` (confirmed bank "
+        "statements: totals, running balance, gaps between statements, and whether each "
+        "payslip's net pay arrived). Returns every finding: `passed`, `discrepancy` (values, "
+        "difference and the sources cited) or `not_run` (with the reason). Each finding names "
+        "its rule set. Nothing is stored. The checks never decide anything about the case, and "
+        "a near salary match is never treated as received."
     ),
     responses={404: {"description": "Case not found"}},
 )

@@ -5,7 +5,7 @@
 // The balance checks (validation) are shown beside it and are never changed by confirming.
 
 import { CircleAlert, CircleCheck, Info, Landmark, Lock, Plus, TriangleAlert } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Breadcrumbs, Loading, PageContainer } from "@/components/Page";
 import { type Highlight, PdfView } from "@/components/PdfView";
@@ -40,6 +40,7 @@ import {
   defaultChoice,
   holdersText,
   integritySummary,
+  linkedOrdinal,
   ROW_ORDINAL_BASE,
 } from "@/lib/statements";
 import type {
@@ -160,6 +161,16 @@ export function StatementReview({ caseId, documentId }: { caseId: string; docume
       window.document.querySelector(target)?.scrollIntoView({ block: "nearest", behavior: "smooth" }),
     );
   }, []);
+
+  // A link from a check's evidence (?row=<n> or ?field=<ordinal>) opens with that row or
+  // field selected and its box highlighted, once the extraction has loaded.
+  const linked = useRef(false);
+  useEffect(() => {
+    if (linked.current || !extraction) return;
+    linked.current = true;
+    const target = linkedOrdinal(window.location.search);
+    if (target !== null) setTimeout(() => select(target), 300);
+  }, [extraction, select]);
 
   async function confirm() {
     if (!document || !choice) return;
