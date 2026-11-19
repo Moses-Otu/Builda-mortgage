@@ -9,12 +9,15 @@ index, which also holds under concurrent uploads).
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from enum import StrEnum
+from typing import Any
 
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
+    Date,
+    Float,
     ForeignKey,
     ForeignKeyConstraint,
     Index,
@@ -23,10 +26,12 @@ from sqlalchemy import (
     UniqueConstraint,
     text,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from meip.core.db import Base, check_in, utcnow
 from meip.core.ids import uuid7
+from meip.documents.extraction import FIELD_CODES
 from meip.documents.storage import BLOB_KEY_PATTERN
 
 PDF_MEDIA_TYPE = "application/pdf"
@@ -42,6 +47,10 @@ class DocumentStatus(StrEnum):
     """Stored and awaiting processing."""
     READY = "ready"
     """The original passed its hash and PDF checks; page_count is known."""
+    EXTRACTED = "extracted"
+    """Identified as a payslip; extracted fields are available for review."""
+    UNRECOGNISED = "unrecognised"
+    """Not identified as a payslip; a person needs to look at it."""
     FAILED = "failed"
     """Processing stopped; failure_code says why."""
 
@@ -54,10 +63,12 @@ class FailureCode(StrEnum):
     TOO_MANY_PAGES = "too_many_pages"
     TIMEOUT = "timeout"
     RETRIES_EXHAUSTED = "retries_exhausted"
+    EXTRACTION_FAILED = "extraction_failed"
 
 
 class JobKind(StrEnum):
     DOCUMENT_INGEST = "document.ingest"
+    DOCUMENT_EXTRACT = "document.extract"
 
 
 class JobStatus(StrEnum):
@@ -191,3 +202,118 @@ class Job(Base):
     error_code: Mapped[str | None] = mapped_column(String(32))
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
+
+
+class Classification(StrEnum):
+    PAYSLIP = "payslip"
+    UNRECOGNISED = "unrecognised"
+
+
+class ExtractionRun(Base):
+    """One extraction of a document version. Immutable for the runtime role. ``provider``
+    names where the layout came from, so synthetic results are always identifiable."""
+
+    __tablename__ = "extraction_runs"
+    __table_args__ = (
+        UniqueConstraint("document_version_id"),
+        UniqueConstraint("tenant_id", "case_id", "id"),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "document_version_id"],
+            [
+                "document_versions.tenant_id",
+                "document_versions.case_id",
+                "document_versions.id",
+            ],
+            name="fk_extraction_runs_document_version",
+        ),
+        CheckConstraint(check_in("classification", Classification), name="classification"),
+        CheckConstraint("raw_output_sha256 ~ '^[0-9a-f]{64}$'", name="raw_output_sha256"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
+    case_id: Mapped[uuid.UUID] = mapped_column()
+    document_version_id: Mapped[uuid.UUID] = mapped_column()
+    provider: Mapped[str] = mapped_column(String(64))
+    model_version: Mapped[str] = mapped_column(String(64))
+    schema_version: Mapped[str] = mapped_column(String(32))
+    classifier_version: Mapped[str] = mapped_column(String(32))
+    classification: Mapped[str] = mapped_column(String(16))
+    markers: Mapped[list[str]] = mapped_column(JSONB)
+    raw_output: Mapped[dict[str, Any]] = mapped_column(JSONB, deferred=True)
+    raw_output_sha256: Mapped[str] = mapped_column(String(64))
+    created_at: Mapped[datetime] = mapped_column(default=utcnow)
+
+
+def _box_check(prefix: str) -> str:
+    x0, y0, x1, y1 = (f"{prefix}{c}" for c in ("x0", "y0", "x1", "y1"))
+    return (
+        f"0 <= {x0} AND {x0} <= {x1} AND {x1} <= page_width "
+        f"AND 0 <= {y0} AND {y0} <= {y1} AND {y1} <= page_height"
+    )
+
+
+class ExtractedField(Base):
+    """One extracted value with its own label and evidence. Immutable for the runtime role.
+
+    The database guarantees the links (field -> run -> version -> document, one tenant and
+    case) and that both boxes lie inside the page. It cannot verify that a box really shows
+    the value: the broker checks that in review."""
+
+    __tablename__ = "extracted_fields"
+    __table_args__ = (
+        UniqueConstraint("run_id", "ordinal"),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "run_id"],
+            ["extraction_runs.tenant_id", "extraction_runs.case_id", "extraction_runs.id"],
+            name="fk_extracted_fields_run",
+        ),
+        CheckConstraint(
+            "section IN ('summary', 'payment', 'deduction', 'year_to_date')", name="section"
+        ),
+        CheckConstraint(
+            f"field_code IS NULL OR field_code IN ({', '.join(repr(c) for c in FIELD_CODES)})",
+            name="field_code",
+        ),
+        CheckConstraint("ordinal > 0", name="ordinal"),
+        CheckConstraint(
+            "num_nonnulls(value_money_minor, value_date, value_text) <= 1", name="one_value"
+        ),
+        CheckConstraint(
+            "(currency IS NULL) = (value_money_minor IS NULL) "
+            "AND (currency IS NULL OR currency = 'GBP')",
+            name="currency",
+        ),
+        CheckConstraint("page_number >= 1 AND page_width > 0 AND page_height > 0", name="page"),
+        CheckConstraint("unit IN ('pt', 'inch')", name="unit"),
+        CheckConstraint(_box_check(""), name="value_box"),
+        CheckConstraint(_box_check("label_"), name="label_box"),
+        CheckConstraint("confidence IS NULL OR confidence BETWEEN 0 AND 1", name="confidence"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), index=True)
+    case_id: Mapped[uuid.UUID] = mapped_column()
+    run_id: Mapped[uuid.UUID] = mapped_column()
+    section: Mapped[str] = mapped_column(String(16))
+    ordinal: Mapped[int] = mapped_column(Integer)
+    field_code: Mapped[str | None] = mapped_column(String(32))
+    label_text: Mapped[str] = mapped_column(String(200))
+    raw_text: Mapped[str] = mapped_column(String(200))
+    value_money_minor: Mapped[int | None] = mapped_column(BigInteger)
+    currency: Mapped[str | None] = mapped_column(String(3))
+    value_date: Mapped[date | None] = mapped_column(Date)
+    value_text: Mapped[str | None] = mapped_column(String(64))
+    page_number: Mapped[int] = mapped_column(Integer)
+    page_width: Mapped[float] = mapped_column(Float)
+    page_height: Mapped[float] = mapped_column(Float)
+    unit: Mapped[str] = mapped_column(String(8))
+    x0: Mapped[float] = mapped_column(Float)
+    y0: Mapped[float] = mapped_column(Float)
+    x1: Mapped[float] = mapped_column(Float)
+    y1: Mapped[float] = mapped_column(Float)
+    label_x0: Mapped[float] = mapped_column(Float)
+    label_y0: Mapped[float] = mapped_column(Float)
+    label_x1: Mapped[float] = mapped_column(Float)
+    label_y1: Mapped[float] = mapped_column(Float)
+    confidence: Mapped[float | None] = mapped_column(Float)

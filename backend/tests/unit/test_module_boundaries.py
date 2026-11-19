@@ -73,6 +73,7 @@ def test_the_worker_can_reach_no_user_facing_service() -> None:
         "meip.core.config",
         "meip.core.db",
         "meip.core.logging",
+        "meip.documents.extraction",
         "meip.documents.models",
         "meip.documents.pdfcheck",
         "meip.documents.storage",

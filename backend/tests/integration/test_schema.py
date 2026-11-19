@@ -354,3 +354,24 @@ async def test_downgrade_refuses_to_discard_processing_state(scratch_engine: Asy
         await run_alembic(scratch_engine, "downgrade", "0012")
     assert await _state(scratch_engine, "SELECT failure_code FROM documents") == (HEAD, "timeout")
     await _fresh(scratch_engine)
+
+
+async def test_downgrade_refuses_to_discard_extraction_results(
+    scratch_engine: AsyncEngine,
+) -> None:
+    await _fresh(scratch_engine)
+    await run_alembic(scratch_engine, "upgrade", "head")
+    await _seed_case_with_income(scratch_engine)
+    async with scratch_engine.begin() as conn:
+        await conn.execute(
+            text(
+                "INSERT INTO documents (id, tenant_id, case_id, document_type, status,"
+                " page_count, created_at, updated_at, version) VALUES (gen_random_uuid(),"
+                " '00000000-0000-7000-8000-0000000000a1', '00000000-0000-7000-8000-0000000000a2',"
+                " 'payslip', 'unrecognised', 1, now(), now(), 1)"
+            )
+        )
+    with pytest.raises(Exception, match="Extraction results exist"):
+        await run_alembic(scratch_engine, "downgrade", "0013")
+    assert await _state(scratch_engine, "SELECT status FROM documents") == (HEAD, "unrecognised")
+    await _fresh(scratch_engine)

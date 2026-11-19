@@ -33,6 +33,11 @@ class BlobBackend(StrEnum):
     """A local directory. Local development and tests only."""
 
 
+class ExtractionProvider(StrEnum):
+    SYNTHETIC = "synthetic"
+    """Reads layouts embedded in synthetic test PDFs. Local and test only."""
+
+
 class ConfigurationError(RuntimeError):
     """Raised when settings are invalid or unsafe for the selected environment."""
 
@@ -108,6 +113,7 @@ class Settings(BaseSettings):
         default=600, gt=0, description="How long a claimed job stays locked to one worker"
     )
     pdf_check_timeout_seconds: float = Field(default=30.0, gt=0)
+    extraction_provider: ExtractionProvider = ExtractionProvider.SYNTHETIC
 
     @model_validator(mode="after")
     def _validate_documents(self) -> Settings:
@@ -151,6 +157,13 @@ class Settings(BaseSettings):
                     "MEIP_BLOB_CONNECTION_STRING must not be the Azurite development account "
                     f"when env={self.env.value}"
                 )
+        # Last: until a real provider is connected, this keeps document processing off
+        # wherever real data could exist, even when every other setting is right.
+        if deployed and self.extraction_provider is ExtractionProvider.SYNTHETIC:
+            raise ConfigurationError(
+                "extraction_provider=synthetic is test-only and forbidden "
+                f"when env={self.env.value}"
+            )
         return self
 
     @model_validator(mode="after")

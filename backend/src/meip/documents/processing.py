@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import hashlib
+import io
 import signal
 import sys
 import tempfile
@@ -37,10 +38,22 @@ from meip.audit.service import AuditAction
 from meip.core.config import Settings, get_settings
 from meip.core.db import create_engine, create_sessionmaker, utcnow
 from meip.core.logging import configure_logging, get_logger
+from meip.documents.extraction import (
+    CLASSIFIER_VERSION,
+    SCHEMA_VERSION,
+    ProviderError,
+    build_layout_provider,
+    classify,
+    extract,
+    raw_output_sha256,
+)
 from meip.documents.models import (
+    Classification,
     Document,
     DocumentStatus,
     DocumentVersion,
+    ExtractedField,
+    ExtractionRun,
     FailureCode,
     Job,
     JobKind,
@@ -65,13 +78,23 @@ async def enqueue_ingest(
     session: AsyncSession, tenant_id: uuid.UUID, case_id: uuid.UUID, version_id: uuid.UUID
 ) -> None:
     """Queue the ingest job in the caller's transaction (idempotent)."""
+    await _enqueue(session, JobKind.DOCUMENT_INGEST, tenant_id, case_id, version_id)
+
+
+async def _enqueue(
+    session: AsyncSession,
+    kind: JobKind,
+    tenant_id: uuid.UUID,
+    case_id: uuid.UUID,
+    version_id: uuid.UUID,
+) -> None:
     await session.execute(
         insert(Job)
         .values(
             id=uuid.uuid4(),
             tenant_id=tenant_id,
             case_id=case_id,
-            kind=JobKind.DOCUMENT_INGEST.value,
+            kind=kind.value,
             document_version_id=version_id,
             status=JobStatus.QUEUED.value,
             attempts=0,
@@ -221,7 +244,130 @@ async def ingest(
         await _set_outcome(ctx, document, pages=None, failure=FailureCode(result.error))
         return result.error
     await _set_outcome(ctx, document, pages=result.pages, failure=None)
+    await _enqueue(
+        ctx.session, JobKind.DOCUMENT_EXTRACT, ctx.tenant_id, document.case_id, version.id
+    )
     return DocumentStatus.READY.value
+
+
+async def extract_document(
+    ctx: OperationContext, store: BlobStore, version_id: uuid.UUID, settings: Settings
+) -> str:
+    """Classify and extract one ``ready`` document. Returns ``extracted``, ``unrecognised``,
+    ``extraction_failed`` or ``skipped``. Raises :class:`TransientError` when worth retrying.
+
+    Three distinct outcomes: extracted (run and fields stored), unrecognised (run stored with
+    the markers found, no fields), provider failure (document failed, no run)."""
+    ctx.require(Permission.DOCUMENT_PROCESS)
+    loaded = await _load(ctx, version_id)
+    if loaded is None:
+        return "skipped"
+    document, version = loaded
+    if document.status != DocumentStatus.READY.value:
+        return "skipped"  # already extracted or failed: running again changes nothing
+
+    sink = io.BytesIO()
+    try:
+        await store.read_into(BlobKey(version.blob_key), sink)
+    except Exception as exc:  # the original was verified at ingest: treat as transient
+        raise TransientError(type(exc).__name__) from exc
+    pdf = sink.getvalue()
+    if hashlib.sha256(pdf).hexdigest() != version.sha256:
+        raise TransientError("hash_changed")  # never extract from bytes we can't vouch for
+
+    provider = build_layout_provider(settings)
+    try:
+        layout = await provider.analyse(pdf)
+    except ProviderError:
+        await _set_outcome(ctx, document, pages=None, failure=FailureCode.EXTRACTION_FAILED)
+        return FailureCode.EXTRACTION_FAILED.value
+
+    classification = classify(layout.text)
+    run = ExtractionRun(
+        tenant_id=ctx.tenant_id,
+        case_id=document.case_id,
+        document_version_id=version.id,
+        provider=provider.name,
+        model_version=provider.model_version,
+        schema_version=SCHEMA_VERSION,
+        classifier_version=CLASSIFIER_VERSION,
+        classification=(
+            Classification.PAYSLIP if classification.is_payslip else Classification.UNRECOGNISED
+        ).value,
+        markers=classification.markers,
+        raw_output=layout.raw,
+        raw_output_sha256=raw_output_sha256(layout.raw),
+    )
+    ctx.session.add(run)
+    await ctx.session.flush()
+
+    counts = {"field_count": 0, "payment_line_count": 0, "deduction_line_count": 0}
+    if classification.is_payslip:
+        for item in extract(layout).fields:
+            page = layout.pages[item.value.page]
+            ctx.session.add(
+                ExtractedField(
+                    tenant_id=ctx.tenant_id,
+                    case_id=document.case_id,
+                    run_id=run.id,
+                    section=item.section.value,
+                    ordinal=item.ordinal,
+                    field_code=item.field_code,
+                    label_text=item.label_text,
+                    raw_text=item.raw_text,
+                    value_money_minor=item.money_minor,
+                    currency="GBP" if item.money_minor is not None else None,
+                    value_date=item.value_date,
+                    value_text=item.value_text,
+                    page_number=page.number,
+                    page_width=page.width,
+                    page_height=page.height,
+                    unit=layout.unit,
+                    x0=item.value.box.x0,
+                    y0=item.value.box.y0,
+                    x1=item.value.box.x1,
+                    y1=item.value.box.y1,
+                    label_x0=item.label.box.x0,
+                    label_y0=item.label.box.y0,
+                    label_x1=item.label.box.x1,
+                    label_y1=item.label.box.y1,
+                    confidence=item.value.confidence,
+                )
+            )
+            counts["field_count"] += 1
+            if item.section.value == "payment":
+                counts["payment_line_count"] += 1
+            elif item.section.value == "deduction":
+                counts["deduction_line_count"] += 1
+        await ctx.session.flush()
+
+    before = {"status": document.status}
+    if classification.is_payslip:
+        document.status = DocumentStatus.EXTRACTED.value
+        action = AuditAction.DOCUMENT_EXTRACTED
+    else:
+        document.status = DocumentStatus.UNRECOGNISED.value
+        action = AuditAction.DOCUMENT_UNRECOGNISED
+    await ctx.session.flush()
+    # Counts, versions and marker names only: no labels, values or document text.
+    change_set = audit.diff(before, {"status": document.status})
+    change_set.note("classification", run.classification)
+    change_set.note("schema_version", SCHEMA_VERSION)
+    change_set.note("markers", classification.markers)
+    for name, value in counts.items():
+        change_set.note(name, value)
+    await audit.record(
+        ctx.session,
+        tenant_id=ctx.tenant_id,
+        actor=ctx.actor,
+        action=action,
+        entity_type="document",
+        entity_id=document.id,
+        case_id=document.case_id,
+        change_set=change_set,
+        correlation_id=ctx.correlation_id,
+    )
+    return document.status
 
 
 def _sha256(path: Path) -> str:
@@ -232,10 +378,24 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-async def _exhausted(ctx: OperationContext, version_id: uuid.UUID) -> None:
-    loaded = await _load(ctx, version_id)
-    if loaded is not None and loaded[0].status == DocumentStatus.RECEIVED.value:
-        await _set_outcome(ctx, loaded[0], pages=None, failure=FailureCode.RETRIES_EXHAUSTED)
+# Per job kind: the handler, the document status it starts from, and the failure code
+# recorded when its retries are exhausted.
+HANDLERS = {
+    JobKind.DOCUMENT_INGEST.value: (ingest, DocumentStatus.RECEIVED, FailureCode.RETRIES_EXHAUSTED),
+    JobKind.DOCUMENT_EXTRACT.value: (
+        extract_document,
+        DocumentStatus.READY,
+        FailureCode.EXTRACTION_FAILED,
+    ),
+}
+
+
+async def _exhausted(ctx: OperationContext, job: ClaimedJob) -> str:
+    _, starts_from, failure = HANDLERS[job.kind]
+    loaded = await _load(ctx, job.document_version_id)
+    if loaded is not None and loaded[0].status == starts_from.value:
+        await _set_outcome(ctx, loaded[0], pages=None, failure=failure)
+    return failure.value
 
 
 # --- worker ------------------------------------------------------------------------------
@@ -258,10 +418,10 @@ async def run_once(
         ctx = context(scope)
         try:
             if job.attempt > MAX_ATTEMPTS:
-                await _exhausted(ctx, job.document_version_id)
-                outcome, done = FailureCode.RETRIES_EXHAUSTED.value, JobStatus.FAILED
+                outcome, done = await _exhausted(ctx, job), JobStatus.FAILED
             else:
-                outcome = await ingest(ctx, store, job.document_version_id, settings)
+                handler = HANDLERS[job.kind][0]
+                outcome = await handler(ctx, store, job.document_version_id, settings)
                 done = JobStatus.DONE
             if await _finish(ctx.session, job, done, None if done is JobStatus.DONE else outcome):
                 await ctx.commit()
@@ -276,10 +436,8 @@ async def run_once(
         async with open_tenant_scope(sessionmaker, job.tenant_id) as scope:
             ctx = context(scope)
             if job.attempt >= MAX_ATTEMPTS:
-                await _exhausted(ctx, job.document_version_id)
-                finished = await _finish(
-                    ctx.session, job, JobStatus.FAILED, FailureCode.RETRIES_EXHAUSTED.value
-                )
+                code = await _exhausted(ctx, job)
+                finished = await _finish(ctx.session, job, JobStatus.FAILED, code)
             else:
                 finished = await _finish(
                     ctx.session, job, JobStatus.QUEUED, outcome, retry_after=RETRY_DELAY

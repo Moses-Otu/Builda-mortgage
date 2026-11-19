@@ -25,7 +25,7 @@ Where this amendment and the sections below differ, the amendment wins.
   the page number and coordinates.
 - **The queue is minimal:** one claim function, a 10-minute lock and an attempt-number
   fence; no extra roles, heartbeats or operator commands.
-- Steps now: 2-A (done), 2-B, 2-D, 2-E, 2-F. Deferred hardening is listed under Stage 4 of
+- Steps now, renumbered: 2-A (done), 2-B (done), **2-C** classification and extraction, **2-D** review and save to the case, **2-E** the review screen. Deferred hardening is listed under Stage 4 of
   [ROADMAP.md](../ROADMAP.md).
 
 ## 0. Revision 2: approved decisions and binding requirements

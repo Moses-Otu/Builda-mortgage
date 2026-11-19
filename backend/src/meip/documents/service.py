@@ -35,17 +35,26 @@ from meip.core.errors import (
 )
 from meip.core.ids import uuid7
 from meip.core.logging import get_logger
+from meip.documents.extraction import REQUIRED_FIELDS
 from meip.documents.models import (
     PDF_MEDIA_TYPE,
     Document,
     DocumentStatus,
     DocumentType,
     DocumentVersion,
+    ExtractedField,
+    ExtractionRun,
     FailureCode,
     ScanStatus,
 )
 from meip.documents.processing import enqueue_ingest
-from meip.documents.schemas import DocumentOut, DocumentVersionOut
+from meip.documents.schemas import (
+    DocumentOut,
+    DocumentVersionOut,
+    Evidence,
+    ExtractedFieldOut,
+    ExtractionOut,
+)
 from meip.documents.storage import BlobKey, BlobNotFoundError, BlobStore
 from meip.tenancy.context import OperationContext
 
@@ -367,3 +376,73 @@ async def open_original(
         spool.close()
         raise
     return original, spool
+
+
+# --- extraction results --------------------------------------------------------------------
+
+
+def _field_out(f: ExtractedField) -> ExtractedFieldOut:
+    return ExtractedFieldOut(
+        ordinal=f.ordinal,
+        field_code=f.field_code,
+        label_text=f.label_text,
+        raw_text=f.raw_text,
+        value_money_minor=f.value_money_minor,
+        currency=f.currency,
+        value_date=f.value_date,
+        value_text=f.value_text,
+        value_evidence=Evidence(page_number=f.page_number, x0=f.x0, y0=f.y0, x1=f.x1, y1=f.y1),
+        label_evidence=Evidence(
+            page_number=f.page_number, x0=f.label_x0, y0=f.label_y0, x1=f.label_x1, y1=f.label_y1
+        ),
+        page_width=f.page_width,
+        page_height=f.page_height,
+        unit=f.unit,
+        confidence=f.confidence,
+    )
+
+
+async def get_extraction(
+    ctx: OperationContext, case_id: uuid.UUID, document_id: uuid.UUID
+) -> ExtractionOut:
+    _, original = await _load(ctx, case_id, document_id)
+    run = await ctx.session.scalar(
+        select(ExtractionRun).where(ExtractionRun.document_version_id == original.id)
+    )
+    if run is None:
+        raise NotFoundError("No extraction for this document yet")
+    fields = list(
+        await ctx.session.scalars(
+            select(ExtractedField)
+            .where(ExtractedField.run_id == run.id)
+            .order_by(ExtractedField.ordinal)
+        )
+    )
+    by_section: dict[str, list[ExtractedFieldOut]] = {
+        "summary": [],
+        "payment": [],
+        "deduction": [],
+        "year_to_date": [],
+    }
+    for f in fields:
+        by_section[f.section].append(_field_out(f))
+    parsed = {
+        f.field_code
+        for f in fields
+        if f.value_money_minor is not None or f.value_date is not None or f.value_text
+    }
+    is_payslip = run.classification == "payslip"
+    return ExtractionOut(
+        provider=run.provider,
+        model_version=run.model_version,
+        schema_version=run.schema_version,
+        classifier_version=run.classifier_version,
+        classification=run.classification,
+        markers=list(run.markers),
+        created_at=run.created_at,
+        summary=by_section["summary"],
+        payments=by_section["payment"],
+        deductions=by_section["deduction"],
+        year_to_date=by_section["year_to_date"],
+        missing_required=[c for c in REQUIRED_FIELDS if c not in parsed] if is_payslip else [],
+    )

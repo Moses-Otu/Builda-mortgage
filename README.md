@@ -165,6 +165,12 @@ UPDATE_OPENAPI_SNAPSHOT=1 uv run pytest tests/integration/test_schema.py
   and opens the PDF in a separate, time-limited process, then marks the document `ready`
   (with `page_count`) or `failed` (with `failure_code`). Transient failures are retried
   three times, one minute apart.
+- **Extraction (Phase 2.0):** a `ready` document is classified with fixed payslip markers and
+  extracted to schema `payslip/1.0.0`. The outcome is `extracted`, `unrecognised` or `failed`
+  (`extraction_failed`). `GET …/documents/{id}/extraction` returns every value with its label,
+  raw text, normalised value, page and boxes. The only provider is the **synthetic test
+  provider** (`synthetic-fixture`), which staging and production refuse; Azure Document
+  Intelligence can be connected later behind the same interface.
 - **Audit:** every mutation writes exactly one `audit_events` row in the same transaction.
   The permanent row holds no direct identifiers and no financial values, though it is still
   pseudonymous personal data (status and role facts about an applicant ID). Amounts,

@@ -152,13 +152,15 @@ def test_deployed_documents_need_the_retention_approval(env: Environment) -> Non
             blob_connection_string=_HTTPS,
             document_retention_approval="  ",
         )
-    approved = _make(
-        env=env,
-        documents_enabled=True,
-        blob_connection_string=_HTTPS,
-        document_retention_approval="D10-approved",
-    )
-    assert approved.documents_enabled
+    # With the approval, the only remaining refusal is the synthetic extraction provider:
+    # no real provider exists yet, so documents can't be enabled where real data could be.
+    with pytest.raises(ConfigurationError, match="extraction_provider=synthetic"):
+        _make(
+            env=env,
+            documents_enabled=True,
+            blob_connection_string=_HTTPS,
+            document_retention_approval="D10-approved",
+        )
 
 
 @pytest.mark.parametrize("env", [Environment.STAGING, Environment.PRODUCTION])
@@ -197,17 +199,18 @@ def test_deployed_storage_must_be_https_and_not_azurite(connection: str, message
     assert "a2V5" not in str(raised.value)  # the account key is never echoed
 
 
-def test_deployed_https_account_is_accepted() -> None:
-    settings = _make(
-        env=Environment.PRODUCTION,
-        documents_enabled=True,
-        document_retention_approval="D10-approved",
-        blob_connection_string=(
-            "DefaultEndpointsProtocol=https;AccountName=meipprod;AccountKey=a2V5;"
-            "EndpointSuffix=core.windows.net"
-        ),
-    )
-    assert settings.documents_enabled
+def test_deployed_https_account_passes_the_storage_checks() -> None:
+    # Storage and approval checks pass; the synthetic provider is the only refusal left.
+    with pytest.raises(ConfigurationError, match="extraction_provider=synthetic"):
+        _make(
+            env=Environment.PRODUCTION,
+            documents_enabled=True,
+            document_retention_approval="D10-approved",
+            blob_connection_string=(
+                "DefaultEndpointsProtocol=https;AccountName=meipprod;AccountKey=a2V5;"
+                "EndpointSuffix=core.windows.net"
+            ),
+        )
     assert _make(env=Environment.LOCAL, auth_mode=AuthMode.DEV, blob_connection_string=_AZURITE)
 
 

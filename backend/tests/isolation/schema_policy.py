@@ -52,6 +52,9 @@ TENANT_SCOPED: dict[str, frozenset[str]] = {
     "document_versions": frozenset({"SELECT", "INSERT"}),
     # Background jobs: enqueued with the upload, finished by the worker (same runtime role).
     "jobs": frozenset({"SELECT", "INSERT", "UPDATE"}),
+    # Extraction results: written once by the worker, never changed or deleted.
+    "extraction_runs": frozenset({"SELECT", "INSERT"}),
+    "extracted_fields": frozenset({"SELECT", "INSERT"}),
 }
 
 # table -> columns the runtime role may UPDATE through column-level grants only.

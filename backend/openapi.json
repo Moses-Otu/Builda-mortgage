@@ -1444,6 +1444,8 @@
         "enum": [
           "received",
           "ready",
+          "extracted",
+          "unrecognised",
           "failed"
         ],
         "title": "DocumentStatus",
@@ -1558,6 +1560,40 @@
         ],
         "title": "EmploymentBasis",
         "type": "string"
+      },
+      "Evidence": {
+        "description": "Where a value (or its label) appears: a box on a page, origin top-left.",
+        "properties": {
+          "page_number": {
+            "title": "Page Number",
+            "type": "integer"
+          },
+          "x0": {
+            "title": "X0",
+            "type": "number"
+          },
+          "x1": {
+            "title": "X1",
+            "type": "number"
+          },
+          "y0": {
+            "title": "Y0",
+            "type": "number"
+          },
+          "y1": {
+            "title": "Y1",
+            "type": "number"
+          }
+        },
+        "required": [
+          "page_number",
+          "x0",
+          "y0",
+          "x1",
+          "y1"
+        ],
+        "title": "Evidence",
+        "type": "object"
       },
       "ExpenditureCategory": {
         "enum": [
@@ -1816,6 +1852,222 @@
         "title": "ExpenditureUpdate",
         "type": "object"
       },
+      "ExtractedFieldOut": {
+        "properties": {
+          "confidence": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An indicator from the provider. Never used to approve a value.",
+            "title": "Confidence"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
+          "field_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Canonical code when the label is recognised; otherwise null (line kept)",
+            "title": "Field Code"
+          },
+          "label_evidence": {
+            "$ref": "#/components/schemas/Evidence"
+          },
+          "label_text": {
+            "description": "The label exactly as printed",
+            "title": "Label Text",
+            "type": "string"
+          },
+          "ordinal": {
+            "title": "Ordinal",
+            "type": "integer"
+          },
+          "page_height": {
+            "title": "Page Height",
+            "type": "number"
+          },
+          "page_width": {
+            "title": "Page Width",
+            "type": "number"
+          },
+          "raw_text": {
+            "description": "The value exactly as printed",
+            "title": "Raw Text",
+            "type": "string"
+          },
+          "unit": {
+            "description": "Coordinate unit: 'pt' (PDF points) or 'inch'",
+            "title": "Unit",
+            "type": "string"
+          },
+          "value_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Date"
+          },
+          "value_evidence": {
+            "$ref": "#/components/schemas/Evidence"
+          },
+          "value_money_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Normalised amount in pence; null if unparsed",
+            "title": "Value Money Minor"
+          },
+          "value_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Text"
+          }
+        },
+        "required": [
+          "ordinal",
+          "field_code",
+          "label_text",
+          "raw_text",
+          "value_money_minor",
+          "currency",
+          "value_date",
+          "value_text",
+          "value_evidence",
+          "label_evidence",
+          "page_width",
+          "page_height",
+          "unit",
+          "confidence"
+        ],
+        "title": "ExtractedFieldOut",
+        "type": "object"
+      },
+      "ExtractionOut": {
+        "properties": {
+          "classification": {
+            "description": "'payslip' or 'unrecognised'",
+            "title": "Classification",
+            "type": "string"
+          },
+          "classifier_version": {
+            "title": "Classifier Version",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "deductions": {
+            "items": {
+              "$ref": "#/components/schemas/ExtractedFieldOut"
+            },
+            "title": "Deductions",
+            "type": "array"
+          },
+          "markers": {
+            "description": "Classification marker groups found (names only)",
+            "items": {
+              "type": "string"
+            },
+            "title": "Markers",
+            "type": "array"
+          },
+          "missing_required": {
+            "description": "Required summary fields with no parsed value (pay_date, gross_pay, net_pay)",
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Required",
+            "type": "array"
+          },
+          "model_version": {
+            "title": "Model Version",
+            "type": "string"
+          },
+          "payments": {
+            "items": {
+              "$ref": "#/components/schemas/ExtractedFieldOut"
+            },
+            "title": "Payments",
+            "type": "array"
+          },
+          "provider": {
+            "description": "'synthetic-fixture' marks results from synthetic test data",
+            "title": "Provider",
+            "type": "string"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "summary": {
+            "items": {
+              "$ref": "#/components/schemas/ExtractedFieldOut"
+            },
+            "title": "Summary",
+            "type": "array"
+          },
+          "year_to_date": {
+            "items": {
+              "$ref": "#/components/schemas/ExtractedFieldOut"
+            },
+            "title": "Year To Date",
+            "type": "array"
+          }
+        },
+        "required": [
+          "provider",
+          "model_version",
+          "schema_version",
+          "classifier_version",
+          "classification",
+          "markers",
+          "created_at",
+          "summary",
+          "payments",
+          "deductions",
+          "year_to_date",
+          "missing_required"
+        ],
+        "title": "ExtractionOut",
+        "type": "object"
+      },
       "FailureCode": {
         "enum": [
           "hash_mismatch",
@@ -1824,7 +2076,8 @@
           "encrypted_pdf",
           "too_many_pages",
           "timeout",
-          "retries_exhausted"
+          "retries_exhausted",
+          "extraction_failed"
         ],
         "title": "FailureCode",
         "type": "string"
@@ -4609,6 +4862,77 @@
           }
         ],
         "summary": "Download the original",
+        "tags": [
+          "documents"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/documents/{document_id}/extraction": {
+      "get": {
+        "description": "Each value has its label, raw text, normalised value and evidence (page and boxes). Confidence is an indicator only. 404 until extraction has run. `provider = synthetic-fixture` marks results from synthetic test data.",
+        "operationId": "get_extraction_api_v1_cases__case_id__documents__document_id__extraction_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "document_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Document Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExtractionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get the classification and extracted fields",
         "tags": [
           "documents"
         ]

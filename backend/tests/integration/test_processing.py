@@ -87,9 +87,14 @@ async def _document(firm: Firm, case: dict[str, Any], document_id: str) -> dict[
     return out
 
 
-async def _job(owner: asyncpg.Connection, version_id: str) -> asyncpg.Record:
+async def _job(
+    owner: asyncpg.Connection, version_id: str, kind: str = "document.ingest"
+) -> asyncpg.Record:
+    # Each version can have several jobs (ingest, then extract): always ask for one kind.
     row = await owner.fetchrow(
-        "SELECT * FROM jobs WHERE document_version_id = $1", uuid.UUID(version_id)
+        "SELECT * FROM jobs WHERE document_version_id = $1 AND kind = $2",
+        uuid.UUID(version_id),
+        kind,
     )
     assert row is not None
     return row
@@ -178,7 +183,13 @@ async def test_valid_pdf_becomes_ready_and_is_audited(
 ) -> None:
     doc = await _upload(firm, case, synthetic_valid_pdf(pages=3))
     assert (await _document(firm, case, doc["id"]))["status"] == "received"
-    assert await _drain(worker) == 1
+    assert await run_once(*worker)  # the ingest job only
+    extract_jobs = await owner.fetchval(
+        "SELECT count(*) FROM jobs WHERE document_version_id = $1 AND kind = 'document.extract'"
+        " AND status = 'queued'",
+        uuid.UUID(doc["original"]["id"]),
+    )
+    assert extract_jobs == 1  # queued in the same transaction as the ingest outcome
 
     out = await _document(firm, case, doc["id"])
     assert (out["status"], out["page_count"], out["failure_code"]) == ("ready", 3, None)

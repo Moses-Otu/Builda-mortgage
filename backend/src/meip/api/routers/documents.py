@@ -27,7 +27,7 @@ from meip.api.deps import (
 )
 from meip.documents import service
 from meip.documents.models import PDF_MEDIA_TYPE, DocumentType
-from meip.documents.schemas import DocumentOut
+from meip.documents.schemas import DocumentOut, ExtractionOut
 
 router = APIRouter(
     prefix="/api/v1/cases/{case_id}/documents",
@@ -143,3 +143,19 @@ async def download_original(
         },
         background=BackgroundTask(file.close),
     )
+
+
+@router.get(
+    "/{document_id}/extraction",
+    response_model=ExtractionOut,
+    summary="Get the classification and extracted fields",
+    description=(
+        "Each value has its label, raw text, normalised value and evidence (page and boxes). "
+        "Confidence is an indicator only. 404 until extraction has run. "
+        "`provider = synthetic-fixture` marks results from synthetic test data."
+    ),
+)
+async def get_extraction(
+    case_id: uuid.UUID, document_id: uuid.UUID, ctx: DocumentReadCtx
+) -> ExtractionOut:
+    return await service.get_extraction(ctx, case_id, document_id)

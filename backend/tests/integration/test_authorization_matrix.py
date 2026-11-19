@@ -271,6 +271,12 @@ PROBES: list[Probe] = [
         "/api/v1/cases/{case_id}/documents/{document_id}/content",
         EVERYONE,
     ),
+    Probe(
+        "get extraction",
+        "GET",
+        "/api/v1/cases/{case_id}/documents/{document_id}/extraction",
+        EVERYONE,
+    ),
 ]
 
 # Routes that do not act within a firm and so have no role-based permission.

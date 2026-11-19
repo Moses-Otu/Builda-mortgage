@@ -129,6 +129,15 @@ Single deployable backend codebase (modular monolith) with API and worker proces
     still applies but the database doesn't narrow it further. A dedicated worker role is a
     production-readiness item (ROADMAP Stage 4). Role permissions are listed explicitly per
     role, never as "every permission". No server-side page images: the review screen renders the original with pdf.js.
+  - **Extraction (step 2-C):** deterministic, no AI. Classification by fixed markers
+    (`payslip-rules/1`: a net pay marker, at least two of six supporting groups, and no
+    exclusion such as P60, P45, SA302 or bank statement). Extraction to `payslip/1.0.0`: one
+    row per value with its own label, raw text, normalised value, value and label boxes, page
+    size and unit, and confidence (an indicator only). Raw provider output is kept as JSONB.
+    Runs and fields are insert-only, linked to their version within one tenant and case,
+    with boxes CHECKed to lie inside their page. The database can't verify that a box shows
+    its value; the broker does. Provider: `LayoutProvider` interface; only the test-only
+    synthetic provider exists so far.
   - **Downloads are not yet access-logged.** That is a production-readiness requirement
     before real borrower documents are enabled (retention brief R17). The platform cannot tell synthetic from
     real documents, so this is a deployment control, not content inspection.

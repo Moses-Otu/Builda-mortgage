@@ -95,6 +95,13 @@ NON_PERSONAL_FIELDS = frozenset(
         "media_type",
         "page_count",
         "failure_code",
+        # extraction: versions, marker names and counts only (never labels or values)
+        "classification",
+        "schema_version",
+        "markers",
+        "field_count",
+        "payment_line_count",
+        "deduction_line_count",
     }
 )
 
@@ -121,6 +128,8 @@ class AuditAction(StrEnum):
     DOCUMENT_UPLOADED = "document.uploaded"
     DOCUMENT_PROCESSED = "document.processed"
     DOCUMENT_PROCESSING_FAILED = "document.processing_failed"
+    DOCUMENT_EXTRACTED = "document.extracted"
+    DOCUMENT_UNRECOGNISED = "document.unrecognised"
 
 
 @dataclass
