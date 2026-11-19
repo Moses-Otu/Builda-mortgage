@@ -4,18 +4,20 @@ B2B SaaS for UK mortgage broker firms that turns borrower financial documents in
 reconciled, source-linked, broker-approved financial profile. See
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/ROADMAP.md](docs/ROADMAP.md).
 
-**Current state: Phase 1.1 (stable domain model).** Firms, invited members, mortgage cases
-with a broker-centred lifecycle, applicants with roles and soft removal, typed declared
-financial data (income sources, commitments, expenditure, observations), per-firm settings,
-an append-only audit trail with erasable details, and database-enforced tenant isolation. No
-document handling yet. See [docs/phases/PHASE-1-REPORT.md](docs/phases/PHASE-1-REPORT.md)
-and [docs/phases/PHASE-1.1-REPORT.md](docs/phases/PHASE-1.1-REPORT.md).
+**Current state: Stage 2-A (payslip reconciliation).** On top of the foundation (firms,
+members, cases, applicants, the typed financial model, the audit trail and database-enforced
+tenant isolation): the payslip workflow end to end (upload, safe processing, extraction with
+a synthetic test provider, broker review, saving figures to the case), a broker screen, and
+six versioned checks across the reviewed payslips and the declared basic salary. **Synthetic
+data only.** See [docs/ROADMAP.md](docs/ROADMAP.md) and the reports in
+[docs/phases/](docs/phases/).
 
 ## Repository layout
 
 ```
 backend/            FastAPI service (Python package `meip`)
-  src/meip/         core/ auth/ tenancy/ firm/ cases/ applicants/ financial/ audit/ api/
+  src/meip/         core/ auth/ tenancy/ firm/ cases/ applicants/ financial/ audit/
+                    documents/ reconciliation/ api/
   migrations/       Alembic migrations (run as the owner DB role)
   scripts/db/       Role and database bootstrap SQL (local only)
   tests/            unit/ integration/ isolation/
@@ -207,6 +209,14 @@ UPDATE_OPENAPI_SNAPSHOT=1 uv run pytest tests/integration/test_schema.py
   `source_kind = 'document'` figures linked to their decision; dates, frequency and tax code
   stay as reviewed evidence. All or nothing; a document is reviewed once (409 with the
   existing review afterwards). Later corrections use the financial endpoints.
+- **Checks (Stage 2-A):** `GET /api/v1/cases/{id}/checks` runs rule set `payslip-checks/1`
+  over the current reviewed payslips and declared basic salary, in the request; nothing is
+  stored. Findings are `passed`, `discrepancy` (both sources cited) or `not_run` (with the
+  reason), each with a key that changes whenever any cited input or the rule set changes.
+  `POST …/checks/{key}/acknowledgement` (`financial:write`) records a note against a current
+  discrepancy. **Acknowledging is not resolving or approving:** no figure changes and the
+  finding is still reported as a discrepancy. Demo data: `scripts/make_synthetic_payslip.py
+  series OUTDIR --faults ytd_break@1,missing_month@3`.
 - **Audit:** every mutation writes exactly one `audit_events` row in the same transaction.
   The permanent row holds no direct identifiers and no financial values, though it is still
   pseudonymous personal data (status and role facts about an applicant ID). Amounts,

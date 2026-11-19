@@ -1,6 +1,55 @@
 {
   "components": {
     "schemas": {
+      "AcknowledgementIn": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "description": "What you found or did. Recorded as written; changes nothing else.",
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "note"
+        ],
+        "title": "AcknowledgementIn",
+        "type": "object"
+      },
+      "AcknowledgementOut": {
+        "properties": {
+          "acknowledged_at": {
+            "format": "date-time",
+            "title": "Acknowledged At",
+            "type": "string"
+          },
+          "acknowledged_by_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acknowledged By User Id"
+          },
+          "note": {
+            "title": "Note",
+            "type": "string"
+          }
+        },
+        "required": [
+          "note",
+          "acknowledged_by_user_id",
+          "acknowledged_at"
+        ],
+        "title": "AcknowledgementOut",
+        "type": "object"
+      },
       "ApplicantCreate": {
         "additionalProperties": false,
         "description": "The first active borrower on a case becomes its primary applicant automatically.",
@@ -929,6 +978,34 @@
         "title": "CaseWarning",
         "type": "object"
       },
+      "ChecksOut": {
+        "properties": {
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/FindingOut"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "description": "The rule set's thresholds. The 2 % declared-basic threshold is an initial product assumption, not a regulatory or lender standard.",
+            "title": "Parameters",
+            "type": "object"
+          },
+          "ruleset_version": {
+            "title": "Ruleset Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ruleset_version",
+          "parameters",
+          "findings"
+        ],
+        "title": "ChecksOut",
+        "type": "object"
+      },
       "ClosureReason": {
         "enum": [
           "completed",
@@ -1603,6 +1680,135 @@
           "y1"
         ],
         "title": "Evidence",
+        "type": "object"
+      },
+      "EvidenceOut": {
+        "description": "One cited input. Document evidence resolves to the payslip and field (and so to the\nhighlighted box on the original); declared evidence is the applicant's declared figure.",
+        "properties": {
+          "document_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Id"
+          },
+          "document_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "examples": [
+              "June 2026 payslip"
+            ],
+            "title": "Document Label"
+          },
+          "field_ordinal": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Ordinal"
+          },
+          "field_review_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Review Id"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "measure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Measure"
+          },
+          "observation_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observation Id"
+          },
+          "source_kind": {
+            "enum": [
+              "document",
+              "declared"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "value_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Date"
+          },
+          "value_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Minor"
+          },
+          "value_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Text"
+          }
+        },
+        "required": [
+          "source_kind",
+          "label"
+        ],
+        "title": "EvidenceOut",
         "type": "object"
       },
       "ExpenditureCategory": {
@@ -2355,6 +2561,84 @@
           "observation_id"
         ],
         "title": "FieldDecisionOut",
+        "type": "object"
+      },
+      "FindingOut": {
+        "properties": {
+          "acknowledgement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AcknowledgementOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A broker has seen this discrepancy and recorded a note. It is still a discrepancy: acknowledging resolves nothing and approves no figure."
+          },
+          "amounts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "description": "Pence: expected, actual, difference and allowance, where relevant",
+            "title": "Amounts",
+            "type": "object"
+          },
+          "applicant_id": {
+            "format": "uuid",
+            "title": "Applicant Id",
+            "type": "string"
+          },
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/EvidenceOut"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "income_source_id": {
+            "format": "uuid",
+            "title": "Income Source Id",
+            "type": "string"
+          },
+          "key": {
+            "description": "Fingerprint of the rule-set version, rule and cited inputs",
+            "title": "Key",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "rule_code": {
+            "title": "Rule Code",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "passed",
+              "discrepancy",
+              "not_run"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "rule_code",
+          "status",
+          "title",
+          "message",
+          "income_source_id",
+          "applicant_id",
+          "evidence"
+        ],
+        "title": "FindingOut",
         "type": "object"
       },
       "FirmSettingsOut": {
@@ -4889,6 +5173,152 @@
         "summary": "Remove an applicant from the case",
         "tags": [
           "applicants"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/checks": {
+      "get": {
+        "description": "Runs the versioned rule set (`payslip-checks/1`) over the case's current reviewed payslips and declared figures, and returns every finding: `passed`, `discrepancy` (values, difference and both sources cited) or `not_run` (with the reason). Nothing is stored. The checks never decide anything about the case.",
+        "operationId": "get_checks_api_v1_cases__case_id__checks_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChecksOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Case not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Run the payslip checks",
+        "tags": [
+          "checks"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/checks/{finding_key}/acknowledgement": {
+      "post": {
+        "description": "Records that a broker has seen a current discrepancy, with a note. It changes no figures, does not resolve the discrepancy and approves no income: the finding is still reported as a discrepancy, with the acknowledgement attached. If any input behind the finding changes, it gets a new key and needs acknowledging again.",
+        "operationId": "acknowledge_api_v1_cases__case_id__checks__finding_key__acknowledgement_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "A finding's key",
+            "in": "path",
+            "name": "finding_key",
+            "required": true,
+            "schema": {
+              "description": "A finding's key",
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Finding Key",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcknowledgementIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FindingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Case not found"
+          },
+          "409": {
+            "description": "`finding-not-current` (no current discrepancy has this key) or `already-acknowledged`"
+          },
+          "422": {
+            "description": "Empty or too long note, or a closed case"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Acknowledge a discrepancy",
+        "tags": [
+          "checks"
         ]
       }
     },

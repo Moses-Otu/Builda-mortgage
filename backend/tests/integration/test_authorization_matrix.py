@@ -291,6 +291,15 @@ PROBES: list[Probe] = [
         },
     ),
     Probe("get review", "GET", "/api/v1/cases/{case_id}/documents/{document_id}/review", EVERYONE),
+    # --- reconciliation checks (Stage 2-A) ---------------------------------------------------
+    Probe("run checks", "GET", "/api/v1/cases/{case_id}/checks", EVERYONE),
+    Probe(
+        "acknowledge finding",
+        "POST",
+        "/api/v1/cases/{case_id}/checks/{finding_key}/acknowledgement",
+        CASE_WORKERS,
+        lambda s: {"json": {"note": "Seen"}},
+    ),
 ]
 
 # Routes that do not act within a firm and so have no role-based permission.
@@ -373,6 +382,7 @@ async def _state(firm: Firm) -> State:
         "membership_id": str(firm.members[target]),
         "member_version": 2,  # invited (1) -> accepted (2)
         "adviser_membership_id": str(firm.members[adviser]),
+        "finding_key": "0" * 64,  # not a current finding: allowed roles get 409, not 403
     }
 
 

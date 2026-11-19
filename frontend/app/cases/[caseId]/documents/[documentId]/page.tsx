@@ -2,7 +2,7 @@
 
 import { Check, ChevronDown, Keyboard, Pencil, X } from "lucide-react";
 import { useParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Breadcrumbs, Loading, PageContainer, RequireFirm } from "@/components/Page";
 import { type Highlight, PdfView } from "@/components/PdfView";
@@ -180,6 +180,16 @@ function ReviewPage({ caseId, documentId }: { caseId: string; documentId: string
 
   const order = useMemo(() => visible.map((f) => f.ordinal), [visible]);
   const moveNext = useCallback(() => select(step(order, selected, 1)), [order, selected, select]);
+
+  // A link from a check's evidence (?field=<ordinal>) opens with that field selected and its
+  // box highlighted, once the fields (or the saved review) have loaded.
+  const linkedField = useRef(false);
+  useEffect(() => {
+    if (linkedField.current || (fields.length === 0 && !review)) return;
+    linkedField.current = true;
+    const field = Number(new URLSearchParams(window.location.search).get("field"));
+    if (Number.isInteger(field) && field > 0) setTimeout(() => select(field), 300);
+  }, [fields, review, select]);
 
   // Keyboard shortcuts (not while typing, and not while a dialog is open).
   useEffect(() => {

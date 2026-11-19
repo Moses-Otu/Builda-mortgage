@@ -81,6 +81,10 @@ NON_PERSONAL_FIELDS = frozenset(
         "retired_reason",
         "withdrawal_reason",
         "retired_observation_ids",
+        # reconciliation: which versioned rule and finding (a hash) was acknowledged
+        "rule_code",
+        "ruleset_version",
+        "finding_key",
         "currency",
         "to_be_repaid_before_completion",
         # No "name": it means a firm's name in one place and an employer or business in
@@ -136,6 +140,7 @@ class AuditAction(StrEnum):
     DOCUMENT_EXTRACTED = "document.extracted"
     DOCUMENT_UNRECOGNISED = "document.unrecognised"
     DOCUMENT_REVIEWED = "document.reviewed"
+    CHECK_ACKNOWLEDGED = "check.acknowledged"
 
 
 @dataclass

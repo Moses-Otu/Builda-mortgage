@@ -16,6 +16,8 @@ import { useParams } from "next/navigation";
 import { type DragEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { AddApplicantDialog } from "@/components/AddApplicantDialog";
+import { ChecksCard } from "@/components/ChecksCard";
+import { DeclaredSalary } from "@/components/DeclaredSalary";
 import { Breadcrumbs, Loading, PageContainer, RequireFirm } from "@/components/Page";
 import { caseTitle, useCaseSummary } from "@/components/useCaseSummary";
 import { Alert } from "@/components/ui/alert";
@@ -29,7 +31,8 @@ import { caseSteps, type Step } from "@/lib/case-steps";
 import { documentStatusView } from "@/lib/failures";
 import { caseStatusLabel, formatBytes, formatDateTime, purposeLabel } from "@/lib/labels";
 import { problemMessage } from "@/lib/problems";
-import type { Applicant, DocumentOut, IncomeSource } from "@/lib/types";
+import { currentDeclaredBasic } from "@/lib/checks";
+import type { Applicant, DocumentOut, IncomeSource, Observation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export default function CasePageRoute() {
@@ -43,15 +46,18 @@ function CasePage({ caseId }: { caseId: string }) {
   const [applicants, setApplicants] = useState<Applicant[] | null>(null);
   const [sources, setSources] = useState<IncomeSource[]>([]);
   const [documents, setDocuments] = useState<DocumentOut[]>([]);
+  const [observations, setObservations] = useState<Observation[]>([]);
   const [applicantId, setApplicantId] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [a, s, d] = await Promise.all([
+    const [a, s, d, o] = await Promise.all([
       get<Applicant[]>(`cases/${caseId}/applicants`),
       get<IncomeSource[]>(`cases/${caseId}/financial/income-sources`),
       get<DocumentOut[]>(`cases/${caseId}/documents`),
+      get<Observation[]>(`cases/${caseId}/financial/observations`),
     ]);
+    if (o.ok) setObservations(o.data);
     if (!a.ok) {
       setError(problemMessage(a.status, a.problem));
       return;
@@ -109,6 +115,11 @@ function CasePage({ caseId }: { caseId: string }) {
   };
   const activeSources = sources.filter((s) => !s.withdrawn_at);
   const steps = caseSteps(sources, documents);
+  // The checks re-run when a document changes state or a declared salary changes.
+  const checksKey = [
+    ...documents.map((d) => `${d.id}:${d.status}`),
+    ...observations.filter((o) => o.source_kind === "declared" && !o.retired_at).map((o) => o.id),
+  ].join(",");
 
   return (
     <PageContainer>
@@ -180,14 +191,24 @@ function CasePage({ caseId }: { caseId: string }) {
                   </p>
                 )}
                 {activeSources.map((s) => (
-                  <div key={s.id} className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2.5">
-                    <span className="grid size-8 place-items-center rounded-md bg-brand-50 text-brand-600">
-                      <Briefcase className="size-4" />
-                    </span>
-                    <div className="text-sm">
-                      <p className="font-medium">{s.name ?? "Employment income"}</p>
-                      <p className="text-slate-500">{nameOf(s.applicant_id)}</p>
+                  <div key={s.id} className="flex flex-col gap-2 rounded-lg border border-slate-200 px-3 py-2.5">
+                    <div className="flex items-center gap-3">
+                      <span className="grid size-8 place-items-center rounded-md bg-brand-50 text-brand-600">
+                        <Briefcase className="size-4" />
+                      </span>
+                      <div className="text-sm">
+                        <p className="font-medium">{s.name ?? "Employment income"}</p>
+                        <p className="text-slate-500">{nameOf(s.applicant_id)}</p>
+                      </div>
                     </div>
+                    {s.kind === "employment" && (
+                      <DeclaredSalary
+                        caseId={caseId}
+                        incomeSourceId={s.id}
+                        current={currentDeclaredBasic(observations, s.id)}
+                        onSaved={() => void load()}
+                      />
+                    )}
                   </div>
                 ))}
                 <Button variant="secondary" onClick={addIncomeSource} disabled={!applicantId}>
@@ -196,6 +217,10 @@ function CasePage({ caseId }: { caseId: string }) {
                 </Button>
               </CardContent>
             </Card>
+          </div>
+
+          <div className="mt-6">
+            <ChecksCard caseId={caseId} refreshKey={checksKey} />
           </div>
         </>
       )}

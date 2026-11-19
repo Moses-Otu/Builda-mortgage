@@ -58,6 +58,9 @@ TENANT_SCOPED: dict[str, frozenset[str]] = {
     # Broker reviews and their per-field decisions: written once, never changed or deleted.
     "document_reviews": frozenset({"SELECT", "INSERT"}),
     "field_reviews": frozenset({"SELECT", "INSERT"}),
+    # Acknowledgements of reconciliation discrepancies: written once, never changed by the
+    # application (the owner role can erase them under the retention policy).
+    "check_acknowledgements": frozenset({"SELECT", "INSERT"}),
 }
 
 # table -> columns the runtime role may UPDATE through column-level grants only.

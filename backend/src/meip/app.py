@@ -14,6 +14,7 @@ from meip.api.middleware import RequestContextMiddleware
 from meip.api.routers import (
     applicants,
     cases,
+    checks,
     documents,
     financial,
     firm,
@@ -79,7 +80,7 @@ def create_app(
 
     app.add_middleware(RequestContextMiddleware)
     install_error_handlers(app)
-    for module in (health, me, firm, members, cases, applicants, financial, documents):
+    for module in (health, me, firm, members, cases, applicants, financial, documents, checks):
         app.include_router(module.router)
     app.include_router(financial.reference)
     return app

@@ -165,6 +165,60 @@ export interface Measure {
   qualifiers: string[];
 }
 
+// --- reconciliation checks (Stage 2-A) ---
+
+export type FindingStatus = "passed" | "discrepancy" | "not_run";
+
+export interface CheckEvidence {
+  source_kind: "document" | "declared";
+  observation_id: Uuid | null;
+  field_review_id: Uuid | null;
+  document_id: Uuid | null;
+  document_label: string | null;
+  field_ordinal: number | null;
+  label: string;
+  measure: string | null;
+  value_minor: number | null;
+  value_date: string | null;
+  value_text: string | null;
+}
+
+export interface Acknowledgement {
+  note: string;
+  acknowledged_by_user_id: Uuid | null;
+  acknowledged_at: string;
+}
+
+export interface Finding {
+  key: string;
+  rule_code: string;
+  status: FindingStatus;
+  title: string;
+  message: string;
+  income_source_id: Uuid;
+  applicant_id: Uuid;
+  amounts: Record<string, number>;
+  evidence: CheckEvidence[];
+  acknowledgement: Acknowledgement | null;
+}
+
+export interface Checks {
+  ruleset_version: string;
+  parameters: Record<string, unknown>;
+  findings: Finding[];
+}
+
+export interface Observation {
+  id: Uuid;
+  income_source_id: Uuid | null;
+  measure: string;
+  source_kind: string;
+  frequency: string | null;
+  value: { type: string; amount_minor?: number };
+  retired_at: string | null;
+  recorded_at: string;
+}
+
 export interface Problem {
   type?: string;
   title?: string;

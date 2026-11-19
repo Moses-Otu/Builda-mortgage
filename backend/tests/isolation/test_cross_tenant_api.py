@@ -124,6 +124,12 @@ PROBES: list[tuple[str, str, dict[str, Any]]] = [
         },
     ),
     ("GET", "/api/v1/cases/{case_id}/documents/{document_id}/review", {}),
+    ("GET", "/api/v1/cases/{case_id}/checks", {}),
+    (
+        "POST",
+        "/api/v1/cases/{case_id}/checks/{finding_key}/acknowledgement",
+        {"json": {"note": "Probe"}},
+    ),
     # Not tenant-scoped, but an attacker must not be able to accept someone else's invitation.
     ("POST", "/api/v1/me/invitations/{membership_id}/accept", {}),
 ]
@@ -181,6 +187,7 @@ async def victim(make_firm: MakeFirm) -> tuple[Firm, dict[str, str]]:
         "commitment_id": commitment.json()["id"],
         "expenditure_item_id": spend.json()["id"],
         "observation_id": observation.json()["id"],
+        "finding_key": "a" * 64,
     }
     return firm, ids
 

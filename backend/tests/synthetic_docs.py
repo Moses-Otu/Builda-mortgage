@@ -13,10 +13,13 @@ never collide as duplicates.
 from __future__ import annotations
 
 import base64
+import calendar
 import io
 import json
 import uuid
 from dataclasses import dataclass, field
+from datetime import date as date_type
+from datetime import timedelta
 from typing import Any
 
 from reportlab.pdfbase.pdfmetrics import getAscentDescent, stringWidth
@@ -263,6 +266,163 @@ PAYSLIPS = {
     "earnings": payslip_earnings,
     "two-pages": payslip_two_pages,
 }
+
+
+# --- a consistent monthly series, for reconciliation (Stage 2-A) ---------------------------
+
+SERIES_FAULTS = frozenset(
+    {
+        "missing_month",  # the payslip at ``fault_at`` is not produced (pay continues)
+        "ytd_break",  # gross pay to date jumps by an extra £375.00 from ``fault_at`` on
+        "arithmetic_error",  # net pay at ``fault_at`` is £10.00 too high
+        "duplicate_period",  # the payslip at ``fault_at`` is produced twice
+        "adjustment",  # an "Arrears Adjustment" line at ``fault_at``; YTD gross jumps by £150 more
+        "taxable_label",  # every payslip says "Taxable Pay To Date" instead of gross
+        "period_end_only",  # no "Period Start" row on any payslip
+        "no_basic",  # the basic line is labelled "Contractual Pay" (not recognised as basic)
+        "part_period",  # an "Unpaid Leave" line on the payslip at ``fault_at``
+    }
+)
+
+
+@dataclass
+class SeriesPayslip:
+    document: SyntheticDocument
+    period_start: date_type
+    period_end: date_type
+    pay_date: date_type
+    gross_minor: int
+    net_minor: int
+    ytd_gross_minor: int
+    ytd_tax_minor: int
+
+
+def _money(minor: int) -> str:
+    sign = "-" if minor < 0 else ""
+    pounds, pence = divmod(abs(minor), 100)
+    return f"{sign}£{pounds:,}.{pence:02d}"
+
+
+def _month_end(year: int, month: int) -> date_type:
+    return date_type(year, month, calendar.monthrange(year, month)[1])
+
+
+def _last_weekday(day: date_type) -> date_type:
+    while day.weekday() >= 5:  # pay moves to the Friday when the month ends at a weekend
+        day -= timedelta(days=1)
+    return day
+
+
+def payslip_series(
+    start: tuple[int, int] = (2026, 5),
+    months: int = 4,
+    basic_minor: int = 375_000,
+    *,
+    faults: frozenset[str] = frozenset(),
+    fault_at: int = 2,
+    positions: dict[str, int] | None = None,
+) -> list[SeriesPayslip]:
+    """SYNTHETIC consecutive monthly payslips with consistent year-to-date totals.
+
+    Periods run from the 1st to the month end; pay is on the last weekday. Tax, NI and pension
+    are simple made-up rates (this is test data, not a payroll engine). Year to date assumes
+    the same pay in earlier months of the tax year and restarts each April. ``faults``
+    (from :data:`SERIES_FAULTS`) apply at the index ``fault_at`` where they name one, or at
+    their own index in ``positions`` (e.g. ``{"ytd_break": 1, "missing_month": 3}``)."""
+    positions = positions or {}
+    unknown = (faults | set(positions)) - SERIES_FAULTS
+    faults = faults | frozenset(positions)
+
+    def hit(fault: str, i: int) -> bool:
+        return fault in faults and i == positions.get(fault, fault_at)
+
+    if unknown:
+        raise ValueError(f"Unknown faults: {sorted(unknown)}")
+    year, month = start
+    tax_month = (month - 4) % 12 + 1  # April is month 1 of the UK tax year
+    regular_tax = max(0, basic_minor - 104_750) * 20 // 100
+    ytd_gross = basic_minor * (tax_month - 1)
+    ytd_tax = regular_tax * (tax_month - 1)
+    extra_ytd = 0
+    out: list[SeriesPayslip] = []
+    for i in range(months):
+        if month == 4:
+            ytd_gross, ytd_tax, extra_ytd = 0, 0, 0
+        period_start = date_type(year, month, 1)
+        period_end = _month_end(year, month)
+        pay_date = _last_weekday(period_end)
+        lines: list[tuple[str, int]] = [
+            ("Contractual Pay" if "no_basic" in faults else "Basic Pay", basic_minor)
+        ]
+        if hit("adjustment", i):
+            lines.append(("Arrears Adjustment", 20_000))
+            extra_ytd += 15_000
+        if hit("part_period", i):
+            lines.append(("Unpaid Leave", -50_000))
+        if hit("ytd_break", i):
+            extra_ytd += 37_500
+        gross = sum(amount for _, amount in lines)
+        tax = max(0, gross - 104_750) * 20 // 100
+        ni = max(0, gross - 104_800) * 8 // 100
+        pension = gross * 5 // 100
+        deductions = tax + ni + pension
+        net = gross - deductions + (1_000 if hit("arithmetic_error", i) else 0)
+        ytd_gross += gross
+        ytd_tax += tax
+
+        copies = 0 if hit("missing_month", i) else 1
+        if hit("duplicate_period", i):
+            copies = 2
+        for _ in range(copies):
+            doc = SyntheticDocument()
+            doc.text(1, 50, 60, "SYNTHETIC SERIES EMPLOYER LTD")
+            doc.text(1, 50, 75, "PAYSLIP")
+            fmt = "%d/%m/%Y"
+            _row(doc, 1, 100, "Pay Date", pay_date.strftime(fmt))
+            _row(doc, 1, 115, "Tax Code", "1257L")
+            _row(doc, 1, 130, "Pay Frequency", "Monthly")
+            if "period_end_only" not in faults:
+                _row(doc, 1, 145, "Period Start", period_start.strftime(fmt))
+            _row(doc, 1, 160, "Period End", period_end.strftime(fmt))
+            doc.text(1, 50, 190, "Payments")
+            y = 205.0
+            for label, amount in lines:
+                _row(doc, 1, y, label, _money(amount))
+                y += 15
+            _row(doc, 1, y, "Total Gross Pay", _money(gross))
+            y += 30
+            doc.text(1, 50, y, "Deductions")
+            y += 15
+            for label, amount in (
+                ("PAYE Tax", tax),
+                ("Employee NI", ni),
+                ("Employee Pension", pension),
+            ):
+                _row(doc, 1, y, label, _money(amount))
+                y += 15
+            _row(doc, 1, y, "Total Deductions", _money(deductions))
+            y += 30
+            _row(doc, 1, y, "Net Pay", _money(net))
+            y += 30
+            ytd_label = "Taxable Pay To Date" if "taxable_label" in faults else "Gross Pay To Date"
+            _row(doc, 1, y, ytd_label, _money(ytd_gross + extra_ytd))
+            _row(doc, 1, y + 15, "Tax Paid To Date", _money(ytd_tax))
+            out.append(
+                SeriesPayslip(
+                    doc,
+                    period_start,
+                    period_end,
+                    pay_date,
+                    gross,
+                    net,
+                    ytd_gross + extra_ytd,
+                    ytd_tax,
+                )
+            )
+        month += 1
+        if month == 13:
+            year, month = year + 1, 1
+    return out
 
 
 # --- look-alike documents that must NOT be classified as payslips -------------------------

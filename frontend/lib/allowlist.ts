@@ -3,7 +3,10 @@
 // other routes, traversal, encoded separators, absolute URLs - is refused.
 
 const ID = "{id}";
+const KEY = "{key}";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+/** A reconciliation finding's key: a SHA-256 in lowercase hex. */
+const FINDING_KEY = /^[0-9a-f]{64}$/;
 
 const ROUTES: Array<[method: string, pattern: string]> = [
   ["GET", "me"],
@@ -14,6 +17,11 @@ const ROUTES: Array<[method: string, pattern: string]> = [
   ["GET", `cases/${ID}/financial/income-sources`],
   ["POST", `cases/${ID}/financial/income-sources`],
   ["GET", `cases/${ID}/financial/observations`],
+  // Stage 2-A: the declared basic salary (financial:write; the API checks the measure).
+  ["POST", `cases/${ID}/financial/observations`],
+  // Stage 2-A: reconciliation checks, and acknowledging a discrepancy (financial:write).
+  ["GET", `cases/${ID}/checks`],
+  ["POST", `cases/${ID}/checks/${KEY}/acknowledgement`],
   ["GET", "financial/measures"],
   ["GET", `cases/${ID}/documents`],
   ["POST", `cases/${ID}/documents`],
@@ -33,7 +41,9 @@ export function isAllowed(method: string, segments: readonly string[]): boolean 
       parts.length === segments.length &&
       parts.every((part, i) => {
         const segment = segments[i] ?? "";
-        return part === ID ? UUID.test(segment) : part === segment;
+        if (part === ID) return UUID.test(segment);
+        if (part === KEY) return FINDING_KEY.test(segment);
+        return part === segment;
       })
     );
   });

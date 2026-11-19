@@ -24,6 +24,7 @@ from meip.financial.models import (
     MeasureQualifier,
 )
 from meip.firm.models import FirmSettings
+from meip.reconciliation.models import CheckAcknowledgement
 from meip.tenancy.models import Membership, Tenant, User
 
 __all__ = [
@@ -32,6 +33,7 @@ __all__ = [
     "AuditEventDetail",
     "Base",
     "Case",
+    "CheckAcknowledgement",
     "Commitment",
     "CommitmentParty",
     "Document",

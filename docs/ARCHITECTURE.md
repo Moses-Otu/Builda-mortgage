@@ -157,6 +157,18 @@ Single deployable backend codebase (modular monolith) with API and worker proces
     cases and applicants (`POST cases`, `POST cases/{id}/applicants`); the API's own
     permissions decide. Display wording for API codes lives in `lib/labels.ts` and
     `lib/failures.ts`; the codes are unchanged.
+  - **Reconciliation (Stage 2-A):** module `reconciliation`. Six deterministic checks
+    (`payslip-checks/1`) are **pure functions** over the case's current reviewed payslip
+    figures, reviewed pay dates and periods, and the declared basic salary. They run **in the
+    API request** (`GET /cases/{id}/checks`); there is no worker job and no results table.
+    Each finding is `passed`, `discrepancy` (both sources cited, down to the field and its
+    box) or `not_run` (with the reason). Thresholds live in one versioned configuration; the
+    2 % declared-basic threshold is an initial product assumption, not a regulatory
+    standard. A finding's key is a SHA-256 over the rule-set version, rule, parameters and
+    every cited input's identity, value and period, so any change produces a new finding.
+    The only stored data is `check_acknowledgements` (insert-only for the runtime role, RLS,
+    one audit event with the note in the erasable details). **Acknowledging is not resolving
+    or approving:** it changes no figure and the finding stays a discrepancy.
   - **Downloads are not yet access-logged.** That is a production-readiness requirement
     before real borrower documents are enabled (retention brief R17). The platform cannot tell synthetic from
     real documents, so this is a deployment control, not content inspection.

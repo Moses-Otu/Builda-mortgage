@@ -38,6 +38,17 @@ ALLOWED: dict[str, set[str]] = {
         "financial",
         "models",
     },
+    # reconciliation reads reviewed documents and financial figures (never writes them) and
+    # stores only acknowledgements; nothing imports reconciliation except the API.
+    "reconciliation": {
+        "core",
+        "reconciliation",
+        "audit",
+        "cases",
+        "tenancy",
+        "documents",
+        "financial",
+    },
 }
 HTTP_FRAMEWORKS = {"fastapi", "starlette"}
 

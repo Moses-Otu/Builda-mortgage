@@ -46,6 +46,7 @@ AUDITED_ROUTES: dict[Route, str] = {
     ("POST", "/api/v1/cases/{case_id}/documents/{document_id}/review"): "document.reviewed",
     ("POST", _F + "/observations"): "observation.recorded",
     ("POST", _F + "/observations/{observation_id}/retirement"): "observation.retired",
+    ("POST", _C + "/checks/{finding_key}/acknowledgement"): "check.acknowledged",
 }
 
 
@@ -232,6 +233,11 @@ ACTIONS: dict[Route, Action] = {
             "decisions": [{"ordinal": o, "decision": "accept"} for o in s["ordinals"]],
         },
     ),
+    ("POST", _C + "/checks/{finding_key}/acknowledgement"): lambda f, s: f.request(
+        "POST",
+        f"{_case(s)}/checks/{s['finding_key']}/acknowledgement",
+        json={"note": "Seen; client to explain"},
+    ),
 }
 
 
@@ -257,9 +263,24 @@ async def _extracted_payslip(firm: Firm, state: dict[str, Any]) -> None:
     ]
 
 
+async def _discrepancy(firm: Firm, state: dict[str, Any]) -> None:
+    """A reviewed payslip whose basic pay differs from the declared £3,000 a month (the setup's
+    declared observation): a current DECLARED-BASIC discrepancy to acknowledge."""
+    await _extracted_payslip(firm, state)
+    review = await ACTIONS[("POST", "/api/v1/cases/{case_id}/documents/{document_id}/review")](
+        firm, state
+    )
+    assert review.status_code == 201, review.text
+    checks = (await firm.request("GET", f"{_case(state)}/checks")).json()
+    state["finding_key"] = next(
+        f["key"] for f in checks["findings"] if f["status"] == "discrepancy"
+    )
+
+
 # Routes whose action needs state that itself writes audit events.
 PREPARE: dict[Route, Callable[[Firm, dict[str, Any]], Awaitable[None]]] = {
     ("POST", "/api/v1/cases/{case_id}/documents/{document_id}/review"): _extracted_payslip,
+    ("POST", _C + "/checks/{finding_key}/acknowledgement"): _discrepancy,
 }
 
 
