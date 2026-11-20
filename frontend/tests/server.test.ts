@@ -21,6 +21,7 @@ describe("forwarder allowlist", () => {
     ["get", `cases/${CASE}/documents/${DOC}/review`],
     ["POST", "cases"], // Phase 2.1 (U2): new case
     ["POST", `cases/${CASE}/applicants`], // Phase 2.1 (U2): add applicant
+    ["POST", `cases/${CASE}/transitions`], // Stage 3-B: case status control (decision V4)
   ])("allows %s %s", (method, path) => expect(isAllowed(method, split(path))).toBe(true));
 
   it.each([
@@ -29,7 +30,6 @@ describe("forwarder allowlist", () => {
     // Phase 2.1 allows creating cases and applicants, and nothing next to them:
     ["PATCH", `cases/${CASE}`],
     ["POST", `cases/${CASE}`],
-    ["POST", `cases/${CASE}/transitions`],
     ["POST", `cases/${CASE}/applicants/${DOC}`],
     ["POST", `cases/${CASE}/applicants/${DOC}/removal`],
     ["DELETE", `cases/${CASE}/applicants`],

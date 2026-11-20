@@ -11,7 +11,7 @@ export interface Step {
   state: StepState;
 }
 
-export function caseSteps(sources: IncomeSource[], documents: DocumentOut[]): Step[] {
+export function caseSteps(sources: IncomeSource[], documents: DocumentOut[], status = "draft"): Step[] {
   const hasSource = sources.some((s) => !s.withdrawn_at);
   // Payslips only: bank statements have their own confirmation (Stage 2-B).
   const usable = documents.filter(
@@ -46,13 +46,17 @@ export function caseSteps(sources: IncomeSource[], documents: DocumentOut[]): St
       state: state(1),
     },
     { key: "review", title: "Review and save", detail: reviewDetail, state: state(2) },
-    // Stage 3-A: the profile can be checked once the evidence is reviewed. Approving it
-    // (Stage 3-B) will complete this step.
+    // Stage 3-B: approving the profile completes the case's evidence work.
     {
       key: "profile",
-      title: "Check the profile",
-      detail: "Every figure with its source",
-      state: done.every(Boolean) ? "current" : "upcoming",
+      title: "Approve the profile",
+      detail:
+        status === "verified"
+          ? "Approved"
+          : status === "in_review"
+            ? "Ready for approval"
+            : "Check every figure with its source, then approve",
+      state: status === "verified" ? "done" : done.every(Boolean) ? "current" : "upcoming",
     },
   ];
 }

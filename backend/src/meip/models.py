@@ -27,6 +27,7 @@ from meip.financial.models import (
     MeasureQualifier,
 )
 from meip.firm.models import FirmSettings
+from meip.profile.models import ProfileApproval
 from meip.reconciliation.models import CheckAcknowledgement
 from meip.tenancy.models import Membership, Tenant, User
 
@@ -57,6 +58,7 @@ __all__ = [
     "MeasureDefinition",
     "MeasureQualifier",
     "Membership",
+    "ProfileApproval",
     "Tenant",
     "User",
 ]

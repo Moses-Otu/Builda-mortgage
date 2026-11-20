@@ -55,16 +55,22 @@ class ClosureReason(StrEnum):
     OTHER = "other"
 
 
-# Statuses the database accepts today. 'verified' is added (with an approval-pointer CHECK)
-# only when profile approvals exist, so a case can never be stored as verified without one.
+# Statuses the database accepts. 'verified' became storable with profile approvals (Stage
+# 3-B, migration 0019), together with the CHECKs below that tie it to an approval.
 STORABLE_STATUSES = (
     CaseStatus.DRAFT,
     CaseStatus.COLLECTING_EVIDENCE,
     CaseStatus.IN_REVIEW,
+    CaseStatus.VERIFIED,
     CaseStatus.CLOSED,
 )
 STATUS_CHECK = "status IN ({})".format(", ".join(f"'{s.value}'" for s in STORABLE_STATUSES))
 CLOSURE_CHECK = "(status = 'closed') = (closure_reason IS NOT NULL)"
+# A verified case always has a current approval.
+VERIFIED_HAS_APPROVAL = "status <> 'verified' OR approval_id IS NOT NULL"
+# Only a verified case, or one closed from verified (its final approval), keeps an approval.
+# Reopening must clear the pointer; the approval row itself remains.
+APPROVAL_STATUS = "approval_id IS NULL OR status IN ('verified', 'closed')"
 # Data sanity only. Typical lender ranges are reported as warnings, not enforced (D7).
 TERM_CHECK = "term_months IS NULL OR term_months BETWEEN 1 AND 600"
 
@@ -89,6 +95,16 @@ class Case(Base):
             name="closure_reason",
         ),
         CheckConstraint(CLOSURE_CHECK, name="closure_consistency"),
+        CheckConstraint(VERIFIED_HAS_APPROVAL, name="verified_has_approval"),
+        CheckConstraint(APPROVAL_STATUS, name="approval_status"),
+        # The current approval: always one of this case's own approvals. Added after both
+        # tables exist (approvals also point at their case).
+        ForeignKeyConstraint(
+            ["tenant_id", "id", "approval_id"],
+            ["profile_approvals.tenant_id", "profile_approvals.case_id", "profile_approvals.id"],
+            name="fk_cases_approval",
+            use_alter=True,
+        ),
         CheckConstraint(TERM_CHECK, name="term"),
         CheckConstraint(
             "property_value_minor IS NULL OR property_value_minor >= 0", name="property_value"
@@ -113,6 +129,8 @@ class Case(Base):
     updated_at: Mapped[datetime] = mapped_column(default=utcnow, onupdate=utcnow)
     status_changed_at: Mapped[datetime] = mapped_column(default=utcnow)
     closure_reason: Mapped[str | None] = mapped_column(String(32))
+    # The current profile approval (Stage 3-B): set by approving, cleared by reopening.
+    approval_id: Mapped[uuid.UUID | None] = mapped_column()
     closure_note: Mapped[str | None] = mapped_column(String(500))
     version: Mapped[int] = mapped_column(Integer, default=1)
 

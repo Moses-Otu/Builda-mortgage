@@ -312,9 +312,17 @@ async def transition_case(
         # Reopened: the closure no longer applies. Its record remains in the audit history.
         case.closure_reason = None
         case.closure_note = None
+    # Stage 3-B: closing a verified case keeps its final approval; any reopening supersedes
+    # it. The pointer is cleared in the same UPDATE as the status (a CHECK requires it); the
+    # approval row itself remains as history.
+    superseded = case.approval_id if not closing else None
+    if superseded is not None:
+        case.approval_id = None
     await ctx.session.flush()
-    changes = audit.diff(before, audit.snapshot(case, ("status", "closure_reason"))).note(
-        "note", body.note
+    changes = (
+        audit.diff(before, audit.snapshot(case, ("status", "closure_reason")))
+        .note("note", body.note)
+        .note("superseded_approval_id", superseded)
     )
     await audit.record(
         ctx.session,

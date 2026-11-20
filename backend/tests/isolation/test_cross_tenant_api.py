@@ -126,6 +126,19 @@ PROBES: list[tuple[str, str, dict[str, Any]]] = [
     ("GET", "/api/v1/cases/{case_id}/documents/{document_id}/review", {}),
     ("GET", "/api/v1/cases/{case_id}/checks", {}),
     ("GET", "/api/v1/cases/{case_id}/profile", {}),
+    ("GET", "/api/v1/cases/{case_id}/profile/approvals", {}),
+    ("GET", "/api/v1/cases/{case_id}/profile/approvals/{approval_id}", {}),
+    (
+        "POST",
+        "/api/v1/cases/{case_id}/profile/approvals",
+        {
+            "json": {
+                "fingerprint": "0" * 64,
+                "attestation_version": "attestation/1",
+                "confirmed": True,
+            }
+        },
+    ),
     ("GET", "/api/v1/cases/{case_id}/bank-accounts", {}),
     (
         "POST",
@@ -196,6 +209,7 @@ async def victim(make_firm: MakeFirm) -> tuple[Firm, dict[str, str]]:
         "observation_id": observation.json()["id"],
         "finding_key": "a" * 64,
         "account_id": "00000000-0000-7000-8000-00000000000b",
+        "approval_id": "00000000-0000-7000-8000-00000000000c",
     }
     return firm, ids
 

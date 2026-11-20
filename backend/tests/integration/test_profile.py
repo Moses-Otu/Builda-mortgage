@@ -301,7 +301,7 @@ async def test_supported_by_keeps_declared_and_documentary_apart(
     declared = await case.declare_basic(45_000)
 
     profile = await case.profile()
-    assert profile["approval"] == {"status": "not_approved"}
+    assert profile["approval"]["status"] == "not_approved"
     s = support_of(profile, case.source)
     assert s["item_kind"] == "income_source"
     assert s["declared"] == [declared]  # declared only here, never documentary

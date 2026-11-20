@@ -48,6 +48,7 @@ AUDITED_ROUTES: dict[Route, str] = {
     ("POST", _F + "/observations/{observation_id}/retirement"): "observation.retired",
     ("POST", _C + "/checks/{finding_key}/acknowledgement"): "check.acknowledged",
     ("POST", _C + "/bank-accounts/{account_id}/holders"): "bank_account.holder_added",
+    ("POST", _C + "/profile/approvals"): "profile.approved",
 }
 
 
@@ -244,6 +245,16 @@ ACTIONS: dict[Route, Action] = {
         f"{_case(s)}/bank-accounts/{s['account_id']}/holders",
         json={"applicant_id": s["second"]["id"]},
     ),
+    ("POST", _C + "/profile/approvals"): lambda f, s: f.request(
+        "POST",
+        f"{_case(s)}/profile/approvals",
+        json={
+            "fingerprint": s["fingerprint"],
+            "attestation_version": "attestation/1",
+            "confirmed": True,
+            "note": "Reviewed with the client",
+        },
+    ),
 }
 
 
@@ -314,11 +325,26 @@ async def _confirmed_account(firm: Firm, state: dict[str, Any]) -> None:
     state["account_id"] = review.json()["bank_account"]["id"]
 
 
+async def _approvable(firm: Firm, state: dict[str, Any]) -> None:
+    """Move the case to review (each transition writes its own event) and load the profile's
+    fingerprint, so the approval itself is the only event counted."""
+    for to in ("collecting_evidence", "in_review"):
+        version = (await firm.request("GET", _case(state))).json()["version"]
+        resp = await firm.request(
+            "POST", f"{_case(state)}/transitions", if_match=version, json={"to_status": to}
+        )
+        assert resp.status_code == 200, resp.text
+    profile = (await firm.request("GET", f"{_case(state)}/profile")).json()
+    assert profile["readiness"]["ready"], profile["readiness"]
+    state["fingerprint"] = profile["fingerprint"]
+
+
 # Routes whose action needs state that itself writes audit events.
 PREPARE: dict[Route, Callable[[Firm, dict[str, Any]], Awaitable[None]]] = {
     ("POST", "/api/v1/cases/{case_id}/documents/{document_id}/review"): _extracted_payslip,
     ("POST", _C + "/checks/{finding_key}/acknowledgement"): _discrepancy,
     ("POST", _C + "/bank-accounts/{account_id}/holders"): _confirmed_account,
+    ("POST", _C + "/profile/approvals"): _approvable,
 }
 
 

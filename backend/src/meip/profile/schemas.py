@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import Field
+from pydantic import Field, StringConstraints
 
-from meip.core.schemas import OutputModel
+from meip.core.schemas import InputModel, OutputModel
 from meip.documents.schemas import BankAccountOut, DocumentOut, ExtractedFieldOut
 from meip.financial.schemas import (
     CommitmentOut,
@@ -181,18 +181,12 @@ class ItemSupport(OutputModel):
     findings: ItemFindings
 
 
-class ApprovalStatus(OutputModel):
-    """The broker's approval of the whole profile (Stage 3-B). Approval is a broker act,
-    not a property of the evidence."""
-
-    status: Literal["not_approved", "approved", "superseded"] = "not_approved"
-
-
-class ProfileOut(OutputModel):
-    """The case's financial profile under rule ``profile/1``: every current (not retired)
-    figure, labelled by origin, with its provenance. Nothing is chosen, averaged, annualised
-    or summed. The fingerprint is the SHA-256 of everything else in this document; approving
-    (Stage 3-B) requires the fingerprint the broker saw."""
+class ProfileSnapshot(OutputModel):
+    """The content a broker attests: the case's financial profile under rule ``profile/1``.
+    Every current (not retired) figure, labelled by origin, with its provenance; what supports
+    each item; the checks; the documents; and the names of every member referenced. Nothing is
+    chosen, averaged, annualised or summed. This is exactly what an approval freezes: its
+    canonical JSON is the snapshot, and its SHA-256 the fingerprint."""
 
     rules: Literal["profile/1"] = "profile/1"
     case: ProfileCase
@@ -207,8 +201,108 @@ class ProfileOut(OutputModel):
         description="Every document on the case, including those not relied on"
     )
     support: list[ItemSupport] = Field(
-        description="Per item, what supports it in five separate kinds (declared, "
-        "documentary, corroborating, findings; approval is profile-level)"
+        description="Per item, what supports it in separate kinds (declared, documentary, "
+        "corroborating, findings); approval, the fifth, is profile-level"
     )
+    members: list[MemberRef] = Field(
+        description="Every firm member the profile references, with their name as it was "
+        "when the profile was built, so a stored snapshot stays readable"
+    )
+
+
+# --- readiness and approval (derived; outside the fingerprint and the snapshot) -----------------
+
+
+class Blocker(OutputModel):
+    code: Literal[
+        "case_not_in_review",
+        "documents_outstanding",
+        "discrepancies_unacknowledged",
+        "nothing_recorded",
+    ]
+    message: str
+    ids: list[str] = Field(default_factory=list, description="Documents or finding keys")
+
+
+class Notice(OutputModel):
+    """A fact shown before attesting. Never blocks; never a count or a judgement."""
+
+    message: str
+
+
+class Attestation(OutputModel):
+    version: str = Field(examples=["attestation/1"])
+    text: str
+
+
+class Readiness(OutputModel):
+    ready: bool
+    blockers: list[Blocker]
+    notices: list[Notice]
+    attestation: Attestation = Field(description="The wording the broker will attest")
+
+
+class Superseded(OutputModel):
+    version: int
+    superseded_at: datetime | None
+
+
+class ApprovalStatus(OutputModel):
+    """The broker's approval of the whole profile. Approval is a broker act, not a property of
+    the evidence; its facts live on the approval record, never inside the snapshot."""
+
+    status: Literal["not_approved", "approved"] = "not_approved"
+    approval_id: uuid.UUID | None = None
+    version: int | None = None
+    approved_by: MemberRef | None = None
+    approved_at: datetime | None = None
+    superseded: list[Superseded] = Field(default_factory=list)
+
+
+class ProfileOut(ProfileSnapshot):
+    """The live profile: the snapshot content plus three derived fields that describe its
+    state, not its content (excluded from the fingerprint and from any snapshot)."""
+
+    readiness: Readiness
     approval: ApprovalStatus
-    fingerprint: str = Field(description="SHA-256 of this profile's canonical JSON")
+    fingerprint: str = Field(
+        description="SHA-256 of the profile's canonical JSON, without readiness, approval and "
+        "the fingerprint itself. Approving requires the fingerprint the broker saw."
+    )
+
+
+Note = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=1000)]
+
+
+class ApproveIn(InputModel):
+    fingerprint: str = Field(
+        pattern=r"^[0-9a-f]{64}$", description="The profile's fingerprint as loaded"
+    )
+    attestation_version: str = Field(examples=["attestation/1"])
+    confirmed: bool = Field(description="The broker ticked the attestation")
+    note: Note | None = None
+
+
+class ApprovalOut(OutputModel):
+    id: uuid.UUID
+    case_id: uuid.UUID
+    version: int
+    profile_rules: str
+    snapshot_sha256: str
+    attestation_version: str
+    note: str | None
+    approved_by: MemberRef | None
+    approved_at: datetime
+    current: bool = Field(description="The case's current approval")
+    superseded_at: datetime | None = Field(
+        default=None, description="When reopening the case superseded it"
+    )
+
+
+class ApprovedOut(ApprovalOut):
+    case_version: int = Field(description="The case's new version (its ETag)")
+
+
+class ApprovalDetailOut(ApprovalOut):
+    attestation_text: str = Field(description="The exact wording the broker accepted")
+    snapshot: ProfileSnapshot = Field(description="The approved profile, its hash checked")

@@ -238,6 +238,18 @@ UPDATE_OPENAPI_SNAPSHOT=1 uv run pytest tests/integration/test_schema.py
   every document on the case, plus a `fingerprint` (SHA-256) that approval (3-B) will
   require. Nothing is chosen, summed, averaged or annualised. The screen is
   `/cases/{id}/profile`.
+- **Profile approval (Stage 3-B):** `POST /api/v1/cases/{id}/profile/approvals` (`profile:approve`:
+  firm admins and advisers) attests the profile exactly as loaded (`fingerprint`), with the
+  current `attestation_version` and `confirmed: true`.
+  - It runs in one transaction under the case row lock. Blockers (case not in review,
+    documents outstanding, unacknowledged discrepancies, nothing recorded) or a changed
+    fingerprint refuse it.
+  - It stores the canonical snapshot text, its SHA-256 and the exact attestation wording as
+    the next version, and the case becomes `verified`.
+  - Reopening (a note is required) supersedes the approval; closing keeps it.
+  - `GET …/profile/approvals[/{id}]` list versions and return a snapshot, after checking its
+    hash. The screens add a case status control, a readiness panel, an approve dialog and a
+    version history (`/cases/{id}/profile?version=n`).
 - **Checks (Stage 2-A and 2B-3):** `GET /api/v1/cases/{id}/checks` runs two rule sets in the
   request; nothing is stored. `payslip-checks/1` covers the current reviewed payslips and the
   declared basic salary. `bank-checks/1` covers confirmed bank statements: `BANK-TOTALS`,

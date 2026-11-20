@@ -36,7 +36,7 @@ built in a later phase), **External** (held by a third party).
 | 3a | **Extracted transactions** (Stage 2-B) | **Exists (local and test only)** since step 2B-1 | `extracted_transactions`; the statement summary in `extracted_fields`; `extraction_runs.account_fingerprint`; since 2B-2 `bank_accounts` (last 4 digits, fingerprint, label) and `bank_account_holders` (which applicants hold which account), and statement confirmations in `document_reviews` / `field_reviews` | Every printed row: date, **verbatim description**, money in, money out, running balance, with page and boxes. Account **last 4 digits** only (raw text masked). The keyed fingerprint is not reversible without the key but links statements of the same account | Extraction runs | Nothing: insert-only. Needs its **own retention period** and per-case erasure |
 | 4 | Normalised financial observations, items, parties | **Exists** | `financial_observations`, `income_sources`, `commitments`, `commitment_parties`, `expenditure_items`, `expenditure_parties` | Amounts, periods, employer/creditor names, masked account references, links to applicants | Brokers (declared/broker entries); **document figures saved from a broker's review (step 2-D)** | Nothing: values are retired or items withdrawn, never deleted (by design) |
 | 5 | Reconciled values and discrepancies | Planned (Phase 7) | `reconciliation_runs`, `reconciled_values`, `discrepancies` | Derived figures per applicant item | Reconciliation runs | — |
-| 6 | Broker decisions and profile approvals | Planned (Phase 9) | `broker_decisions`, `profile_approvals` (including a JSON snapshot and hash) | Overrides with reasons; a full snapshot of the approved profile | Brokers | — |
+| 6 | Broker decisions and profile approvals | **Exists (local and test only, synthetic)** since Stage 3-B | `profile_approvals` (snapshot as canonical text and its SHA-256, the attestation wording, an optional note); `cases.approval_id` | Overrides with reasons; a full snapshot of the approved profile | Brokers | — |
 | 6a | Document reviews and field decisions | **Exists (local and test only, synthetic documents)** since step 2-D | `document_reviews`, `field_reviews` | Corrected values and the broker's reasons (free text) | Brokers | Nothing: insert-only |
 | 7a | Audit events (permanent skeleton) | **Exists** | `audit_events` (append-only; triggers block UPDATE, DELETE and TRUNCATE for every role) | No direct identifiers or financial values, but **pseudonymous personal data**: actions, statuses and roles about applicant and user IDs, timestamps, request IDs | Every mutation | Nothing, by design |
 | 7b | Audit details (erasable values) | **Exists** | `audit_event_details` (runtime role: insert-only; bound to the event's transaction) | Amounts, reasons, notes, names (employer/business), party lists | Every mutation with values | Nothing yet; designed to be deletable by the owner-run retention process |
@@ -59,9 +59,12 @@ built in a later phase), **External** (held by a third party).
 - **Shared items.** A joint commitment can involve several applicants. Erasing one applicant
   must not silently delete a liability that still concerns another (the
   liability-versus-allocation model in Phase 1.1).
-- **Approvals.** An approval snapshot (Phase 9) copies the values that were approved. Erasing
-  the underlying observations without the snapshot (or the reverse) would leave either orphan
-  personal data or an unverifiable approval.
+- **Approvals.** An approval snapshot (Stage 3-B) **copies** what was approved: applicant
+  names, figures, provenance (file names, correction reasons), check messages, acknowledgement
+  notes and member names. It's insert-only for the runtime role. Erasing the underlying
+  records without the snapshot (or the reverse) would leave either orphan personal data or an
+  unverifiable approval, so the snapshot must be erased **with its case**, by the owner-run
+  process, never separately. The approval note is free text, like acknowledgement notes.
 
 ## 3. Technical requirements any policy must satisfy
 

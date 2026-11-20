@@ -12,6 +12,7 @@ const ROUTES: Array<[method: string, pattern: string]> = [
   ["GET", "me"],
   ["GET", "cases"],
   ["POST", "cases"], // new case (Phase 2.1, U2); the API requires case:create
+  ["GET", `cases/${ID}`], // one case: its status and version, the ETag for status changes (3-B)
   ["GET", `cases/${ID}/applicants`],
   ["POST", `cases/${ID}/applicants`], // add applicant (Phase 2.1, U2); applicant:write
   ["GET", `cases/${ID}/financial/income-sources`],
@@ -22,6 +23,10 @@ const ROUTES: Array<[method: string, pattern: string]> = [
   // Stage 2-A: reconciliation checks, and acknowledging a discrepancy (financial:write).
   ["GET", `cases/${ID}/checks`],
   ["GET", `cases/${ID}/profile`], // the financial profile (Stage 3-A); document:read
+  ["GET", `cases/${ID}/profile/approvals`], // approvals (Stage 3-B); document:read
+  ["POST", `cases/${ID}/profile/approvals`], // approve; profile:approve
+  ["GET", `cases/${ID}/profile/approvals/${ID}`],
+  ["POST", `cases/${ID}/transitions`], // case status (Stage 3-B screens); case:transition
   // Stage 2-B: bank accounts confirmed from statements, and adding a holder.
   ["GET", `cases/${ID}/bank-accounts`],
   ["POST", `cases/${ID}/bank-accounts/${ID}/holders`],

@@ -2,6 +2,7 @@
 // and evidence links. Display only: the figures, their order and provenance come from the API
 // unchanged (rule profile/1). Nothing here chooses, sums, averages or annualises a figure.
 
+import { approvalSummary } from "./approval";
 import { formatMoney } from "./decisions";
 import { formatDate, measureLabel } from "./labels";
 import type { ApprovalStatus, Corroboration, DocumentarySupport, Figure, FigureValue, Origin } from "./types";
@@ -190,13 +191,7 @@ export function corroborationLine(c: Corroboration, payslipMonth: string | null,
   return `Net pay${payslipMonth ? ` for ${payslipMonth}` : ""} received${when}${amount} into account ending ${c.account_ending} (${label}${holders})`;
 }
 
+/** The fifth kind of support: the broker's approval of the whole profile (Stage 3-B). */
 export function approvalText(a: ApprovalStatus): string {
-  switch (a.status) {
-    case "approved":
-      return "Approved";
-    case "superseded":
-      return "Superseded on reopening";
-    default:
-      return "Not approved";
-  }
+  return approvalSummary(a);
 }

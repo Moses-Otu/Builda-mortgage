@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Breadcrumbs, Loading, PageContainer, RequireFirm } from "@/components/Page";
+import { ApprovalPanel } from "@/components/profile/ApprovalPanel";
 import { caseTitle, useCaseSummary } from "@/components/useCaseSummary";
 import { Alert } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -34,7 +35,7 @@ import {
 } from "@/lib/profile";
 import { problemMessage } from "@/lib/problems";
 import { accountTitle, holdersText } from "@/lib/statements";
-import type { Figure, ItemSupport, Origin, Profile, ProfileItem } from "@/lib/types";
+import type { Approval, ApprovalDetail, Figure, ItemSupport, Origin, Profile, ProfileItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export default function ProfileRoute() {
@@ -66,17 +67,52 @@ function OriginMark({ origin }: { origin: Origin }) {
 
 function ProfilePage({ caseId }: { caseId: string }) {
   const summary = useCaseSummary(caseId);
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const [live, setLive] = useState<Profile | null>(null);
+  const [approvals, setApprovals] = useState<Approval[]>([]);
+  const [viewing, setViewing] = useState<ApprovalDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const result = await get<Profile>(`cases/${caseId}/profile`);
-    if (result.ok) {
-      setProfile(result.data);
-      setError(null);
-    } else setError(problemMessage(result.status, result.problem));
+    const [result, list] = await Promise.all([
+      get<Profile>(`cases/${caseId}/profile`),
+      get<Approval[]>(`cases/${caseId}/profile/approvals`),
+    ]);
+    if (!result.ok) {
+      setError(problemMessage(result.status, result.problem));
+      return;
+    }
+    setLive(result.data);
+    setError(null);
+    const all = list.ok ? list.data : [];
+    setApprovals(all);
+    // ?version=n opens that approval's stored snapshot, read-only.
+    const wanted = Number(new URLSearchParams(window.location.search).get("version"));
+    const match = Number.isInteger(wanted) && wanted > 0 ? all.find((a) => a.version === wanted) : undefined;
+    if (match) {
+      const detail = await get<ApprovalDetail>(`cases/${caseId}/profile/approvals/${match.id}`);
+      if (detail.ok) setViewing(detail.data);
+      else setError(problemMessage(detail.status, detail.problem));
+    } else setViewing(null);
   }, [caseId]);
+
+  // A stored version renders exactly as approved, with its own approval as the fifth kind.
+  const profile: Profile | null = useMemo(() => {
+    if (!viewing || !live) return live;
+    return {
+      ...viewing.snapshot,
+      readiness: live.readiness,
+      approval: {
+        status: "approved",
+        approval_id: viewing.id,
+        version: viewing.version,
+        approved_by: viewing.approved_by,
+        approved_at: viewing.approved_at,
+        superseded: [],
+      },
+      fingerprint: viewing.snapshot_sha256,
+    };
+  }, [viewing, live]);
 
   useEffect(() => {
     void load();
@@ -116,8 +152,9 @@ function ProfilePage({ caseId }: { caseId: string }) {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Financial profile</h1>
           <p className="mt-1 max-w-3xl text-sm text-slate-600">
-            Every current figure on the case, with where it came from. Nothing is chosen, added up, averaged or
-            annualised. Select a figure to see its source.
+            {viewing
+              ? `The profile exactly as approved in version ${viewing.version}. Read-only; select a figure to see its source.`
+              : "Every current figure on the case, with where it came from. Nothing is chosen, added up, averaged or annualised. Select a figure to see its source."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
@@ -134,6 +171,11 @@ function ProfilePage({ caseId }: { caseId: string }) {
         </div>
       </div>
 
+      {live && (
+        <div className="mb-6">
+          <ApprovalPanel caseId={caseId} profile={live} approvals={approvals} viewing={viewing} onChanged={() => void load()} />
+        </div>
+      )}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">
         <div className="flex min-w-0 flex-col gap-6">
           {profile.applicants

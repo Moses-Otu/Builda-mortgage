@@ -87,6 +87,13 @@ NON_PERSONAL_FIELDS = frozenset(
         "account_created",
         "holder_count",
         "fingerprint_status",
+        # profile approvals (Stage 3-B)
+        "approval_id",
+        "approval_version",
+        "snapshot_sha256",
+        "attestation_version",
+        "profile_rules",
+        "superseded_approval_id",
         "integrity_totals",
         "integrity_running",
         # reconciliation: which versioned rule and finding (a hash) was acknowledged
@@ -152,6 +159,7 @@ class AuditAction(StrEnum):
     DOCUMENT_REVIEWED = "document.reviewed"
     CHECK_ACKNOWLEDGED = "check.acknowledged"
     BANK_ACCOUNT_HOLDER_ADDED = "bank_account.holder_added"
+    PROFILE_APPROVED = "profile.approved"
 
 
 @dataclass

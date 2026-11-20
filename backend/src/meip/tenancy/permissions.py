@@ -26,6 +26,8 @@ class Permission(StrEnum):
     DOCUMENT_WRITE = "document:write"
     # Background processing. Held by the worker's system actor only, never by a user role.
     DOCUMENT_PROCESS = "document:process"
+    # Stage 3-B: attest the financial profile (decision S3: advisers and firm admins).
+    PROFILE_APPROVE = "profile:approve"
 
 
 _READ = {
@@ -57,10 +59,13 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             Permission.CASE_ASSIGN_ADVISER,
             Permission.MEMBER_MANAGE,
             Permission.FIRM_SETTINGS_MANAGE,
+            Permission.PROFILE_APPROVE,
         }
     ),
     Role.ADVISER: frozenset(
-        _READ | _CASE_WORK | {Permission.CASE_CLOSE, Permission.CASE_ASSIGN_ADVISER}
+        _READ
+        | _CASE_WORK
+        | {Permission.CASE_CLOSE, Permission.CASE_ASSIGN_ADVISER, Permission.PROFILE_APPROVE}
     ),
     Role.CASE_ADMINISTRATOR: frozenset(_READ | _CASE_WORK),
     Role.READ_ONLY: frozenset(_READ),

@@ -1,6 +1,6 @@
 # Stage 3 — Broker Experience: Plan
 
-Status: **Approved; decisions S1–S4 approved as recommended (2026-11-19). Built step by step, each reviewed before the next: 3-A implemented (see [STAGE-3A-REPORT.md](STAGE-3A-REPORT.md)); 3-A2 added 2026-11-20 by the [financial domain assessment](FINANCIAL-DOMAIN-ASSESSMENT.md) (decision A1); 3-A2 implemented (see [STAGE-3A2-REPORT.md](STAGE-3A2-REPORT.md)); 3-B and 3-C not started.** · Date: 2026-11-19 ·
+Status: **Approved; decisions S1–S4 approved as recommended (2026-11-19). Built step by step, each reviewed before the next: 3-A implemented (see [STAGE-3A-REPORT.md](STAGE-3A-REPORT.md)); 3-A2 added 2026-11-20 by the [financial domain assessment](FINANCIAL-DOMAIN-ASSESSMENT.md) (decision A1); 3-A2 implemented (see [STAGE-3A2-REPORT.md](STAGE-3A2-REPORT.md)); 3-B implemented (see [STAGE-3B-REPORT.md](STAGE-3B-REPORT.md)); 3-C not started.** · Date: 2026-11-19 ·
 Roadmap: [Phase 3](../ROADMAP.md) · Baseline: `6aa3be5` (Stage 2 complete)
 
 **Goal:** turn reviewed evidence into a **broker-approved financial profile** that can be

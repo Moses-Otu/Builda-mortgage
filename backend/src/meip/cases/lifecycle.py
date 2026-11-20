@@ -3,10 +3,10 @@
 Statuses describe where the *broker's* work stands, never system activity: document
 processing is reported by a derived indicator (Phase 2), not by a case status.
 
-``verified`` means a broker has approved an evidence profile. It can only be represented
-once a durable, auditable approval record exists (Phase 9). Until then the transition is
-declared but unavailable, and the database CHECK on ``cases.status`` does not even admit
-the value, so no code path can store it.
+``verified`` means a broker has approved the financial profile (Stage 3-B). The only way in
+is approving the profile (``POST …/profile/approvals``), which writes the approval and the
+status together; the status route refuses ``in_review → verified``. Database CHECKs tie
+``verified`` to a current approval.
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ TRANSITIONS: dict[CaseStatus, frozenset[CaseStatus]] = {
 
 # Transitions that need capabilities from a later phase, with the reason shown to clients.
 NOT_YET_AVAILABLE: dict[tuple[CaseStatus, CaseStatus], str] = {
-    (S.IN_REVIEW, S.VERIFIED): "Verification requires broker approval, which is not available yet",
+    (S.IN_REVIEW, S.VERIFIED): "Approve the profile to verify the case",
 }
 
 # Statuses in which case details and applicants may still be edited. A verified case must

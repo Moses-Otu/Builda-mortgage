@@ -458,21 +458,417 @@
         "title": "ApplicantUpdate",
         "type": "object"
       },
-      "ApprovalStatus": {
-        "description": "The broker's approval of the whole profile (Stage 3-B). Approval is a broker act,\nnot a property of the evidence.",
+      "ApprovalDetailOut": {
         "properties": {
+          "approved_at": {
+            "format": "date-time",
+            "title": "Approved At",
+            "type": "string"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "attestation_text": {
+            "description": "The exact wording the broker accepted",
+            "title": "Attestation Text",
+            "type": "string"
+          },
+          "attestation_version": {
+            "title": "Attestation Version",
+            "type": "string"
+          },
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "current": {
+            "description": "The case's current approval",
+            "title": "Current",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "profile_rules": {
+            "title": "Profile Rules",
+            "type": "string"
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/ProfileSnapshot",
+            "description": "The approved profile, its hash checked"
+          },
+          "snapshot_sha256": {
+            "title": "Snapshot Sha256",
+            "type": "string"
+          },
+          "superseded_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When reopening the case superseded it",
+            "title": "Superseded At"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "case_id",
+          "version",
+          "profile_rules",
+          "snapshot_sha256",
+          "attestation_version",
+          "note",
+          "approved_by",
+          "approved_at",
+          "current",
+          "attestation_text",
+          "snapshot"
+        ],
+        "title": "ApprovalDetailOut",
+        "type": "object"
+      },
+      "ApprovalOut": {
+        "properties": {
+          "approved_at": {
+            "format": "date-time",
+            "title": "Approved At",
+            "type": "string"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "attestation_version": {
+            "title": "Attestation Version",
+            "type": "string"
+          },
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "current": {
+            "description": "The case's current approval",
+            "title": "Current",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "profile_rules": {
+            "title": "Profile Rules",
+            "type": "string"
+          },
+          "snapshot_sha256": {
+            "title": "Snapshot Sha256",
+            "type": "string"
+          },
+          "superseded_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When reopening the case superseded it",
+            "title": "Superseded At"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "case_id",
+          "version",
+          "profile_rules",
+          "snapshot_sha256",
+          "attestation_version",
+          "note",
+          "approved_by",
+          "approved_at",
+          "current"
+        ],
+        "title": "ApprovalOut",
+        "type": "object"
+      },
+      "ApprovalStatus": {
+        "description": "The broker's approval of the whole profile. Approval is a broker act, not a property of\nthe evidence; its facts live on the approval record, never inside the snapshot.",
+        "properties": {
+          "approval_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Id"
+          },
+          "approved_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved At"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "status": {
             "default": "not_approved",
             "enum": [
               "not_approved",
-              "approved",
-              "superseded"
+              "approved"
             ],
             "title": "Status",
             "type": "string"
+          },
+          "superseded": {
+            "items": {
+              "$ref": "#/components/schemas/Superseded"
+            },
+            "title": "Superseded",
+            "type": "array"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
           }
         },
         "title": "ApprovalStatus",
+        "type": "object"
+      },
+      "ApproveIn": {
+        "additionalProperties": false,
+        "properties": {
+          "attestation_version": {
+            "examples": [
+              "attestation/1"
+            ],
+            "title": "Attestation Version",
+            "type": "string"
+          },
+          "confirmed": {
+            "description": "The broker ticked the attestation",
+            "title": "Confirmed",
+            "type": "boolean"
+          },
+          "fingerprint": {
+            "description": "The profile's fingerprint as loaded",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Fingerprint",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "required": [
+          "fingerprint",
+          "attestation_version",
+          "confirmed"
+        ],
+        "title": "ApproveIn",
+        "type": "object"
+      },
+      "ApprovedOut": {
+        "properties": {
+          "approved_at": {
+            "format": "date-time",
+            "title": "Approved At",
+            "type": "string"
+          },
+          "approved_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "attestation_version": {
+            "title": "Attestation Version",
+            "type": "string"
+          },
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "case_version": {
+            "description": "The case's new version (its ETag)",
+            "title": "Case Version",
+            "type": "integer"
+          },
+          "current": {
+            "description": "The case's current approval",
+            "title": "Current",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "profile_rules": {
+            "title": "Profile Rules",
+            "type": "string"
+          },
+          "snapshot_sha256": {
+            "title": "Snapshot Sha256",
+            "type": "string"
+          },
+          "superseded_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When reopening the case superseded it",
+            "title": "Superseded At"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "case_id",
+          "version",
+          "profile_rules",
+          "snapshot_sha256",
+          "attestation_version",
+          "note",
+          "approved_by",
+          "approved_at",
+          "current",
+          "case_version"
+        ],
+        "title": "ApprovedOut",
+        "type": "object"
+      },
+      "Attestation": {
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "version": {
+            "examples": [
+              "attestation/1"
+            ],
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version",
+          "text"
+        ],
+        "title": "Attestation",
         "type": "object"
       },
       "AuditEventOut": {
@@ -683,6 +1079,38 @@
           "created_at"
         ],
         "title": "BankAccountOut",
+        "type": "object"
+      },
+      "Blocker": {
+        "properties": {
+          "code": {
+            "enum": [
+              "case_not_in_review",
+              "documents_outstanding",
+              "discrepancies_unacknowledged",
+              "nothing_recorded"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "ids": {
+            "description": "Documents or finding keys",
+            "items": {
+              "type": "string"
+            },
+            "title": "Ids",
+            "type": "array"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "Blocker",
         "type": "object"
       },
       "CaseCreate": {
@@ -4715,6 +5143,20 @@
         "title": "NotRunRef",
         "type": "object"
       },
+      "Notice": {
+        "description": "A fact shown before attesting. Never blocks; never a count or a judgement.",
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message"
+        ],
+        "title": "Notice",
+        "type": "object"
+      },
       "ObservationCreate": {
         "additionalProperties": false,
         "description": "Record one typed value about one item. To correct a value, record a new observation\nwith ``supersedes_observation_id``; the old one is retired, never edited.",
@@ -5394,7 +5836,7 @@
         "type": "object"
       },
       "ProfileOut": {
-        "description": "The case's financial profile under rule ``profile/1``: every current (not retired)\nfigure, labelled by origin, with its provenance. Nothing is chosen, averaged, annualised\nor summed. The fingerprint is the SHA-256 of everything else in this document; approving\n(Stage 3-B) requires the fingerprint the broker saw.",
+        "description": "The live profile: the snapshot content plus three derived fields that describe its\nstate, not its content (excluded from the fingerprint and from any snapshot).",
         "properties": {
           "applicants": {
             "items": {
@@ -5449,7 +5891,7 @@
             "type": "array"
           },
           "fingerprint": {
-            "description": "SHA-256 of this profile's canonical JSON",
+            "description": "SHA-256 of the profile's canonical JSON, without readiness, approval and the fingerprint itself. Approving requires the fingerprint the broker saw.",
             "title": "Fingerprint",
             "type": "string"
           },
@@ -5460,6 +5902,17 @@
             "title": "Income Sources",
             "type": "array"
           },
+          "members": {
+            "description": "Every firm member the profile references, with their name as it was when the profile was built, so a stored snapshot stays readable",
+            "items": {
+              "$ref": "#/components/schemas/MemberRef"
+            },
+            "title": "Members",
+            "type": "array"
+          },
+          "readiness": {
+            "$ref": "#/components/schemas/Readiness"
+          },
           "rules": {
             "const": "profile/1",
             "default": "profile/1",
@@ -5467,7 +5920,7 @@
             "type": "string"
           },
           "support": {
-            "description": "Per item, what supports it in five separate kinds (declared, documentary, corroborating, findings; approval is profile-level)",
+            "description": "Per item, what supports it in separate kinds (declared, documentary, corroborating, findings); approval, the fifth, is profile-level",
             "items": {
               "$ref": "#/components/schemas/ItemSupport"
             },
@@ -5486,10 +5939,110 @@
           "checks",
           "documents",
           "support",
+          "members",
+          "readiness",
           "approval",
           "fingerprint"
         ],
         "title": "ProfileOut",
+        "type": "object"
+      },
+      "ProfileSnapshot": {
+        "description": "The content a broker attests: the case's financial profile under rule ``profile/1``.\nEvery current (not retired) figure, labelled by origin, with its provenance; what supports\neach item; the checks; the documents; and the names of every member referenced. Nothing is\nchosen, averaged, annualised or summed. This is exactly what an approval freezes: its\ncanonical JSON is the snapshot, and its SHA-256 the fingerprint.",
+        "properties": {
+          "applicants": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileApplicant"
+            },
+            "title": "Applicants",
+            "type": "array"
+          },
+          "bank_accounts": {
+            "items": {
+              "$ref": "#/components/schemas/BankAccountOut"
+            },
+            "title": "Bank Accounts",
+            "type": "array"
+          },
+          "case": {
+            "$ref": "#/components/schemas/ProfileCase"
+          },
+          "checks": {
+            "$ref": "#/components/schemas/ChecksOut"
+          },
+          "commitments": {
+            "items": {
+              "$ref": "#/components/schemas/CommitmentOut"
+            },
+            "title": "Commitments",
+            "type": "array"
+          },
+          "documents": {
+            "description": "Every document on the case, including those not relied on",
+            "items": {
+              "$ref": "#/components/schemas/DocumentOut"
+            },
+            "title": "Documents",
+            "type": "array"
+          },
+          "expenditure": {
+            "items": {
+              "$ref": "#/components/schemas/ExpenditureOut"
+            },
+            "title": "Expenditure",
+            "type": "array"
+          },
+          "figures": {
+            "items": {
+              "$ref": "#/components/schemas/FigureOut"
+            },
+            "title": "Figures",
+            "type": "array"
+          },
+          "income_sources": {
+            "items": {
+              "$ref": "#/components/schemas/IncomeSourceOut"
+            },
+            "title": "Income Sources",
+            "type": "array"
+          },
+          "members": {
+            "description": "Every firm member the profile references, with their name as it was when the profile was built, so a stored snapshot stays readable",
+            "items": {
+              "$ref": "#/components/schemas/MemberRef"
+            },
+            "title": "Members",
+            "type": "array"
+          },
+          "rules": {
+            "const": "profile/1",
+            "default": "profile/1",
+            "title": "Rules",
+            "type": "string"
+          },
+          "support": {
+            "description": "Per item, what supports it in separate kinds (declared, documentary, corroborating, findings); approval, the fifth, is profile-level",
+            "items": {
+              "$ref": "#/components/schemas/ItemSupport"
+            },
+            "title": "Support",
+            "type": "array"
+          }
+        },
+        "required": [
+          "case",
+          "applicants",
+          "income_sources",
+          "commitments",
+          "expenditure",
+          "figures",
+          "bank_accounts",
+          "checks",
+          "documents",
+          "support",
+          "members"
+        ],
+        "title": "ProfileSnapshot",
         "type": "object"
       },
       "PropertyUse": {
@@ -5500,6 +6053,40 @@
         ],
         "title": "PropertyUse",
         "type": "string"
+      },
+      "Readiness": {
+        "properties": {
+          "attestation": {
+            "$ref": "#/components/schemas/Attestation",
+            "description": "The wording the broker will attest"
+          },
+          "blockers": {
+            "items": {
+              "$ref": "#/components/schemas/Blocker"
+            },
+            "title": "Blockers",
+            "type": "array"
+          },
+          "notices": {
+            "items": {
+              "$ref": "#/components/schemas/Notice"
+            },
+            "title": "Notices",
+            "type": "array"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ready",
+          "blockers",
+          "notices",
+          "attestation"
+        ],
+        "title": "Readiness",
+        "type": "object"
       },
       "RelationshipOut": {
         "description": "For a salary credit: whose payslip, which account the money arrived in (sole or joint,\nand its holders), who the statement was filed under, and the matched row.",
@@ -5807,6 +6394,32 @@
         ],
         "title": "SubjectKind",
         "type": "string"
+      },
+      "Superseded": {
+        "properties": {
+          "superseded_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superseded At"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "superseded_at"
+        ],
+        "title": "Superseded",
+        "type": "object"
       },
       "TemporalKind": {
         "enum": [
@@ -9190,7 +9803,7 @@
     },
     "/api/v1/cases/{case_id}/profile": {
       "get": {
-        "description": "The case's financial profile under rule `profile/1`: every current (not retired) figure from items that are not withdrawn, labelled by origin (extracted, corrected, declared or broker entry), each with its provenance. A document figure carries the document, page and boxes, the extraction, the broker's decision and who reviewed it. Also the applicants, items, bank accounts, both rule sets' checks and every document on the case. Nothing is chosen, averaged, annualised or summed. `fingerprint` is the SHA-256 of the rest of the document. Needs `document:read`, since it includes document details.",
+        "description": "The case's financial profile under rule `profile/1`: every current (not retired) figure from items that are not withdrawn, labelled by origin (extracted, corrected, declared or broker entry), each with its provenance; what supports each item; the applicants, items, bank accounts, both rule sets' checks, every document, and the members referenced. Nothing is chosen, averaged, annualised or summed. Also, derived and outside the fingerprint: `readiness` (what blocks approval, notices, and the attestation wording) and `approval` (the current approval and superseded versions). `fingerprint` is the SHA-256 of the profile's canonical JSON. Needs `document:read`.",
         "operationId": "get_profile_api_v1_cases__case_id__profile_get",
         "parameters": [
           {
@@ -9247,6 +9860,219 @@
           }
         ],
         "summary": "Get the financial profile",
+        "tags": [
+          "profile"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/profile/approvals": {
+      "get": {
+        "description": "Every approval of the case's profile, newest first: version, who approved it and when, the snapshot's hash, the attestation version, and whether it is current or was superseded by reopening the case (and when). Approvals are never changed or deleted.",
+        "operationId": "list_approvals_api_v1_cases__case_id__profile_approvals_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ApprovalOut"
+                  },
+                  "title": "Response List Approvals Api V1 Cases  Case Id  Profile Approvals Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Case not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List the profile's approvals",
+        "tags": [
+          "profile"
+        ]
+      },
+      "post": {
+        "description": "Attests the profile exactly as loaded: send its `fingerprint` and the current `attestation_version` with `confirmed: true`. In one transaction under the case lock, the profile is rebuilt; any blocker, or a different fingerprint, refuses. Otherwise the approval is stored (the canonical snapshot text, its hash, and the exact attestation wording) as the next version, and the case becomes `verified`. Approving is the only way to verify a case. Needs `profile:approve` (firm admin, adviser).",
+        "operationId": "approve_api_v1_cases__case_id__profile_approvals_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApproveIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovedOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Case not found"
+          },
+          "409": {
+            "description": "`approval-blocked` (with the blockers) or `profile-changed` (reload and review again)"
+          },
+          "422": {
+            "description": "Not the current attestation, or not confirmed"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Approve the profile",
+        "tags": [
+          "profile"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/profile/approvals/{approval_id}": {
+      "get": {
+        "description": "One approval with the exact attestation wording the broker accepted and the approved profile, after checking the stored snapshot against its SHA-256 (a mismatch refuses with `snapshot-integrity`).",
+        "operationId": "get_approval_api_v1_cases__case_id__profile_approvals__approval_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "approval_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Approval Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApprovalDetailOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Case or approval not found"
+          },
+          "409": {
+            "description": "`snapshot-integrity`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get one approval with its snapshot",
         "tags": [
           "profile"
         ]

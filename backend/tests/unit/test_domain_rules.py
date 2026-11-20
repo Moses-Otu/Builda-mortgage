@@ -38,9 +38,14 @@ class TestLifecycle:
         assert sources == {CaseStatus.IN_REVIEW}
         assert lifecycle.unavailable_reason(CaseStatus.IN_REVIEW, CaseStatus.VERIFIED)
 
-    def test_verified_is_not_storable(self) -> None:
-        assert CaseStatus.VERIFIED not in STORABLE_STATUSES
-        assert "verified" not in STATUS_CHECK
+    def test_verified_is_storable_only_with_an_approval(self) -> None:
+        """Stage 3-B: 'verified' is storable, tied to a current approval by CHECKs; the status
+        route still can't reach it (only approving the profile does)."""
+        assert CaseStatus.VERIFIED in STORABLE_STATUSES
+        assert "verified" in STATUS_CHECK
+        assert lifecycle.unavailable_reason(CaseStatus.IN_REVIEW, CaseStatus.VERIFIED) == (
+            "Approve the profile to verify the case"
+        )
 
     def test_leaving_verified_is_a_reopen(self) -> None:
         for target in (CaseStatus.COLLECTING_EVIDENCE, CaseStatus.IN_REVIEW):
@@ -73,7 +78,14 @@ class TestPermissions:
             "audit:read",
             "document:read",
             "document:write",
+            "profile:approve",
         }
+
+    def test_profile_approval_is_for_advisers_and_firm_admins_only(self) -> None:
+        holders = {
+            r for r, perms in ROLE_PERMISSIONS.items() if Permission.PROFILE_APPROVE in perms
+        }
+        assert holders == {Role.FIRM_ADMIN, Role.ADVISER}
 
     def test_every_permission_is_held_by_a_role_or_is_system_only(self) -> None:
         held = frozenset().union(*ROLE_PERMISSIONS.values())

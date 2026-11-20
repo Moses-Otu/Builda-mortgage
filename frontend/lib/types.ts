@@ -458,8 +458,50 @@ export interface ItemSupport {
 }
 
 export interface ApprovalStatus {
-  status: "not_approved" | "approved" | "superseded";
+  status: "not_approved" | "approved";
+  approval_id?: Uuid | null;
+  version?: number | null;
+  approved_by?: MemberRef | null;
+  approved_at?: string | null;
+  superseded?: { version: number; superseded_at: string | null }[];
 }
+
+// --- profile approval (Stage 3-B) ---
+
+export type BlockerCode =
+  | "case_not_in_review"
+  | "documents_outstanding"
+  | "discrepancies_unacknowledged"
+  | "nothing_recorded";
+
+export interface Readiness {
+  ready: boolean;
+  blockers: { code: BlockerCode; message: string; ids: string[] }[];
+  notices: { message: string }[];
+  attestation: { version: string; text: string };
+}
+
+export interface Approval {
+  id: Uuid;
+  case_id: Uuid;
+  version: number;
+  profile_rules: string;
+  snapshot_sha256: string;
+  attestation_version: string;
+  note: string | null;
+  approved_by: MemberRef | null;
+  approved_at: string;
+  current: boolean;
+  superseded_at: string | null;
+}
+
+export interface ApprovalDetail extends Approval {
+  attestation_text: string;
+  snapshot: ProfileSnapshot;
+}
+
+/** What an approval freezes: the profile without its derived state fields. */
+export type ProfileSnapshot = Omit<Profile, "readiness" | "approval" | "fingerprint">;
 
 export interface Profile {
   rules: string;
@@ -473,6 +515,8 @@ export interface Profile {
   checks: Checks;
   documents: DocumentOut[];
   support: ItemSupport[];
+  members: MemberRef[];
+  readiness: Readiness;
   approval: ApprovalStatus;
   fingerprint: string;
 }

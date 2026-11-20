@@ -29,6 +29,8 @@ class Policy:
 # table -> privileges the runtime role holds (anything more is a test failure)
 TENANT_SCOPED: dict[str, frozenset[str]] = {
     "memberships": frozenset({"SELECT", "INSERT", "UPDATE"}),
+    # Stage 3-B: approvals are insert-only for the runtime role.
+    "profile_approvals": frozenset({"SELECT", "INSERT"}),
     "cases": frozenset({"SELECT", "INSERT", "UPDATE"}),
     # No DELETE: applicants are removed by status, never deleted by the application.
     "applicants": frozenset({"SELECT", "INSERT", "UPDATE"}),

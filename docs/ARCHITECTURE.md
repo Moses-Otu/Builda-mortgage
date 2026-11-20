@@ -204,6 +204,22 @@ Single deployable backend codebase (modular monolith) with API and worker proces
     SHA-256 `fingerprint` of its canonical JSON. The same builder will produce the approval
     snapshot (3-B), so what a broker sees is what gets approved. `profile` may import
     `reconciliation`; nothing imports `profile` except the API.
+  - **Profile approval (Stage 3-B):** `profile_approvals` is insert-only for the runtime
+    role. Each row holds the snapshot as the exact canonical text that was hashed, its
+    SHA-256, and the exact attestation wording the broker accepted. `cases.approval_id` is
+    the current approval, with a composite foreign key to the same tenant and case. CHECKs
+    make `verified` require an approval, and allow an approval only on a verified case or one
+    closed from verified.
+
+    Approving runs in one transaction that first locks the case row (`SELECT … FOR UPDATE`),
+    which every case write also takes (enforced by a static test). It then rebuilds the
+    profile, checks readiness and the fingerprint, inserts the approval, sets the pointer and
+    status, and writes the audit event.
+
+    Reopening clears the pointer in the same `UPDATE` as the status; the row remains.
+    Readiness and approval facts are derived and kept outside the fingerprint and snapshot.
+    Attestation wordings live in a registry pinned by hash. A stored `profile/1` snapshot is
+    kept as a test fixture, so old approvals stay readable.
   - **Bank checks (Stage 2-B, 2B-3):** a second, separately versioned rule set
     (`bank-checks/1`, `reconciliation/bank_rules.py`), also pure and computed in the request,
     over **confirmed** statements (summary values as confirmed, the chosen account and its

@@ -160,3 +160,4 @@ FirmSettingsManageCtx = Annotated[
 AuditReadCtx = Annotated[OperationContext, Depends(requires(Permission.AUDIT_READ))]
 DocumentReadCtx = Annotated[OperationContext, Depends(requires(Permission.DOCUMENT_READ))]
 DocumentWriteCtx = Annotated[OperationContext, Depends(requires(Permission.DOCUMENT_WRITE))]
+ProfileApproveCtx = Annotated[OperationContext, Depends(requires(Permission.PROFILE_APPROVE))]

@@ -17,6 +17,7 @@ import { useParams } from "next/navigation";
 import { type DragEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import { AddApplicantDialog } from "@/components/AddApplicantDialog";
+import { CaseStatusControl } from "@/components/CaseStatusControl";
 import { ChecksCard } from "@/components/ChecksCard";
 import { DeclaredSalary } from "@/components/DeclaredSalary";
 import { Breadcrumbs, Loading, PageContainer, RequireFirm } from "@/components/Page";
@@ -48,17 +49,21 @@ function CasePage({ caseId }: { caseId: string }) {
   const [sources, setSources] = useState<IncomeSource[]>([]);
   const [documents, setDocuments] = useState<DocumentOut[]>([]);
   const [observations, setObservations] = useState<Observation[]>([]);
+  // The case row itself: its live status and version (the ETag for status changes).
+  const [caseRow, setCaseRow] = useState<{ status: string; version: number } | null>(null);
   const [applicantId, setApplicantId] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    const [a, s, d, o] = await Promise.all([
+    const [a, s, d, o, c] = await Promise.all([
       get<Applicant[]>(`cases/${caseId}/applicants`),
       get<IncomeSource[]>(`cases/${caseId}/financial/income-sources`),
       get<DocumentOut[]>(`cases/${caseId}/documents`),
       get<Observation[]>(`cases/${caseId}/financial/observations`),
+      get<{ status: string; version: number }>(`cases/${caseId}`),
     ]);
     if (o.ok) setObservations(o.data);
+    if (c.ok) setCaseRow({ status: c.data.status, version: c.data.version });
     if (!a.ok) {
       setError(problemMessage(a.status, a.problem));
       return;
@@ -115,7 +120,8 @@ function CasePage({ caseId }: { caseId: string }) {
     return a ? `${a.first_name} ${a.last_name}` : "Unknown applicant";
   };
   const activeSources = sources.filter((s) => !s.withdrawn_at);
-  const steps = caseSteps(sources, documents);
+  const status = caseRow?.status ?? summary?.status ?? "draft";
+  const steps = caseSteps(sources, documents, status);
   // The checks re-run when a document changes state or a declared salary changes.
   const checksKey = [
     ...documents.map((d) => `${d.id}:${d.status}`),
@@ -129,7 +135,9 @@ function CasePage({ caseId }: { caseId: string }) {
         <div>
           <h1 className="flex items-center gap-3 text-2xl font-semibold tracking-tight">
             {title}
-            {summary && <Badge tone="info">{caseStatusLabel(summary.status)}</Badge>}
+            {(caseRow || summary) && (
+              <Badge tone={status === "verified" ? "success" : "info"}>{caseStatusLabel(status)}</Badge>
+            )}
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-500">
             {summary && (
@@ -148,6 +156,14 @@ function CasePage({ caseId }: { caseId: string }) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {caseRow && (
+            <CaseStatusControl
+              caseId={caseId}
+              status={caseRow.status}
+              version={caseRow.version}
+              onChanged={() => void load()}
+            />
+          )}
           <Link
             href={`/cases/${caseId}/profile`}
             className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:border-brand-500 hover:text-brand-700"
