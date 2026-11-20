@@ -37,7 +37,9 @@ from meip.documents.models import (
 from meip.documents.service import field_out, list_documents
 from meip.financial import service as financial
 from meip.financial.schemas import ObservationOut
+from meip.profile import support
 from meip.profile.schemas import (
+    ApprovalStatus,
     FigureEvidence,
     FigureHistory,
     FigureOut,
@@ -109,6 +111,26 @@ async def _document_provenance(
     return {fr.id: (fr, review, f, run, (doc, ver)) for fr, review, f, run, doc, ver in rows}
 
 
+async def _reviews_by_item(
+    ctx: OperationContext, case_id: uuid.UUID, items: set[uuid.UUID]
+) -> list[tuple[uuid.UUID, Document, DocumentVersion, DocumentReview]]:
+    """Document reviews bound to an income source (``document_reviews.income_source_id``):
+    the documents the broker reviewed against each item, including any whose figures were
+    all rejected."""
+    rows = await ctx.session.execute(
+        select(DocumentReview, Document, DocumentVersion)
+        .join(ExtractionRun, ExtractionRun.id == DocumentReview.run_id)
+        .join(DocumentVersion, DocumentVersion.id == ExtractionRun.document_version_id)
+        .join(Document, Document.id == DocumentVersion.document_id)
+        .where(DocumentReview.case_id == case_id, DocumentReview.income_source_id.is_not(None))
+    )
+    return [
+        (review.income_source_id, doc, ver, review)
+        for review, doc, ver in rows
+        if review.income_source_id in items
+    ]
+
+
 async def build_profile(ctx: OperationContext, case_id: uuid.UUID) -> ProfileOut:
     case = await get_case(ctx, case_id)  # 404 for an unknown case (or another firm's)
     applicants = list(
@@ -139,8 +161,10 @@ async def build_profile(ctx: OperationContext, case_id: uuid.UUID) -> ProfileOut
                 if ref is not None:
                     cited.setdefault(ref, set()).add(finding.key)
 
+    bound = await _reviews_by_item(ctx, case_id, {s.id for s in sources})
     user_ids = {o.recorded_by_user_id for o in everything if o.recorded_by_user_id}
     user_ids |= {r.reviewed_by_user_id for _, r, *_ in provenance.values() if r.reviewed_by_user_id}
+    user_ids |= {r.reviewed_by_user_id for *_, r in bound if r.reviewed_by_user_id}
     names = await _members(ctx, user_ids)
 
     figures: list[FigureOut] = []
@@ -252,6 +276,25 @@ async def build_profile(ctx: OperationContext, case_id: uuid.UUID) -> ProfileOut
         bank_accounts=await statement_review.list_accounts(ctx, case_id),
         checks=found,
         documents=await list_documents(ctx, case_id),
+        support=support.derive(
+            [("income_source", s.id) for s in sources]
+            + [("commitment", c.id) for c in commitments]
+            + [("expenditure", e.id) for e in expenditure],
+            figures,
+            found.findings,
+            [
+                support.ReviewedDocument(
+                    income_source_id=item_id,
+                    document_id=doc.id,
+                    document_type=doc.document_type,
+                    file_name=ver.original_filename,
+                    reviewed_by=_ref(review.reviewed_by_user_id, names),
+                    reviewed_at=review.created_at,
+                )
+                for item_id, doc, ver, review in bound
+            ],
+        ),
+        approval=ApprovalStatus(status="not_approved"),  # Stage 3-B records approvals
         fingerprint="",
     )
     profile.fingerprint = fingerprint(profile)

@@ -16,19 +16,25 @@ import { checksSummary, groupFindings } from "@/lib/checks";
 import { documentStatusView } from "@/lib/failures";
 import { formatDate, formatDateTime, measureLabel, roleLabel } from "@/lib/labels";
 import {
+  approvalText,
+  corroborationLine,
+  documentaryLine,
   evidenceHref,
   figureScope,
   figuresFor,
   formatValue,
+  NONE_RECORDED,
   ORIGINS,
   originCounts,
   originSentence,
   periodTable,
+  periodText,
+  SUPPORT_KINDS,
   undatedFigures,
 } from "@/lib/profile";
 import { problemMessage } from "@/lib/problems";
 import { accountTitle, holdersText } from "@/lib/statements";
-import type { Figure, Origin, Profile, ProfileItem } from "@/lib/types";
+import type { Figure, ItemSupport, Origin, Profile, ProfileItem } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export default function ProfileRoute() {
@@ -147,14 +153,16 @@ function ProfilePage({ caseId }: { caseId: string }) {
                   <CardContent className="flex flex-col gap-5">
                     {sources.length === 0 && <p className="text-sm text-slate-500">No income sources.</p>}
                     {sources.map((s) => (
-                      <ItemFigures
-                        key={s.id}
-                        title={s.name ?? "Employment income"}
-                        icon={<Briefcase className="size-4" />}
-                        figures={figuresFor(profile.figures, s.id)}
-                        selected={selected}
-                        onSelect={setSelected}
-                      />
+                      <div key={s.id} className="flex flex-col gap-3">
+                        <ItemFigures
+                          title={s.name ?? "Employment income"}
+                          icon={<Briefcase className="size-4" />}
+                          figures={figuresFor(profile.figures, s.id)}
+                          selected={selected}
+                          onSelect={setSelected}
+                        />
+                        <SupportedBy caseId={caseId} profile={profile} itemId={s.id} nameOf={nameOf} onSelect={setSelected} />
+                      </div>
                     ))}
                   </CardContent>
                 </Card>
@@ -168,14 +176,16 @@ function ProfilePage({ caseId }: { caseId: string }) {
               </CardHeader>
               <CardContent className="flex flex-col gap-5">
                 {[...profile.commitments, ...profile.expenditure].map((item: ProfileItem) => (
-                  <ItemFigures
-                    key={item.id}
-                    title={item.creditor ?? item.description ?? measureLabel(item.kind ?? item.category ?? "item")}
-                    icon={<FileText className="size-4" />}
-                    figures={figuresFor(profile.figures, item.id)}
-                    selected={selected}
-                    onSelect={setSelected}
-                  />
+                  <div key={item.id} className="flex flex-col gap-3">
+                    <ItemFigures
+                      title={item.creditor ?? item.description ?? measureLabel(item.kind ?? item.category ?? "item")}
+                      icon={<FileText className="size-4" />}
+                      figures={figuresFor(profile.figures, item.id)}
+                      selected={selected}
+                      onSelect={setSelected}
+                    />
+                    <SupportedBy caseId={caseId} profile={profile} itemId={item.id} nameOf={nameOf} onSelect={setSelected} />
+                  </div>
                 ))}
               </CardContent>
             </Card>
@@ -432,5 +442,107 @@ function ProvenancePanel({ caseId, figure: f, onClose }: { caseId: string; figur
         </p>
       </CardContent>
     </Card>
+  );
+}
+
+function SupportSection(props: { kind: keyof typeof SUPPORT_KINDS; children: React.ReactNode; empty: boolean }) {
+  const { kind, children, empty } = props;
+  const k = SUPPORT_KINDS[kind];
+  return (
+    <div>
+      <p className="font-medium text-slate-700">
+        {k.title}
+        <span className="ml-2 font-normal text-slate-400">{k.note}</span>
+      </p>
+      {empty ? <p className="text-slate-500">{NONE_RECORDED}</p> : children}
+    </div>
+  );
+}
+
+/** What supports one item, in five separate kinds. Lists only: nothing here counts or scores
+ * evidence, because the quantity of evidence is not a measure of reliability. */
+function SupportedBy(props: {
+  caseId: string;
+  profile: Profile;
+  itemId: string;
+  nameOf: (id: string) => string;
+  onSelect: (id: string) => void;
+}) {
+  const { caseId, profile, itemId, nameOf, onSelect } = props;
+  const s: ItemSupport | undefined = profile.support.find((x) => x.item_id === itemId);
+  if (!s) return null;
+  const declared = profile.figures.filter((f) => s.declared.includes(f.id));
+  const months = new Map(s.documentary.map((d) => [d.document_id, periodText(d.period_start, d.period_end)]));
+  const { discrepancies, not_run: notRun, passed } = s.findings;
+  return (
+    <section aria-label="Supported by" className="rounded-lg border border-slate-200 bg-slate-50/60 p-3 text-sm">
+      <p className="mb-2 text-xs font-semibold tracking-wide text-slate-500 uppercase">Supported by</p>
+      <div className="flex flex-col gap-3">
+        <SupportSection kind="declared" empty={declared.length === 0}>
+          <ul className="flex flex-col gap-0.5">
+            {declared.map((f) => (
+              <li key={f.id}>
+                <button type="button" onClick={() => onSelect(f.id)} className="hover:text-brand-700">
+                  {measureLabel(f.measure)} {formatValue(f.value)}
+                  {figureScope(f) ? `, ${figureScope(f)}` : ""}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </SupportSection>
+        <SupportSection kind="documentary" empty={s.documentary.length === 0}>
+          <ul className="flex flex-col gap-0.5">
+            {s.documentary.map((d) => (
+              <li key={d.document_id}>
+                <Link href={`/cases/${caseId}/documents/${d.document_id}`} className="hover:text-brand-700">
+                  {documentaryLine(d)}
+                </Link>
+                <span className="text-slate-400">
+                  {" "}
+                  · reviewed by {d.reviewed_by?.name ?? "unknown"}, {formatDate(d.reviewed_at.slice(0, 10))}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </SupportSection>
+        <SupportSection kind="corroborating" empty={s.corroborating.length === 0}>
+          <ul className="flex flex-col gap-1.5">
+            {s.corroborating.map((c) => (
+              <li key={c.finding_key}>
+                <Link
+                  href={`/cases/${caseId}/documents/${c.statement_document_id}?row=${c.row_number}`}
+                  className="hover:text-brand-700"
+                >
+                  {corroborationLine(c, c.payslip_document_id ? (months.get(c.payslip_document_id) ?? null) : null, nameOf)}
+                </Link>
+                <p className="text-xs text-slate-500 italic">{c.scope}</p>
+              </li>
+            ))}
+          </ul>
+        </SupportSection>
+        <SupportSection kind="findings" empty={discrepancies.length + notRun.length + passed.length === 0}>
+          <ul className="flex flex-col gap-0.5">
+            {discrepancies.map((f) => (
+              <li key={f.key}>
+                <Badge tone="warning">{f.acknowledgement ? "Discrepancy · acknowledged" : "Discrepancy"}</Badge> {f.title}
+                {f.acknowledgement && <span className="text-slate-500"> · “{f.acknowledgement.note}”</span>}
+              </li>
+            ))}
+            {notRun.map((f) => (
+              <li key={f.key} className="text-slate-600">
+                Could not run: {f.title} <span className="text-slate-400">({f.reason.replace(/^could not run:\s*/i, "")})</span>
+              </li>
+            ))}
+            {passed.length > 0 && <li className="text-slate-600">Passed: {passed.map((f) => f.title).join(" · ")}</li>}
+          </ul>
+          <Link href={`/cases/${caseId}`} className="text-xs text-brand-700 hover:underline">
+            Open the checks
+          </Link>
+        </SupportSection>
+        <SupportSection kind="approval" empty={false}>
+          <p className="text-slate-600">{approvalText(profile.approval)}</p>
+        </SupportSection>
+      </div>
+    </section>
   );
 }

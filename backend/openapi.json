@@ -458,6 +458,23 @@
         "title": "ApplicantUpdate",
         "type": "object"
       },
+      "ApprovalStatus": {
+        "description": "The broker's approval of the whole profile (Stage 3-B). Approval is a broker act,\nnot a property of the evidence.",
+        "properties": {
+          "status": {
+            "default": "not_approved",
+            "enum": [
+              "not_approved",
+              "approved",
+              "superseded"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "title": "ApprovalStatus",
+        "type": "object"
+      },
       "AuditEventOut": {
         "properties": {
           "action": {
@@ -1534,6 +1551,118 @@
         "title": "CommitmentUpdate",
         "type": "object"
       },
+      "Corroboration": {
+        "description": "Evidence that confirms one fact about the item without supplying its figures. Today\nonly an exact salary credit (SALARY-CREDIT passed): it confirms receipt of the net\namount, nothing more.",
+        "properties": {
+          "account_ending": {
+            "title": "Account Ending",
+            "type": "string"
+          },
+          "account_id": {
+            "format": "uuid",
+            "title": "Account Id",
+            "type": "string"
+          },
+          "account_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Account Label"
+          },
+          "amount_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount Minor"
+          },
+          "credit_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credit Date"
+          },
+          "finding_key": {
+            "title": "Finding Key",
+            "type": "string"
+          },
+          "holder_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Holder Ids",
+            "type": "array"
+          },
+          "joint": {
+            "title": "Joint",
+            "type": "boolean"
+          },
+          "kind": {
+            "const": "salary_credit",
+            "default": "salary_credit",
+            "title": "Kind",
+            "type": "string"
+          },
+          "payslip_document_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payslip Document Id"
+          },
+          "row_number": {
+            "title": "Row Number",
+            "type": "integer"
+          },
+          "scope": {
+            "description": "What this corroboration does and doesn't confirm",
+            "title": "Scope",
+            "type": "string"
+          },
+          "statement_document_id": {
+            "format": "uuid",
+            "title": "Statement Document Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "finding_key",
+          "payslip_document_id",
+          "credit_date",
+          "amount_minor",
+          "account_id",
+          "account_ending",
+          "account_label",
+          "joint",
+          "holder_ids",
+          "statement_document_id",
+          "row_number",
+          "scope"
+        ],
+        "title": "Corroboration",
+        "type": "object"
+      },
       "CountValue": {
         "properties": {
           "count": {
@@ -1582,6 +1711,46 @@
         ],
         "title": "Decision",
         "type": "string"
+      },
+      "DiscrepancyRef": {
+        "properties": {
+          "acknowledgement": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AcknowledgementOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Acknowledged (still a discrepancy) or not"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "rule_code": {
+            "title": "Rule Code",
+            "type": "string"
+          },
+          "ruleset_version": {
+            "title": "Ruleset Version",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "ruleset_version",
+          "rule_code",
+          "title",
+          "acknowledgement"
+        ],
+        "title": "DiscrepancyRef",
+        "type": "object"
       },
       "DocumentOut": {
         "properties": {
@@ -1766,6 +1935,107 @@
           "uploaded_at"
         ],
         "title": "DocumentVersionOut",
+        "type": "object"
+      },
+      "DocumentarySupport": {
+        "description": "A document the broker reviewed against this item. It supports only the measures it\ncarries, for the period they cover.",
+        "properties": {
+          "corrected_measures": {
+            "description": "Those the broker corrected",
+            "items": {
+              "type": "string"
+            },
+            "title": "Corrected Measures",
+            "type": "array"
+          },
+          "document_id": {
+            "format": "uuid",
+            "title": "Document Id",
+            "type": "string"
+          },
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
+          "figures_saved": {
+            "description": "False when the document was reviewed against the item but every figure was rejected",
+            "title": "Figures Saved",
+            "type": "boolean"
+          },
+          "file_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Name"
+          },
+          "measures": {
+            "description": "The measures saved from it as current figures",
+            "items": {
+              "type": "string"
+            },
+            "title": "Measures",
+            "type": "array"
+          },
+          "period_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Latest period end of its figures",
+            "title": "Period End"
+          },
+          "period_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Earliest period start of its figures",
+            "title": "Period Start"
+          },
+          "reviewed_at": {
+            "format": "date-time",
+            "title": "Reviewed At",
+            "type": "string"
+          },
+          "reviewed_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "document_id",
+          "document_type",
+          "file_name",
+          "period_start",
+          "period_end",
+          "measures",
+          "corrected_measures",
+          "figures_saved",
+          "reviewed_by",
+          "reviewed_at"
+        ],
+        "title": "DocumentarySupport",
         "type": "object"
       },
       "DurationValue": {
@@ -3309,6 +3579,34 @@
         "title": "FindingOut",
         "type": "object"
       },
+      "FindingRef": {
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "rule_code": {
+            "title": "Rule Code",
+            "type": "string"
+          },
+          "ruleset_version": {
+            "title": "Ruleset Version",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "ruleset_version",
+          "rule_code",
+          "title"
+        ],
+        "title": "FindingRef",
+        "type": "object"
+      },
       "FirmSettingsOut": {
         "properties": {
           "max_applicants": {
@@ -3871,6 +4169,93 @@
         "title": "InvitationOut",
         "type": "object"
       },
+      "ItemFindings": {
+        "properties": {
+          "discrepancies": {
+            "items": {
+              "$ref": "#/components/schemas/DiscrepancyRef"
+            },
+            "title": "Discrepancies",
+            "type": "array"
+          },
+          "not_run": {
+            "items": {
+              "$ref": "#/components/schemas/NotRunRef"
+            },
+            "title": "Not Run",
+            "type": "array"
+          },
+          "passed": {
+            "items": {
+              "$ref": "#/components/schemas/FindingRef"
+            },
+            "title": "Passed",
+            "type": "array"
+          }
+        },
+        "required": [
+          "discrepancies",
+          "not_run",
+          "passed"
+        ],
+        "title": "ItemFindings",
+        "type": "object"
+      },
+      "ItemSupport": {
+        "description": "What supports one item, by kind. Lists only, never counts or scores: the quantity of\nevidence is not a measure of reliability.",
+        "properties": {
+          "corroborating": {
+            "items": {
+              "$ref": "#/components/schemas/Corroboration"
+            },
+            "title": "Corroborating",
+            "type": "array"
+          },
+          "declared": {
+            "description": "Ids of the item's declared figures",
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Declared",
+            "type": "array"
+          },
+          "documentary": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentarySupport"
+            },
+            "title": "Documentary",
+            "type": "array"
+          },
+          "findings": {
+            "$ref": "#/components/schemas/ItemFindings"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "item_kind": {
+            "enum": [
+              "income_source",
+              "commitment",
+              "expenditure"
+            ],
+            "title": "Item Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "item_kind",
+          "item_id",
+          "declared",
+          "documentary",
+          "corroborating",
+          "findings"
+        ],
+        "title": "ItemSupport",
+        "type": "object"
+      },
       "LiabilityRole": {
         "enum": [
           "principal",
@@ -4295,6 +4680,39 @@
           "holder_ids"
         ],
         "title": "NewAccountIn",
+        "type": "object"
+      },
+      "NotRunRef": {
+        "properties": {
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "rule_code": {
+            "title": "Rule Code",
+            "type": "string"
+          },
+          "ruleset_version": {
+            "title": "Ruleset Version",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "ruleset_version",
+          "rule_code",
+          "title",
+          "reason"
+        ],
+        "title": "NotRunRef",
         "type": "object"
       },
       "ObservationCreate": {
@@ -4985,6 +5403,9 @@
             "title": "Applicants",
             "type": "array"
           },
+          "approval": {
+            "$ref": "#/components/schemas/ApprovalStatus"
+          },
           "bank_accounts": {
             "items": {
               "$ref": "#/components/schemas/BankAccountOut"
@@ -5044,6 +5465,14 @@
             "default": "profile/1",
             "title": "Rules",
             "type": "string"
+          },
+          "support": {
+            "description": "Per item, what supports it in five separate kinds (declared, documentary, corroborating, findings; approval is profile-level)",
+            "items": {
+              "$ref": "#/components/schemas/ItemSupport"
+            },
+            "title": "Support",
+            "type": "array"
           }
         },
         "required": [
@@ -5056,6 +5485,8 @@
           "bank_accounts",
           "checks",
           "documents",
+          "support",
+          "approval",
           "fingerprint"
         ],
         "title": "ProfileOut",

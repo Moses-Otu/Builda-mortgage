@@ -251,3 +251,107 @@ async def test_a_withdrawn_items_figures_are_not_in_the_profile(case: Case, work
     assert profile["figures"] == []
     assert profile["income_sources"] == []
     assert [d["id"] for d in profile["documents"]] == [doc["id"]]  # still listed
+
+
+# --- "Supported by" (step 3-A2) ------------------------------------------------------------------
+
+
+def support_of(profile: dict[str, Any], item_id: str) -> dict[str, Any]:
+    out: dict[str, Any] = next(s for s in profile["support"] if s["item_id"] == item_id)
+    return out
+
+
+async def test_supported_by_keeps_declared_and_documentary_apart(
+    case: Case, worker: Worker
+) -> None:
+    may, june = payslip_series(months=2)
+    first = await case.upload(worker, may.document.pdf())
+    await case.review(
+        first,
+        {
+            "net_pay": {
+                "decision": "correct",
+                "corrected_money_minor": may.net_minor - 100,
+                "reason": "Paper copy",
+            }
+        },
+    )
+    # The second payslip's figures all rejected: reviewed against the item, nothing saved.
+    second = await case.upload(worker, june.document.pdf())
+    x = (await case.firm.request("GET", f"{case.base}/documents/{second['id']}/extraction")).json()
+    resp = await case.firm.request(
+        "POST",
+        f"{case.base}/documents/{second['id']}/review",
+        if_match=second["version"],
+        json={
+            "income_source_id": case.source,
+            "frequency": "monthly",
+            # Every money figure rejected; the pay date and other descriptive fields kept,
+            # since a payslip review needs them.
+            "decisions": [
+                {"ordinal": f["ordinal"], "decision": "reject", "reason": "Illegible"}
+                if f["value_money_minor"] is not None
+                else {"ordinal": f["ordinal"], "decision": "accept"}
+                for s in SECTIONS
+                for f in x[s]
+            ],
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    declared = await case.declare_basic(45_000)
+
+    profile = await case.profile()
+    assert profile["approval"] == {"status": "not_approved"}
+    s = support_of(profile, case.source)
+    assert s["item_kind"] == "income_source"
+    assert s["declared"] == [declared]  # declared only here, never documentary
+
+    reviewed = {d["document_id"]: d for d in s["documentary"]}
+    assert set(reviewed) == {first["id"], second["id"]}
+    may_doc = reviewed[first["id"]]
+    assert may_doc["figures_saved"] is True
+    assert may_doc["period_start"] == "2026-05-01"
+    assert may_doc["period_end"] == "2026-05-31"
+    assert "net_pay" in may_doc["measures"]
+    assert "gross_pay" in may_doc["measures"]
+    assert may_doc["corrected_measures"] == ["net_pay"]
+    assert may_doc["reviewed_by"] is not None
+    june_doc = reviewed[second["id"]]
+    assert june_doc["figures_saved"] is False
+    assert june_doc["measures"] == []
+    assert june_doc["period_start"] is None
+
+    assert s["corroborating"] == []  # no statements: nothing corroborates
+    keys = {f["key"] for f in profile["checks"]["findings"] if f["income_source_id"] == case.source}
+    item_keys = {
+        f["key"] for kind in ("discrepancies", "not_run", "passed") for f in s["findings"][kind]
+    }
+    assert item_keys == keys  # every finding about the item, nothing else
+
+
+async def test_a_commitment_is_supported_by_its_declaration_only(case: Case) -> None:
+    resp = await case.firm.request(
+        "POST",
+        f"{case.base}/financial/commitments",
+        json={"kind": "credit_card", "parties": [{"applicant_id": case.alex["id"]}]},
+    )
+    assert resp.status_code == 201, resp.text
+    commitment = resp.json()["id"]
+    resp = await case.firm.request(
+        "POST",
+        f"{case.base}/financial/observations",
+        json={
+            "commitment_id": commitment,
+            "measure": "monthly_payment",
+            "value": {"type": "money", "amount_minor": 15_000},
+            "frequency": "monthly",
+            "source_kind": "declared",
+        },
+    )
+    assert resp.status_code == 201, resp.text
+    s = support_of(await case.profile(), commitment)
+    assert s["item_kind"] == "commitment"
+    assert s["declared"] == [resp.json()["id"]]
+    assert s["documentary"] == []
+    assert s["corroborating"] == []
+    assert s["findings"] == {"discrepancies": [], "not_run": [], "passed": []}

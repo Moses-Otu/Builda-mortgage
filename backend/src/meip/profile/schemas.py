@@ -16,7 +16,7 @@ from meip.financial.schemas import (
     IncomeSourceOut,
     ObservationValue,
 )
-from meip.reconciliation.schemas import ChecksOut
+from meip.reconciliation.schemas import AcknowledgementOut, ChecksOut
 
 Origin = Literal["extracted", "corrected", "declared", "broker_entry"]
 
@@ -104,6 +104,90 @@ class FigureOut(OutputModel):
     cited_by: list[str] = Field(description="Keys of the check findings that cite this figure")
 
 
+# --- "Supported by" (step 3-A2): five kinds of support per item, never merged or counted ---
+
+
+class DocumentarySupport(OutputModel):
+    """A document the broker reviewed against this item. It supports only the measures it
+    carries, for the period they cover."""
+
+    document_id: uuid.UUID
+    document_type: str
+    file_name: str | None
+    period_start: date | None = Field(description="Earliest period start of its figures")
+    period_end: date | None = Field(description="Latest period end of its figures")
+    measures: list[str] = Field(description="The measures saved from it as current figures")
+    corrected_measures: list[str] = Field(description="Those the broker corrected")
+    figures_saved: bool = Field(
+        description="False when the document was reviewed against the item but every "
+        "figure was rejected"
+    )
+    reviewed_by: MemberRef | None
+    reviewed_at: datetime
+
+
+class Corroboration(OutputModel):
+    """Evidence that confirms one fact about the item without supplying its figures. Today
+    only an exact salary credit (SALARY-CREDIT passed): it confirms receipt of the net
+    amount, nothing more."""
+
+    kind: Literal["salary_credit"] = "salary_credit"
+    finding_key: str
+    payslip_document_id: uuid.UUID | None
+    credit_date: date | None
+    amount_minor: int | None
+    account_id: uuid.UUID
+    account_ending: str
+    account_label: str | None
+    joint: bool
+    holder_ids: list[uuid.UUID]
+    statement_document_id: uuid.UUID
+    row_number: int
+    scope: str = Field(description="What this corroboration does and doesn't confirm")
+
+
+class FindingRef(OutputModel):
+    key: str
+    ruleset_version: str
+    rule_code: str
+    title: str
+
+
+class DiscrepancyRef(FindingRef):
+    acknowledgement: AcknowledgementOut | None = Field(
+        description="Acknowledged (still a discrepancy) or not"
+    )
+
+
+class NotRunRef(FindingRef):
+    reason: str
+
+
+class ItemFindings(OutputModel):
+    discrepancies: list[DiscrepancyRef]
+    not_run: list[NotRunRef]
+    passed: list[FindingRef]
+
+
+class ItemSupport(OutputModel):
+    """What supports one item, by kind. Lists only, never counts or scores: the quantity of
+    evidence is not a measure of reliability."""
+
+    item_kind: Literal["income_source", "commitment", "expenditure"]
+    item_id: uuid.UUID
+    declared: list[uuid.UUID] = Field(description="Ids of the item's declared figures")
+    documentary: list[DocumentarySupport]
+    corroborating: list[Corroboration]
+    findings: ItemFindings
+
+
+class ApprovalStatus(OutputModel):
+    """The broker's approval of the whole profile (Stage 3-B). Approval is a broker act,
+    not a property of the evidence."""
+
+    status: Literal["not_approved", "approved", "superseded"] = "not_approved"
+
+
 class ProfileOut(OutputModel):
     """The case's financial profile under rule ``profile/1``: every current (not retired)
     figure, labelled by origin, with its provenance. Nothing is chosen, averaged, annualised
@@ -122,4 +206,9 @@ class ProfileOut(OutputModel):
     documents: list[DocumentOut] = Field(
         description="Every document on the case, including those not relied on"
     )
+    support: list[ItemSupport] = Field(
+        description="Per item, what supports it in five separate kinds (declared, "
+        "documentary, corroborating, findings; approval is profile-level)"
+    )
+    approval: ApprovalStatus
     fingerprint: str = Field(description="SHA-256 of this profile's canonical JSON")

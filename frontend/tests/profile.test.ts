@@ -2,15 +2,21 @@ import { describe, expect, it } from "vitest";
 
 import { isAllowed } from "@/lib/allowlist";
 import {
+  approvalText,
+  corroborationLine,
+  documentaryLine,
   evidenceHref,
   figureScope,
   formatValue,
   originCounts,
   originSentence,
+  NONE_RECORDED,
   periodTable,
+  periodText,
+  SUPPORT_KINDS,
   undatedFigures,
 } from "@/lib/profile";
-import type { Figure, FigureEvidence } from "@/lib/types";
+import type { Corroboration, DocumentarySupport, Figure, FigureEvidence } from "@/lib/types";
 
 const CASE = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5b";
 const DOC = "0190a1b2-c3d4-7e5f-8a9b-0c1d2e3f4a5c";
@@ -162,5 +168,78 @@ describe("forwarder allowlist for the profile", () => {
     expect(isAllowed("GET", split(`cases/${CASE}/profile`))).toBe(true);
     expect(isAllowed("POST", split(`cases/${CASE}/profile`))).toBe(false);
     expect(isAllowed("GET", split(`cases/${CASE}/profile/${DOC}`))).toBe(false);
+  });
+});
+
+describe("supported by (3-A2)", () => {
+  const doc = (over: Partial<DocumentarySupport> = {}): DocumentarySupport => ({
+    document_id: DOC,
+    document_type: "payslip",
+    file_name: "payslip-2026-05.pdf",
+    period_start: "2026-05-01",
+    period_end: "2026-05-31",
+    measures: ["net_pay", "gross_pay", "national_insurance", "basic_pay", "income_tax"],
+    corrected_measures: ["net_pay"],
+    figures_saved: true,
+    reviewed_by: { user_id: null, name: "Alex Broker" },
+    reviewed_at: "2026-11-19T10:00:00Z",
+    ...over,
+  });
+  const credit: Corroboration = {
+    kind: "salary_credit",
+    finding_key: "k".repeat(64),
+    payslip_document_id: DOC,
+    credit_date: "2026-05-29",
+    amount_minor: 280_584,
+    account_id: SOURCE,
+    account_ending: "4821",
+    account_label: null,
+    joint: true,
+    holder_ids: ["a", "s"],
+    statement_document_id: CASE,
+    row_number: 7,
+    scope: "Confirms that an amount equal to this payslip’s net pay was received…",
+  };
+  const names: Record<string, string> = { a: "Alex Example", s: "Sam Synthetic" };
+  const nameOf = (id: string) => names[id] ?? "?";
+
+  it("states each document's own scope: the measures it carries and its period", () => {
+    expect(documentaryLine(doc())).toBe(
+      "Payslip, May 2026: gross pay, basic pay, income tax, National Insurance, net pay (net pay corrected)",
+    );
+    expect(documentaryLine(doc({ figures_saved: false, measures: [], corrected_measures: [] }))).toBe(
+      "Payslip, reviewed; no figures saved",
+    );
+    expect(periodText("2026-05-01", "2026-06-30")).toBe("1 May 2026 to 30 Jun 2026");
+  });
+
+  it("says what a salary credit shows, with the account and its holders", () => {
+    expect(corroborationLine(credit, "May 2026", nameOf)).toBe(
+      "Net pay for May 2026 received on 29 May 2026 (£2,805.84) into account ending 4821 (joint: Alex Example and Sam Synthetic)",
+    );
+    expect(corroborationLine({ ...credit, joint: false, holder_ids: ["s"], account_label: "Current" }, null, nameOf)).toBe(
+      "Net pay received on 29 May 2026 (£2,805.84) into account ending 4821 (Current, held by Sam Synthetic)",
+    );
+  });
+
+  it("keeps the five kinds distinct and empty kinds factual", () => {
+    expect(Object.keys(SUPPORT_KINDS)).toEqual(["declared", "documentary", "corroborating", "findings", "approval"]);
+    expect(SUPPORT_KINDS.declared.note).toContain("not verification");
+    expect(NONE_RECORDED).toBe("None recorded");
+    expect(approvalText({ status: "not_approved" })).toBe("Not approved");
+  });
+
+  it("never counts evidence", () => {
+    const COUNT = /\b\d+\s+(documents?|payslips?|statements?|credits?|pieces?|sources?|items?)\b/i;
+    const texts = [
+      documentaryLine(doc()),
+      documentaryLine(doc({ figures_saved: false, measures: [], corrected_measures: [] })),
+      corroborationLine(credit, "May 2026", nameOf),
+      ...Object.values(SUPPORT_KINDS).flatMap((k) => [k.title, k.note]),
+      NONE_RECORDED,
+      approvalText({ status: "not_approved" }),
+    ];
+    for (const t of texts) expect(t).not.toMatch(COUNT);
+    expect(texts.join(" ")).not.toMatch(/well[- ]evidenced|strong|weak|reliab|score/i);
   });
 });

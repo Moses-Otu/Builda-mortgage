@@ -406,6 +406,61 @@ export interface ProfileItem {
   creditor?: string | null;
 }
 
+// "Supported by" (step 3-A2): five kinds per item, as lists; never counted or scored.
+
+export interface DocumentarySupport {
+  document_id: Uuid;
+  document_type: string;
+  file_name: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  measures: string[];
+  corrected_measures: string[];
+  figures_saved: boolean;
+  reviewed_by: MemberRef | null;
+  reviewed_at: string;
+}
+
+export interface Corroboration {
+  kind: "salary_credit";
+  finding_key: string;
+  payslip_document_id: Uuid | null;
+  credit_date: string | null;
+  amount_minor: number | null;
+  account_id: Uuid;
+  account_ending: string;
+  account_label: string | null;
+  joint: boolean;
+  holder_ids: Uuid[];
+  statement_document_id: Uuid;
+  row_number: number;
+  scope: string;
+}
+
+export interface FindingRef {
+  key: string;
+  ruleset_version: string;
+  rule_code: string;
+  title: string;
+}
+
+export interface ItemSupport {
+  item_kind: "income_source" | "commitment" | "expenditure";
+  item_id: Uuid;
+  declared: Uuid[];
+  documentary: DocumentarySupport[];
+  corroborating: Corroboration[];
+  findings: {
+    discrepancies: (FindingRef & { acknowledgement: Acknowledgement | null })[];
+    not_run: (FindingRef & { reason: string })[];
+    passed: FindingRef[];
+  };
+}
+
+export interface ApprovalStatus {
+  status: "not_approved" | "approved" | "superseded";
+}
+
 export interface Profile {
   rules: string;
   case: { id: Uuid; external_reference: string | null; purpose: string; status: string };
@@ -417,5 +472,7 @@ export interface Profile {
   bank_accounts: BankAccount[];
   checks: Checks;
   documents: DocumentOut[];
+  support: ItemSupport[];
+  approval: ApprovalStatus;
   fingerprint: string;
 }

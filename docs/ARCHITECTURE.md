@@ -126,7 +126,7 @@ Single deployable backend codebase (modular monolith) with API and worker proces
     The worker acts as the system actor `worker` with `document:process`, which no user role
     holds. **MVP compromise:** it connects with the API's database role (`meip_app`), so RLS
     still applies but the database doesn't narrow it further. A dedicated worker role is a
-    production-readiness item (ROADMAP Stage 4). Role permissions are listed explicitly per
+    production-readiness item (ROADMAP Phase 4, minimum production safeguards). Role permissions are listed explicitly per
     role, never as "every permission". No server-side page images: the review screen renders the original with pdf.js.
   - **Extraction (step 2-C):** deterministic, no AI. Classification by fixed markers
     (`payslip-rules/1`: a net pay marker, at least two of six supporting groups, and no

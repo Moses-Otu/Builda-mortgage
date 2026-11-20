@@ -200,6 +200,21 @@ async def test_a_joint_account_series_gives_every_bank_check(case: Case, worker:
     )
     assert salary["August 2026"]["status"] == "not_run"  # the window runs into September
 
+    # 3-A2: only the exact credit into a held account corroborates; the near match is a
+    # finding. Statement integrity findings belong to accounts, not to the income source.
+    profile = (await case.firm.request("GET", f"{case.base}/profile")).json()
+    [support] = [s for s in profile["support"] if s["item_id"] == case.source]
+    corroborated = {c["finding_key"] for c in support["corroborating"]}
+    assert corroborated == {may["key"], salary["July 2026"]["key"]}
+    [may_c] = [c for c in support["corroborating"] if c["finding_key"] == may["key"]]
+    assert may_c["statement_document_id"] == docs[0]["id"]
+    assert may_c["joint"] is True
+    assert may_c["account_ending"] == "4821"
+    assert "does not confirm contractual basic salary" in may_c["scope"]
+    assert june["key"] in {f["key"] for f in support["findings"]["discrepancies"]}
+    item_rules = {f["rule_code"] for kind in support["findings"].values() for f in kind}
+    assert not item_rules & {"BANK-TOTALS", "BANK-RUNNING", "BANK-GAP"}
+
     # Acknowledging a bank discrepancy keeps it a discrepancy and records its rule set.
     resp = await case.firm.request(
         "POST",
@@ -274,6 +289,14 @@ async def test_a_partners_sole_account_with_a_gap_and_a_duplicate_credit(
     # July's and August's windows reach into the missing August statement.
     assert salary["July 2026"]["status"] == salary["August 2026"]["status"] == "not_run"
 
+    # 3-A2: an exact credit into an account Alex doesn't hold, and multiple credits, are
+    # findings, never corroboration.
+    profile = (await case.firm.request("GET", f"{case.base}/profile")).json()
+    [support] = [s for s in profile["support"] if s["item_id"] == case.source]
+    assert support["corroborating"] == []
+    open_keys = {f["key"] for f in support["findings"]["discrepancies"]}
+    assert {may["key"], june["key"]} <= open_keys
+
     # Adding Alex as a holder changes the relationship, the outcome and the key.
     account_id = may["relationship"]["account_id"]
     resp = await case.firm.request(
@@ -286,6 +309,9 @@ async def test_a_partners_sole_account_with_a_gap_and_a_duplicate_credit(
     assert (now["status"], now["match_outcome"]) == ("passed", "exact")
     assert "(joint: Sam Synthetic and Alex Example)" in now["message"]
     assert now["key"] != may["key"]
+    profile = (await case.firm.request("GET", f"{case.base}/profile")).json()
+    [support] = [s for s in profile["support"] if s["item_id"] == case.source]
+    assert [c["finding_key"] for c in support["corroborating"]] == [now["key"]]
 
 
 async def test_another_firm_cannot_read_or_acknowledge_bank_findings(

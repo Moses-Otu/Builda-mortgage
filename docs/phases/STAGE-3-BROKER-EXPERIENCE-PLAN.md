@@ -1,7 +1,7 @@
 # Stage 3 — Broker Experience: Plan
 
-Status: **Approved; decisions S1–S4 approved as recommended (2026-11-19). Built step by step, each reviewed before the next: 3-A implemented (see [STAGE-3A-REPORT.md](STAGE-3A-REPORT.md)); 3-B and 3-C not started.** · Date: 2026-11-19 ·
-Roadmap: [Stage 3](../ROADMAP.md) · Baseline: `6aa3be5` (Stage 2 complete)
+Status: **Approved; decisions S1–S4 approved as recommended (2026-11-19). Built step by step, each reviewed before the next: 3-A implemented (see [STAGE-3A-REPORT.md](STAGE-3A-REPORT.md)); 3-A2 added 2026-11-20 by the [financial domain assessment](FINANCIAL-DOMAIN-ASSESSMENT.md) (decision A1); 3-A2 implemented (see [STAGE-3A2-REPORT.md](STAGE-3A2-REPORT.md)); 3-B and 3-C not started.** · Date: 2026-11-19 ·
+Roadmap: [Phase 3](../ROADMAP.md) · Baseline: `6aa3be5` (Stage 2 complete)
 
 **Goal:** turn reviewed evidence into a **broker-approved financial profile** that can be
 trusted and defended:
@@ -9,7 +9,11 @@ trusted and defended:
 - the approval is an immutable, versioned snapshot;
 - the evidence pack reproduces exactly what was approved.
 
-**Synthetic data only**, as in every stage before the Stage 4 gates.
+**Synthetic data only**, as in every step before Phase 4's safeguards.
+
+**Product principle (2026-11-20):** documents are evidence; the financial profile is the
+product. The profile is organised by financial position (item), and each item states what
+supports it, by kind (step 3-A2).
 
 ## 0. Your three principles, and where each is met
 
@@ -19,11 +23,12 @@ trusted and defended:
 | 2 | **Every figure has provenance.** Where it came from, which document, extracted, corrected or entered, who reviewed it, who approved it | One profile builder attaches provenance to every figure from links that already exist (figure → field decision → extracted field → page and box → document version and hash). Clicking a figure opens the document at that field | 2 |
 | 3 | **The pack reflects the approved snapshot**, not whatever is in the database at download time | The pack is built **only** from the stored snapshot, plus originals checked against the hashes in the snapshot. Generation is deterministic: the same approval always gives byte-identical files | 5 |
 
-## 1. Delivery: three steps, each reviewed before the next
+## 1. Delivery: four steps, each reviewed before the next
 
 | Step | Delivers | Migration |
 |---|---|---|
 | **3-A Profile and provenance** | The live profile (`GET …/profile`) and a **Financial profile** screen: every current figure, grouped by applicant and item, each with its provenance; clicking opens the evidence | none |
+| **3-A2 "Supported by" for each item** | Each item states its support in five separate kinds: declared, documentary (broker-reviewed), corroborating (for example an exact salary credit, which confirms receipt only), findings with acknowledgement status, and approval status. No count or score implies reliability; each piece of evidence states what it does and doesn't establish. Derived; in the snapshot. Detail: [assessment, section 3](FINANCIAL-DOMAIN-ASSESSMENT.md); [plan](STAGE-3A2-SUPPORTED-BY-PLAN.md) approved 2026-11-20 | none |
 | **3-B Approval** | Approving the profile freezes it as version n: `profile_approvals`, case status `verified`, reopening supersedes, version history | `0019` |
 | **3-C Evidence pack** | `GET …/approvals/{id}/pack`: a ZIP with a PDF summary, the snapshot JSON, the original documents and a manifest of hashes; audited download | none |
 
