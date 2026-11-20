@@ -386,7 +386,7 @@ async def open_original(
 # --- extraction results --------------------------------------------------------------------
 
 
-def _field_out(f: ExtractedField) -> ExtractedFieldOut:
+def field_out(f: ExtractedField) -> ExtractedFieldOut:
     return ExtractedFieldOut(
         ordinal=f.ordinal,
         field_code=f.field_code,
@@ -430,7 +430,7 @@ async def get_extraction(
         "year_to_date": [],
     }
     for f in fields:
-        by_section[f.section].append(_field_out(f))
+        by_section[f.section].append(field_out(f))
     parsed = {
         f.field_code
         for f in fields

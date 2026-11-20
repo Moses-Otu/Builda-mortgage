@@ -5,7 +5,7 @@ import type { DocumentOut, IncomeSource } from "./types";
 export type StepState = "done" | "current" | "upcoming";
 
 export interface Step {
-  key: "income" | "upload" | "review";
+  key: "income" | "upload" | "review" | "profile";
   title: string;
   detail: string;
   state: StepState;
@@ -46,5 +46,13 @@ export function caseSteps(sources: IncomeSource[], documents: DocumentOut[]): St
       state: state(1),
     },
     { key: "review", title: "Review and save", detail: reviewDetail, state: state(2) },
+    // Stage 3-A: the profile can be checked once the evidence is reviewed. Approving it
+    // (Stage 3-B) will complete this step.
+    {
+      key: "profile",
+      title: "Check the profile",
+      detail: "Every figure with its source",
+      state: done.every(Boolean) ? "current" : "upcoming",
+    },
   ];
 }

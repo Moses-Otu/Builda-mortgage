@@ -309,6 +309,8 @@ PROBES: list[Probe] = [
         CASE_WORKERS,
         lambda s: {"json": {"note": "Seen"}},
     ),
+    # --- financial profile (Stage 3-A) ------------------------------------------------------
+    Probe("get profile", "GET", "/api/v1/cases/{case_id}/profile", EVERYONE),
 ]
 
 # Routes that do not act within a firm and so have no role-based permission.

@@ -319,3 +319,103 @@ export interface Problem {
   existing_review_id?: string;
   existing_document_id?: string;
 }
+
+// --- financial profile (Stage 3-A) ---
+
+export type Origin = "extracted" | "corrected" | "declared" | "broker_entry";
+
+export interface MemberRef {
+  user_id: Uuid | null;
+  name: string;
+}
+
+export interface FigureValue {
+  type: string;
+  amount_minor?: number;
+  currency?: string;
+  percent?: string | number;
+  months?: number;
+  count?: number;
+  date?: string;
+}
+
+export interface FigureEvidence {
+  document_id: Uuid;
+  document_version_id: Uuid;
+  document_type: string;
+  file_name: string | null;
+  sha256: string;
+  field: ExtractedField;
+  decision: "accept" | "correct";
+  correction_reason: string | null;
+  run_id: Uuid;
+  provider: string;
+  schema_version: string;
+  reviewed_by: MemberRef | null;
+  reviewed_at: string;
+}
+
+export interface FigureHistory {
+  observation_id: Uuid;
+  value: FigureValue;
+  source_kind: string;
+  recorded_by: MemberRef | null;
+  recorded_at: string;
+  retired_reason: string | null;
+}
+
+export interface Figure {
+  id: Uuid;
+  item_kind: "income_source" | "commitment" | "expenditure";
+  item_id: Uuid;
+  measure: string;
+  qualifier: string | null;
+  value: FigureValue;
+  frequency: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  tax_year: string | null;
+  as_of_date: string | null;
+  source_kind: string;
+  origin: Origin;
+  recorded_by: MemberRef | null;
+  recorded_at: string;
+  evidence: FigureEvidence | null;
+  history: FigureHistory[];
+  cited_by: string[];
+}
+
+export interface ProfileApplicant {
+  id: Uuid;
+  display_order: number;
+  party_role: string;
+  is_primary: boolean;
+  status: string;
+  first_name: string;
+  middle_names: string | null;
+  last_name: string;
+}
+
+export interface ProfileItem {
+  id: Uuid;
+  kind?: string;
+  name?: string | null;
+  applicant_id?: Uuid;
+  category?: string;
+  description?: string | null;
+  creditor?: string | null;
+}
+
+export interface Profile {
+  rules: string;
+  case: { id: Uuid; external_reference: string | null; purpose: string; status: string };
+  applicants: ProfileApplicant[];
+  income_sources: ProfileItem[];
+  commitments: ProfileItem[];
+  expenditure: ProfileItem[];
+  figures: Figure[];
+  bank_accounts: BankAccount[];
+  checks: Checks;
+  documents: DocumentOut[];
+  fingerprint: string;
+}

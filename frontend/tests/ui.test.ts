@@ -211,25 +211,26 @@ describe("case steps", () => {
   const states = (sources: IncomeSource[], docs: DocumentOut[]) => caseSteps(sources, docs).map((s) => s.state);
 
   it("starts at the income source", () => {
-    expect(states([], [])).toEqual(["current", "upcoming", "upcoming"]);
+    expect(states([], [])).toEqual(["current", "upcoming", "upcoming", "upcoming"]);
   });
   it("moves on to upload, then review", () => {
-    expect(states([source], [])).toEqual(["done", "current", "upcoming"]);
-    expect(states([source], [doc("extracted")])).toEqual(["done", "done", "current"]);
+    expect(states([source], [])).toEqual(["done", "current", "upcoming", "upcoming"]);
+    expect(states([source], [doc("extracted")])).toEqual(["done", "done", "current", "upcoming"]);
   });
-  it("is complete once everything uploaded is reviewed", () => {
-    expect(states([source], [doc("reviewed")])).toEqual(["done", "done", "done"]);
+  it("moves on to the profile once everything uploaded is reviewed", () => {
+    expect(states([source], [doc("reviewed")])).toEqual(["done", "done", "done", "current"]);
   });
   it("ignores failed uploads and withdrawn sources", () => {
     expect(states([{ ...source, withdrawn_at: "2026-11-19T00:00:00Z" }], [doc("failed")])).toEqual([
       "current",
       "upcoming",
       "upcoming",
+      "upcoming",
     ]);
   });
   it("ignores bank statements (they have their own confirmation)", () => {
     const statement = { ...doc("extracted"), document_type: "bank_statement" };
-    expect(states([source], [statement])).toEqual(["done", "current", "upcoming"]);
+    expect(states([source], [statement])).toEqual(["done", "current", "upcoming", "upcoming"]);
   });
   it("describes what is waiting", () => {
     expect(caseSteps([source], [doc("extracted"), doc("extracted")])[2]?.detail).toBe("2 payslips waiting for review");

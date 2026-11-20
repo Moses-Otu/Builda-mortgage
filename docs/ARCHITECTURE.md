@@ -74,8 +74,7 @@ Single deployable backend codebase (modular monolith) with API and worker proces
 | 9 | `liabilities` | commitments from credit reports + recurring bank outgoings | 6 |
 | 10 | `reconciliation` | cross-document rules, discrepancies, tolerances | 7 |
 | 11 | `rules` | versioned rule sets, indicative affordability calc | 8 |
-| 12 | `review` | broker review, corrections, approval snapshots | 9 |
-| 13 | `evidence` | evidence pack generation | 10 |
+| 12 | `profile` | the financial profile and provenance (3-A), approval snapshots (3-B), evidence pack (3-C); replaces the planned `review` and `evidence` modules | Stage 3 |
 | 15 | `integrations` | canonical export schema, outbox, webhooks, CRM adapters | 11 |
 
 ## 5. Data & security foundations
@@ -192,6 +191,19 @@ Single deployable backend codebase (modular monolith) with API and worker proces
     The only stored data is `check_acknowledgements` (insert-only for the runtime role, RLS,
     one audit event with the note in the erasable details). **Acknowledging is not resolving
     or approving:** it changes no figure and the finding stays a discrepancy.
+  - **Financial profile (Stage 3-A):** module `profile`, read-only. One builder
+    (`profile.service.build_profile`) assembles rule `profile/1`: every observation that
+    isn't retired, from items that aren't withdrawn. There's no "current figure" flag and no
+    selection (decision S1).
+
+    Provenance comes from links that already exist: observation → field decision → extracted
+    field (label, raw text, page, boxes) → extraction run → document version (SHA-256). It
+    also includes the supersession chain and the finding keys that cite the figure.
+
+    The profile reuses the item, document, account and checks services, and carries a
+    SHA-256 `fingerprint` of its canonical JSON. The same builder will produce the approval
+    snapshot (3-B), so what a broker sees is what gets approved. `profile` may import
+    `reconciliation`; nothing imports `profile` except the API.
   - **Bank checks (Stage 2-B, 2B-3):** a second, separately versioned rule set
     (`bank-checks/1`, `reconciliation/bank_rules.py`), also pure and computed in the request,
     over **confirmed** statements (summary values as confirmed, the chosen account and its

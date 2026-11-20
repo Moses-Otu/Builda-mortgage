@@ -6,6 +6,7 @@ import {
   Check,
   FileText,
   FileUp,
+  ListChecks,
   Loader2,
   Plus,
   UserRound,
@@ -146,7 +147,15 @@ function CasePage({ caseId }: { caseId: string }) {
             ))}
           </div>
         </div>
-        <AddApplicantDialog caseId={caseId} onAdded={() => void load()} />
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            href={`/cases/${caseId}/profile`}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:border-brand-500 hover:text-brand-700"
+          >
+            <ListChecks className="size-4" /> Financial profile
+          </Link>
+          <AddApplicantDialog caseId={caseId} onAdded={() => void load()} />
+        </div>
       </div>
 
       {applicants.length === 0 ? (
@@ -230,7 +239,7 @@ function CasePage({ caseId }: { caseId: string }) {
 
 function StepStrip({ steps }: { steps: Step[] }) {
   return (
-    <ol className="grid gap-3 sm:grid-cols-3">
+    <ol className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
       {steps.map((step, i) => (
         <li
           key={step.key}

@@ -225,6 +225,19 @@ UPDATE_OPENAPI_SNAPSHOT=1 uv run pytest tests/integration/test_schema.py
   `source_kind = 'document'` figures linked to their decision; dates, frequency and tax code
   stay as reviewed evidence. All or nothing; a document is reviewed once (409 with the
   existing review afterwards). Later corrections use the financial endpoints.
+- **Financial profile (Stage 3-A):** `GET /api/v1/cases/{id}/profile` (`document:read`) returns
+  every current (not retired) figure from items that are not withdrawn, under rule
+  `profile/1`. Each figure is labelled extracted, corrected, declared or broker entry, with
+  its provenance:
+  - for a document figure: the file and the original's SHA-256, the printed label, page and
+    boxes, the extraction, the broker's decision and reason, and who reviewed it and when;
+  - the values it replaced;
+  - the checks that cite it.
+
+  The response also covers the applicants, items, bank accounts, both rule sets' checks and
+  every document on the case, plus a `fingerprint` (SHA-256) that approval (3-B) will
+  require. Nothing is chosen, summed, averaged or annualised. The screen is
+  `/cases/{id}/profile`.
 - **Checks (Stage 2-A and 2B-3):** `GET /api/v1/cases/{id}/checks` runs two rule sets in the
   request; nothing is stored. `payslip-checks/1` covers the current reviewed payslips and the
   declared basic salary. `bank-checks/1` covers confirmed bank statements: `BANK-TOTALS`,

@@ -2761,6 +2761,400 @@
         "title": "FieldDecisionOut",
         "type": "object"
       },
+      "FigureEvidence": {
+        "description": "Where a document figure came from: the document, the exact field (page and boxes),\nthe extraction, and the broker's decision.",
+        "properties": {
+          "correction_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the broker corrected the extracted value (corrections only)",
+            "title": "Correction Reason"
+          },
+          "decision": {
+            "enum": [
+              "accept",
+              "correct"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "document_id": {
+            "format": "uuid",
+            "title": "Document Id",
+            "type": "string"
+          },
+          "document_type": {
+            "title": "Document Type",
+            "type": "string"
+          },
+          "document_version_id": {
+            "format": "uuid",
+            "title": "Document Version Id",
+            "type": "string"
+          },
+          "field": {
+            "$ref": "#/components/schemas/ExtractedFieldOut",
+            "description": "The printed label and value, page and boxes"
+          },
+          "file_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Name"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "reviewed_at": {
+            "format": "date-time",
+            "title": "Reviewed At",
+            "type": "string"
+          },
+          "reviewed_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run_id": {
+            "format": "uuid",
+            "title": "Run Id",
+            "type": "string"
+          },
+          "schema_version": {
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "sha256": {
+            "description": "SHA-256 of the original document",
+            "title": "Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "document_id",
+          "document_version_id",
+          "document_type",
+          "file_name",
+          "sha256",
+          "field",
+          "decision",
+          "correction_reason",
+          "run_id",
+          "provider",
+          "schema_version",
+          "reviewed_by",
+          "reviewed_at"
+        ],
+        "title": "FigureEvidence",
+        "type": "object"
+      },
+      "FigureHistory": {
+        "description": "A value this figure replaced (newest first), kept for provenance; never in the profile.",
+        "properties": {
+          "observation_id": {
+            "format": "uuid",
+            "title": "Observation Id",
+            "type": "string"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "title": "Recorded At",
+            "type": "string"
+          },
+          "recorded_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retired_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retired Reason"
+          },
+          "source_kind": {
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "value": {
+            "discriminator": {
+              "mapping": {
+                "count": "#/components/schemas/CountValue",
+                "date": "#/components/schemas/DateValue",
+                "duration": "#/components/schemas/DurationValue",
+                "money": "#/components/schemas/MoneyValue",
+                "proportion": "#/components/schemas/PercentValue-Output",
+                "rate": "#/components/schemas/PercentValue-Output",
+                "signed_money": "#/components/schemas/MoneyValue"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MoneyValue"
+              },
+              {
+                "$ref": "#/components/schemas/PercentValue-Output"
+              },
+              {
+                "$ref": "#/components/schemas/DurationValue"
+              },
+              {
+                "$ref": "#/components/schemas/CountValue"
+              },
+              {
+                "$ref": "#/components/schemas/DateValue"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "observation_id",
+          "value",
+          "source_kind",
+          "recorded_by",
+          "recorded_at",
+          "retired_reason"
+        ],
+        "title": "FigureHistory",
+        "type": "object"
+      },
+      "FigureOut": {
+        "properties": {
+          "as_of_date": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of Date"
+          },
+          "cited_by": {
+            "description": "Keys of the check findings that cite this figure",
+            "items": {
+              "type": "string"
+            },
+            "title": "Cited By",
+            "type": "array"
+          },
+          "evidence": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FigureEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Document figures only"
+          },
+          "frequency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequency"
+          },
+          "history": {
+            "description": "Values it replaced, newest first",
+            "items": {
+              "$ref": "#/components/schemas/FigureHistory"
+            },
+            "title": "History",
+            "type": "array"
+          },
+          "id": {
+            "description": "The financial observation",
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "item_id": {
+            "format": "uuid",
+            "title": "Item Id",
+            "type": "string"
+          },
+          "item_kind": {
+            "enum": [
+              "income_source",
+              "commitment",
+              "expenditure"
+            ],
+            "title": "Item Kind",
+            "type": "string"
+          },
+          "measure": {
+            "title": "Measure",
+            "type": "string"
+          },
+          "origin": {
+            "description": "extracted (accepted as read), corrected (by the broker, with a reason), declared (what the applicant says) or broker_entry",
+            "enum": [
+              "extracted",
+              "corrected",
+              "declared",
+              "broker_entry"
+            ],
+            "title": "Origin",
+            "type": "string"
+          },
+          "period_end": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period End"
+          },
+          "period_start": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Period Start"
+          },
+          "qualifier": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qualifier"
+          },
+          "recorded_at": {
+            "format": "date-time",
+            "title": "Recorded At",
+            "type": "string"
+          },
+          "recorded_by": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MemberRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_kind": {
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "tax_year": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tax Year"
+          },
+          "value": {
+            "discriminator": {
+              "mapping": {
+                "count": "#/components/schemas/CountValue",
+                "date": "#/components/schemas/DateValue",
+                "duration": "#/components/schemas/DurationValue",
+                "money": "#/components/schemas/MoneyValue",
+                "proportion": "#/components/schemas/PercentValue-Output",
+                "rate": "#/components/schemas/PercentValue-Output",
+                "signed_money": "#/components/schemas/MoneyValue"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/MoneyValue"
+              },
+              {
+                "$ref": "#/components/schemas/PercentValue-Output"
+              },
+              {
+                "$ref": "#/components/schemas/DurationValue"
+              },
+              {
+                "$ref": "#/components/schemas/CountValue"
+              },
+              {
+                "$ref": "#/components/schemas/DateValue"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "id",
+          "item_kind",
+          "item_id",
+          "measure",
+          "qualifier",
+          "value",
+          "frequency",
+          "period_start",
+          "period_end",
+          "tax_year",
+          "as_of_date",
+          "source_kind",
+          "origin",
+          "recorded_by",
+          "recorded_at",
+          "evidence",
+          "history",
+          "cited_by"
+        ],
+        "title": "FigureOut",
+        "type": "object"
+      },
       "FindingOut": {
         "properties": {
           "acknowledgement": {
@@ -3746,6 +4140,36 @@
         "title": "MemberOut",
         "type": "object"
       },
+      "MemberRef": {
+        "description": "Who did something: the firm member's display name, else their email.",
+        "properties": {
+          "name": {
+            "examples": [
+              "Alex Broker"
+            ],
+            "title": "Name",
+            "type": "string"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "user_id",
+          "name"
+        ],
+        "title": "MemberRef",
+        "type": "object"
+      },
       "MemberUpdate": {
         "additionalProperties": false,
         "description": "Send the membership's current ETag in ``If-Match``.",
@@ -4456,6 +4880,185 @@
           "percent"
         ],
         "title": "PercentValue",
+        "type": "object"
+      },
+      "ProfileApplicant": {
+        "description": "Only what the profile needs: no date of birth or contact details.",
+        "properties": {
+          "display_order": {
+            "title": "Display Order",
+            "type": "integer"
+          },
+          "first_name": {
+            "title": "First Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_primary": {
+            "title": "Is Primary",
+            "type": "boolean"
+          },
+          "last_name": {
+            "title": "Last Name",
+            "type": "string"
+          },
+          "middle_names": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Middle Names"
+          },
+          "party_role": {
+            "title": "Party Role",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "display_order",
+          "party_role",
+          "is_primary",
+          "status",
+          "first_name",
+          "middle_names",
+          "last_name"
+        ],
+        "title": "ProfileApplicant",
+        "type": "object"
+      },
+      "ProfileCase": {
+        "properties": {
+          "external_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Reference"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "purpose": {
+            "title": "Purpose",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "external_reference",
+          "purpose",
+          "status"
+        ],
+        "title": "ProfileCase",
+        "type": "object"
+      },
+      "ProfileOut": {
+        "description": "The case's financial profile under rule ``profile/1``: every current (not retired)\nfigure, labelled by origin, with its provenance. Nothing is chosen, averaged, annualised\nor summed. The fingerprint is the SHA-256 of everything else in this document; approving\n(Stage 3-B) requires the fingerprint the broker saw.",
+        "properties": {
+          "applicants": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileApplicant"
+            },
+            "title": "Applicants",
+            "type": "array"
+          },
+          "bank_accounts": {
+            "items": {
+              "$ref": "#/components/schemas/BankAccountOut"
+            },
+            "title": "Bank Accounts",
+            "type": "array"
+          },
+          "case": {
+            "$ref": "#/components/schemas/ProfileCase"
+          },
+          "checks": {
+            "$ref": "#/components/schemas/ChecksOut"
+          },
+          "commitments": {
+            "items": {
+              "$ref": "#/components/schemas/CommitmentOut"
+            },
+            "title": "Commitments",
+            "type": "array"
+          },
+          "documents": {
+            "description": "Every document on the case, including those not relied on",
+            "items": {
+              "$ref": "#/components/schemas/DocumentOut"
+            },
+            "title": "Documents",
+            "type": "array"
+          },
+          "expenditure": {
+            "items": {
+              "$ref": "#/components/schemas/ExpenditureOut"
+            },
+            "title": "Expenditure",
+            "type": "array"
+          },
+          "figures": {
+            "items": {
+              "$ref": "#/components/schemas/FigureOut"
+            },
+            "title": "Figures",
+            "type": "array"
+          },
+          "fingerprint": {
+            "description": "SHA-256 of this profile's canonical JSON",
+            "title": "Fingerprint",
+            "type": "string"
+          },
+          "income_sources": {
+            "items": {
+              "$ref": "#/components/schemas/IncomeSourceOut"
+            },
+            "title": "Income Sources",
+            "type": "array"
+          },
+          "rules": {
+            "const": "profile/1",
+            "default": "profile/1",
+            "title": "Rules",
+            "type": "string"
+          }
+        },
+        "required": [
+          "case",
+          "applicants",
+          "income_sources",
+          "commitments",
+          "expenditure",
+          "figures",
+          "bank_accounts",
+          "checks",
+          "documents",
+          "fingerprint"
+        ],
+        "title": "ProfileOut",
         "type": "object"
       },
       "PropertyUse": {
@@ -8151,6 +8754,70 @@
         "summary": "Retire an observation entered in error",
         "tags": [
           "financial"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/profile": {
+      "get": {
+        "description": "The case's financial profile under rule `profile/1`: every current (not retired) figure from items that are not withdrawn, labelled by origin (extracted, corrected, declared or broker entry), each with its provenance. A document figure carries the document, page and boxes, the extraction, the broker's decision and who reviewed it. Also the applicants, items, bank accounts, both rule sets' checks and every document on the case. Nothing is chosen, averaged, annualised or summed. `fingerprint` is the SHA-256 of the rest of the document. Needs `document:read`, since it includes document details.",
+        "operationId": "get_profile_api_v1_cases__case_id__profile_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Case not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get the financial profile",
+        "tags": [
+          "profile"
         ]
       }
     },

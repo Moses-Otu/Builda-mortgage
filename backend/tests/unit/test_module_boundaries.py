@@ -39,7 +39,7 @@ ALLOWED: dict[str, set[str]] = {
         "models",
     },
     # reconciliation reads reviewed documents and financial figures (never writes them) and
-    # stores only acknowledgements; nothing imports reconciliation except the API. Since 2B-3
+    # stores only acknowledgements; only the API and profile import reconciliation. Since 2B-3
     # it also reads applicants' names, for the bank checks' relationship messages.
     "reconciliation": {
         "core",
@@ -51,6 +51,20 @@ ALLOWED: dict[str, set[str]] = {
         "documents",
         "financial",
     },
+}
+# profile (Stage 3) reads everything the approved profile shows: applicants, items and
+# figures, documents and their provenance, accounts and the checks. Nothing imports profile
+# except the API.
+ALLOWED["profile"] = {
+    "core",
+    "profile",
+    "applicants",
+    "cases",
+    "audit",
+    "tenancy",
+    "documents",
+    "financial",
+    "reconciliation",
 }
 HTTP_FRAMEWORKS = {"fastapi", "starlette"}
 

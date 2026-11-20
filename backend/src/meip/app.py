@@ -22,6 +22,7 @@ from meip.api.routers import (
     health,
     me,
     members,
+    profile,
 )
 from meip.auth.factory import build_auth_provider
 from meip.auth.provider import AuthProvider
@@ -92,6 +93,7 @@ def create_app(
         documents,
         bank_accounts,
         checks,
+        profile,
     ):
         app.include_router(module.router)
     app.include_router(financial.reference)

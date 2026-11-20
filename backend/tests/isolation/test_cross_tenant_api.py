@@ -125,6 +125,7 @@ PROBES: list[tuple[str, str, dict[str, Any]]] = [
     ),
     ("GET", "/api/v1/cases/{case_id}/documents/{document_id}/review", {}),
     ("GET", "/api/v1/cases/{case_id}/checks", {}),
+    ("GET", "/api/v1/cases/{case_id}/profile", {}),
     ("GET", "/api/v1/cases/{case_id}/bank-accounts", {}),
     (
         "POST",
