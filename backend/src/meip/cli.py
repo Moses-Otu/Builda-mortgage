@@ -6,6 +6,8 @@ Commands:
   generate-signing-key  Create the RSA key that signs password-mode tokens (Phase 4).
   erase-case            Permanently erase one case and its documents (owner DB role).
   retention-sweep       List closed cases past the retention period; --apply erases them.
+  bootstrap-database    Create the owner and runtime roles and the database on a managed
+                        PostgreSQL (superuser URL; idempotent). For hosts without init scripts.
   dev-token             Mint a local development bearer token (auth_mode=dev only).
 """
 
@@ -298,6 +300,57 @@ async def _find_orphan_blobs() -> int:
     return 0
 
 
+_BOOTSTRAP_ROLES = {
+    "meip_owner": "LOGIN NOSUPERUSER NOCREATEROLE",
+    # Runtime role: not a table owner, cannot bypass row-level security.
+    "meip_app": "LOGIN NOSUPERUSER NOCREATEROLE NOBYPASSRLS",
+}
+
+
+async def _bootstrap_database() -> int:
+    """The same roles and database as ``scripts/db`` and the pilot's ``db-init``, for managed
+    PostgreSQL where init scripts can't run (the QA deployment). Safe to repeat: existing
+    roles get their passwords re-set, an existing database is kept."""
+    import asyncpg
+
+    url = os.environ.get("MEIP_BOOTSTRAP_SUPERUSER_URL", "")
+    passwords = {
+        "meip_owner": os.environ.get("MEIP_OWNER_DB_PASSWORD", ""),
+        "meip_app": os.environ.get("MEIP_APP_DB_PASSWORD", ""),
+    }
+    if not url or not all(passwords.values()):
+        print(
+            "Needs MEIP_BOOTSTRAP_SUPERUSER_URL, MEIP_OWNER_DB_PASSWORD and MEIP_APP_DB_PASSWORD",
+            file=sys.stderr,
+        )
+        return 2
+    if any(len(p) < 16 for p in passwords.values()):
+        print("Database passwords must be at least 16 characters", file=sys.stderr)
+        return 2
+    conn = await asyncpg.connect(url.replace("postgresql+asyncpg://", "postgresql://", 1))
+    try:
+        for role, attributes in _BOOTSTRAP_ROLES.items():
+            exists = await conn.fetchval("SELECT 1 FROM pg_roles WHERE rolname = $1", role)
+            verb = "ALTER" if exists else "CREATE"
+            # Role names are constants; the password is quoted by the server (format %L).
+            statement = await conn.fetchval(
+                f"SELECT format('{verb} ROLE {role} {attributes} PASSWORD %L', $1::text)",
+                passwords[role],
+            )
+            await conn.execute(statement)
+            print(f"role {role} {'updated' if exists else 'created'}")
+        if await conn.fetchval("SELECT 1 FROM pg_database WHERE datname = 'meip'"):
+            print("database meip already exists")
+        else:
+            await conn.execute("CREATE DATABASE meip OWNER meip_owner")
+            print("database meip created")
+        await conn.execute("REVOKE ALL ON DATABASE meip FROM PUBLIC")
+        await conn.execute("GRANT CONNECT ON DATABASE meip TO meip_app")
+    finally:
+        await conn.close()
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="meip-admin")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -347,6 +400,10 @@ def main(argv: Sequence[str] | None = None) -> int:
     d.add_argument("--name", default=None)
     d.add_argument("--ttl-minutes", type=int, default=60)
 
+    sub.add_parser(
+        "bootstrap-database",
+        help="Create roles and database on managed PostgreSQL (MEIP_BOOTSTRAP_SUPERUSER_URL)",
+    )
     sub.add_parser("init-storage", help="Create the private blob container (local only)")
     sub.add_parser(
         "find-orphan-blobs", help="List stored originals with no database row (read-only)"
@@ -361,6 +418,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return asyncio.run(_retention_sweep(args))
     if args.command == "generate-signing-key":
         return _generate_signing_key(args)
+    if args.command == "bootstrap-database":
+        return asyncio.run(_bootstrap_database())
     if args.command == "init-storage":
         return asyncio.run(_init_storage())
     if args.command == "find-orphan-blobs":

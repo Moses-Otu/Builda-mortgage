@@ -1,0 +1,13 @@
+# QA and demo deployment on Railway (synthetic data only). See docs/QA-DEPLOY-RAILWAY-VERCEL.md.
+# In the service settings, set Root Directory to "backend" and the config file path to
+# "/backend/railway.toml".
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "bash /app/start-combined.sh"
+healthcheckPath = "/ready"
+healthcheckTimeout = 180
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

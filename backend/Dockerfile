@@ -16,6 +16,8 @@ WORKDIR /app
 COPY --from=build /app/.venv /app/.venv
 COPY alembic.ini ./
 COPY migrations ./migrations
+# QA and demo hosting only (one container for the API and worker); unused by deploy/pilot.
+COPY scripts/start-combined.sh ./start-combined.sh
 ENV PATH="/app/.venv/bin:$PATH" PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 USER 10001
 EXPOSE 8000

@@ -4,6 +4,7 @@ import time
 import uuid
 from datetime import UTC, date, datetime
 from decimal import Decimal
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -177,3 +178,28 @@ class TestAuditDiff:
         assert result.changes == {"reason": {"changed": True}, "closure_reason": "duplicate"}
         assert result.details == {"reason": "Client withdrew"}
         assert diff({}, {}).note("reason", None).changes == {}
+
+
+def test_deployed_api_serves_no_docs_or_schema(tmp_path: Path) -> None:
+    """QA deployment: the API may be reachable from the internet, so outside local and test
+    it doesn't serve the interactive docs or the OpenAPI schema."""
+    from fastapi.testclient import TestClient
+
+    from meip.app import create_app
+    from meip.cli import main as admin
+
+    key = tmp_path / "key.pem"
+    assert admin(["generate-signing-key", "--out", str(key)]) == 0
+    url = "postgresql+asyncpg://meip_app:x@localhost:1/meip"
+    deployed = Settings(
+        env=Environment.STAGING,
+        database_url=url,
+        auth_mode=AuthMode.PASSWORD,
+        auth_signing_key_path=key,
+    )
+    # No lifespan (no ``with``): nothing here touches the database.
+    client = TestClient(create_app(deployed))
+    for path in ("/docs", "/redoc", "/openapi.json"):
+        assert client.get(path).status_code == 404
+    local = Settings(env=Environment.LOCAL, database_url=url, auth_mode=AuthMode.DEV)
+    assert TestClient(create_app(local)).get("/openapi.json").status_code == 200

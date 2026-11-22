@@ -27,7 +27,7 @@ from meip.api.routers import (
 )
 from meip.auth.factory import build_auth_provider
 from meip.auth.provider import AuthProvider
-from meip.core.config import Settings, get_settings
+from meip.core.config import NON_DEPLOYED_ENVIRONMENTS, Settings, get_settings
 from meip.core.db import create_engine, create_sessionmaker
 from meip.core.logging import configure_logging, get_logger
 from meip.documents.storage import BlobStore, build_blob_store
@@ -72,6 +72,11 @@ def create_app(
         version=__version__,
         description=DESCRIPTION,
         lifespan=lifespan,
+        # Interactive docs and the schema are served only where no real data can exist; a
+        # deployed API (reachable from the internet in the QA setup) doesn't advertise itself.
+        docs_url="/docs" if settings.env in NON_DEPLOYED_ENVIRONMENTS else None,
+        redoc_url="/redoc" if settings.env in NON_DEPLOYED_ENVIRONMENTS else None,
+        openapi_url="/openapi.json" if settings.env in NON_DEPLOYED_ENVIRONMENTS else None,
     )
     app.state.settings = settings
     app.state.auth_provider = provider
