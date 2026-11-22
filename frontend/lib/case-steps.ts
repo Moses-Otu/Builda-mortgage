@@ -11,6 +11,17 @@ export interface Step {
   state: StepState;
 }
 
+/** True once an applicant's payslips are all reviewed and no bank statement is on file for
+ * them yet: the case page then suggests the statements for the same months. */
+export function statementsDue(documents: DocumentOut[], applicantId: string): boolean {
+  const mine = documents.filter((d) => d.applicant_id === applicantId);
+  const payslips = mine.filter(
+    (d) => d.document_type !== "bank_statement" && d.status !== "failed" && d.status !== "unrecognised",
+  );
+  const hasStatement = mine.some((d) => d.document_type === "bank_statement" && d.status !== "failed");
+  return payslips.length > 0 && payslips.every((d) => d.status === "reviewed") && !hasStatement;
+}
+
 export function caseSteps(sources: IncomeSource[], documents: DocumentOut[], status = "draft"): Step[] {
   const hasSource = sources.some((s) => !s.withdrawn_at);
   // Payslips only: bank statements have their own confirmation (Stage 2-B).

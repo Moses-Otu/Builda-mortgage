@@ -29,7 +29,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Label, Select } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { get, postJson, uploadPdf } from "@/lib/api";
-import { caseSteps, type Step } from "@/lib/case-steps";
+import { caseSteps, statementsDue, type Step } from "@/lib/case-steps";
 import { documentStatusView } from "@/lib/failures";
 import { caseStatusLabel, formatBytes, formatDateTime, purposeLabel } from "@/lib/labels";
 import { problemMessage } from "@/lib/problems";
@@ -122,6 +122,7 @@ function CasePage({ caseId }: { caseId: string }) {
   const activeSources = sources.filter((s) => !s.withdrawn_at);
   const status = caseRow?.status ?? summary?.status ?? "draft";
   const steps = caseSteps(sources, documents, status);
+  const suggestStatements = statementsDue(documents, applicantId);
   // The checks re-run when a document changes state or a declared salary changes.
   const checksKey = [
     ...documents.map((d) => `${d.id}:${d.status}`),
@@ -186,17 +187,26 @@ function CasePage({ caseId }: { caseId: string }) {
             <Card>
               <CardHeader>
                 <div>
-                  <CardTitle>Payslips</CardTitle>
-                  <CardDescription>Upload a payslip, then review its figures.</CardDescription>
+                  <CardTitle>Documents</CardTitle>
+                  <CardDescription>
+                    Upload payslips and review their figures, then the bank statements for the same months.
+                  </CardDescription>
                 </div>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
+                {suggestStatements && (
+                  <Alert tone="info" title="Payslips reviewed. Next: bank statements">
+                    Upload {applicants.length > 1 ? `${nameOf(applicantId).split(" ")[0]}'s` : "the"} bank
+                    statements for the same months, so each salary payment can be matched to its payslip.
+                  </Alert>
+                )}
                 <UploadZone
                   caseId={caseId}
                   applicants={applicants}
                   applicantId={applicantId}
                   onApplicant={setApplicantId}
                   onUploaded={() => void load()}
+                  suggestStatements={suggestStatements}
                 />
                 <DocumentList caseId={caseId} documents={documents} nameOf={nameOf} />
               </CardContent>
@@ -290,8 +300,9 @@ function UploadZone(props: {
   applicantId: string;
   onApplicant: (id: string) => void;
   onUploaded: () => void;
+  suggestStatements?: boolean;
 }) {
-  const { caseId, applicants, applicantId, onApplicant, onUploaded } = props;
+  const { caseId, applicants, applicantId, onApplicant, onUploaded, suggestStatements = false } = props;
   const toast = useToast();
   const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
@@ -299,6 +310,12 @@ function UploadZone(props: {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [documentType, setDocumentType] = useState<"payslip" | "bank_statement">("payslip");
+
+  // When the payslips are done, preselect statements. Only on that change, so the broker can
+  // still switch back to payslips.
+  useEffect(() => {
+    if (suggestStatements) setDocumentType("bank_statement");
+  }, [suggestStatements]);
 
   function pick(candidate: File | undefined) {
     setError(null);
@@ -424,7 +441,7 @@ function DocumentList(props: {
 }) {
   const { caseId, documents, nameOf } = props;
   if (documents.length === 0) {
-    return <p className="py-2 text-center text-sm text-slate-500">No payslips uploaded yet.</p>;
+    return <p className="py-2 text-center text-sm text-slate-500">No documents uploaded yet.</p>;
   }
   return (
     <ul className="flex flex-col gap-2">

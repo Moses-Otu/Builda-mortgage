@@ -18,7 +18,8 @@ export function problemMessage(status: number, problem: Problem | null): string 
     case "unsupported-media-type":
       return "Only PDF files can be uploaded.";
     case "feature-disabled":
-      return "Documents are not enabled in this environment.";
+      // The API says which feature: documents in general, or bank statements only.
+      return problem?.detail ? `${problem.detail.replace(/\.$/, "")}.` : "Documents are not enabled in this environment.";
     case "forbidden":
       return "Your role does not allow this.";
     case "unauthorized":
