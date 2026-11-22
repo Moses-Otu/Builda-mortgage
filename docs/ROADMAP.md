@@ -28,16 +28,24 @@ asset or deposit), and the platform reconciles them rather than creating unrelat
 - **Each step:** plan → approve → build → test → report → commit.
 - **Synthetic data only** until Phase 4's safeguards are in place.
 
+## Direction (2026-11-20)
+1. **Finish 3-C quickly:** one straightforward evidence pack, no export framework.
+2. **Close Phase 3:** no more domain redesign or refinements.
+3. **Phase 4 is the final push to a controlled pilot:** only what's necessary to handle real
+   borrower data safely, get a real extraction provider working, deploy, and onboard a few
+   firms.
+4. **Defer Phases 5 and 6:** actual broker usage decides what to build next.
+
 ## Phases
 
 | Phase | Outcome | Status |
 |---|---|---|
 | **1. Core financial domain and platform foundation** | Tenancy and RLS, roles, cases, applicants, audit; the financial model (items, typed observations with immutable measures, supersession); hardening. Phases 1, 1.1, 1.2 | Done |
 | **2. Document intelligence and reconciliation** | **Payslips** end to end: upload and storage, background processing and safe PDF check, classification and extraction (deterministic synthetic provider behind `LayoutProvider`; a real provider is still to connect), broker review into the financial model, review screen, UI redesign. **Reconciliation:** `payslip-checks/1` (arithmetic, coverage, duplicates, year to date, declared versus evidenced basic). **Bank statements** ([plan](phases/STAGE-2B-BANK-STATEMENTS-PLAN.md), local and test only): extraction with field-level provenance and keyed account fingerprints; broker confirmation, accounts and holders; `bank-checks/1` (totals, running balance, gaps, salary credits with four outcomes) | Done |
-| **3. Unified financial profile, evidence traceability and broker approval** | [Plan](phases/STAGE-3-BROKER-EXPERIENCE-PLAN.md). **3-A** profile with per-figure provenance (done) · **3-A2** (done) "Supported by" for each item: declared, documentary, corroborating, findings, approval, kept separate, with no count implying reliability (assessment section 3) · **3-B** (done) approval: versioned immutable snapshot, case `verified`, reopening supersedes · **3-C** evidence pack built only from the snapshot | In progress |
-| **4. Minimum production safeguards and a controlled broker pilot** | Before **any** real borrower data, and before any new document type (decision R1). Safeguards and pilot below | Next |
-| **5. Broader evidence coverage and financial assessment support** | New evidence types (P60, SA302, credit reports, accounts, other evidence), chosen in the order the pilot shows matters most. Domain additions as each type requires them, from the assessment: per-decision item binding (G1, with credit reports), per-type definitions (G2, with the third type), document-to-item links for evidence without figures (G3), assets and deposit (G4). **Assessment support:** positions per item as an explicit, versioned rule over the observations (never a "current" flag); missing-evidence rules; pre-qualification and affordability preparation, labelled indicative and never advice | Planned |
-| **6. Integrations, operational readiness and commercial rollout** | Integrations and export (CRM and sourcing systems); borrower upload links (D4); operational readiness beyond the pilot minimum (scale, monitoring and alerting, support processes, disaster recovery, Docker verification); firm onboarding and commercial rollout | Planned |
+| **3. Unified financial profile, evidence traceability and broker approval** | [Plan](phases/STAGE-3-BROKER-EXPERIENCE-PLAN.md). **3-A** profile with per-figure provenance (done) · **3-A2** (done) "Supported by" for each item: declared, documentary, corroborating, findings, approval, kept separate, with no count implying reliability (assessment section 3) · **3-B** (done) approval: versioned immutable snapshot, case `verified`, reopening supersedes · **3-C** (done) evidence pack built only from the snapshot ([plan](phases/STAGE-3C-EVIDENCE-PACK-PLAN.md)); Phase 3 closes with it | Done |
+| **4. Minimum production safeguards and a controlled broker pilot** | **The final push to a controlled pilot.** Only what's necessary to handle real borrower data safely, get a real extraction provider working, deploy, and onboard a few firms. Before any real borrower data, and before any new document type (decision R1). **Built (2026-11-20, not yet committed):** OpenAI extraction provider behind `LayoutProvider` (structured outputs, `store: false`); the platform's own email and password accounts (`MEIP_AUTH_MODE=password`) with firm admin onboarding; download auditing; operator case erasure and a retention sweep; a Docker Compose pilot deployment with HTTPS, backups and a restore procedure ([runbook](PILOT-RUNBOOK.md)). **Before real data:** the external prerequisites in the runbook, section 1 | In progress |
+| **5. Broader evidence coverage and financial assessment support** | New evidence types (P60, SA302, credit reports, accounts, other evidence), chosen in the order the pilot shows matters most. Domain additions as each type requires them, from the assessment: per-decision item binding (G1, with credit reports), per-type definitions (G2, with the third type), document-to-item links for evidence without figures (G3), assets and deposit (G4). **Assessment support:** positions per item as an explicit, versioned rule over the observations (never a "current" flag); missing-evidence rules; pre-qualification and affordability preparation, labelled indicative and never advice | **Deferred** until real broker usage shows what to build |
+| **6. Integrations, operational readiness and commercial rollout** | Integrations and export (CRM and sourcing systems); borrower upload links (D4); operational readiness beyond the pilot minimum (scale, monitoring and alerting, support processes, disaster recovery, Docker verification); firm onboarding and commercial rollout | **Deferred** until real broker usage shows what to build |
 
 ### Phase 4 in detail
 
@@ -69,11 +77,11 @@ approved like any step):
 
 | # | Decision | Needed by | Recommendation or status |
 |---|---|---|---|
-| D1 | Managed auth provider | Phase 4 (live integration) | Microsoft Entra External ID |
+| D1 | Managed auth provider | Phase 4 (live integration) | **Pilot:** the platform's own password accounts (no Azure, by direction 2026-11-20). Entra External ID, or another IdP with MFA, remains the option after the pilot |
 | D2 | Python packaging tool | — | uv |
 | D3 | Job queue | — | Postgres `SKIP LOCKED` queue behind an interface (built) |
 | D4 | Borrower access model (portal login or magic-link upload) | Phase 6 | Time-limited, case-scoped magic links; no borrower accounts |
-| D5 | LLM model and region | Phase 4 (if the real provider uses one) or Phase 5 | Azure OpenAI in UK South or the EU Data Zone, subject to model availability |
+| D5 | LLM model and region | Phase 4 | **Pilot:** the OpenAI API (`gpt-4.1` by default, configurable). Data processing region, retention terms and the DPA are external prerequisites |
 | D6 | Synthetic test document corpus | — | Generated synthetic documents; **no real customer documents in the repo** (in place) |
 | D10 | Retention and erasure | Phase 4 | See the retention brief |
 

@@ -25,18 +25,27 @@ class AuthMode(StrEnum):
     DEV = "dev"
     """Validate tokens signed by a local development key. Never allowed in production."""
 
+    PASSWORD = "password"  # noqa: S105 - a mode name, not a secret
+    """Phase 4 pilot: email and password accounts; the platform signs its own tokens with
+    MEIP_AUTH_SIGNING_KEY_PATH. No external identity provider needed."""
+
 
 class BlobBackend(StrEnum):
     AZURE = "azure"
     """Azure Blob Storage (Azurite locally)."""
 
     FILESYSTEM = "filesystem"
-    """A local directory. Local development and tests only."""
+    """A local directory. In a deployment (Phase 4 pilot): a private volume on an encrypted
+    disk, never served directly; set ``MEIP_BLOB_ROOT`` to an absolute path."""
 
 
 class ExtractionProvider(StrEnum):
     SYNTHETIC = "synthetic"
     """Reads layouts embedded in synthetic test PDFs. Local and test only."""
+
+    OPENAI = "openai"
+    """Phase 4: the OpenAI API transcribes each page (structured outputs); the deterministic
+    rules do the rest. Needs MEIP_OPENAI_API_KEY."""
 
 
 class ConfigurationError(RuntimeError):
@@ -94,6 +103,13 @@ class Settings(BaseSettings):
     )
     jwt_leeway_seconds: int = 30
 
+    auth_signing_key_path: Path | None = Field(
+        default=None, description="RSA private key (PEM) for password-mode tokens; a secret"
+    )
+    password_auth_issuer: str = "meip-accounts"  # noqa: S105 - token issuer name
+    password_auth_audience: str = "meip-api"  # noqa: S105 - token audience name
+    session_minutes: int = Field(default=480, ge=5, le=1440)
+
     dev_auth_issuer: str = "https://meip-dev.localhost/"
     dev_auth_audience: str = "meip-api"
     dev_auth_key_path: Path = Path(".dev/dev_auth_key.pem")
@@ -124,6 +140,22 @@ class Settings(BaseSettings):
     )
     pdf_check_timeout_seconds: float = Field(default=30.0, gt=0)
     extraction_provider: ExtractionProvider = ExtractionProvider.SYNTHETIC
+    openai_api_key: SecretStr | None = Field(
+        default=None, description="Server-side only; never sent to the browser or logged"
+    )
+    openai_model: str = Field(
+        default="gpt-4.1", description="A vision-capable model that supports structured outputs"
+    )
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_timeout_seconds: float = Field(default=120.0, gt=0)
+    openai_max_attempts: int = Field(default=3, ge=1, le=6)
+    bank_statements_enabled: bool = Field(
+        default=False,
+        description=(
+            "Outside local and test, bank statements stay refused unless this is set, which "
+            "should only follow a DPIA that covers statements (Stage 2-B plan, section 2.3)"
+        ),
+    )
     account_fingerprint_key: SecretStr | None = Field(
         default=None,
         description=(
@@ -135,10 +167,12 @@ class Settings(BaseSettings):
 
     @property
     def bank_statements_allowed(self) -> bool:
-        """Stage 2-B: bank statements are refused outside local and test, whatever else is
-        set. Real statements need the DPIA, D10, R15-R17, provider terms and key management
-        first (Stage 2-B plan, section 2.3)."""
-        return self.env in NON_DEPLOYED_ENVIRONMENTS
+        """Stage 2-B: bank statements are allowed in local and test. Anywhere else (Phase 4)
+        only when ``MEIP_BANK_STATEMENTS_ENABLED`` is set, with a fingerprint key; that switch
+        belongs after a DPIA that covers statements (Stage 2-B plan, section 2.3)."""
+        if self.env in NON_DEPLOYED_ENVIRONMENTS:
+            return True
+        return self.bank_statements_enabled and self.account_fingerprint_key is not None
 
     def fingerprint_key(self) -> bytes:
         if self.account_fingerprint_key is not None:
@@ -152,9 +186,14 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def _validate_documents(self) -> Settings:
         deployed = self.env not in NON_DEPLOYED_ENVIRONMENTS
-        if self.blob_backend is BlobBackend.FILESYSTEM and deployed:
+        if (
+            self.blob_backend is BlobBackend.FILESYSTEM
+            and deployed
+            and not self.blob_root.is_absolute()
+        ):
             raise ConfigurationError(
-                f"blob_backend=filesystem is forbidden when env={self.env.value}"
+                "blob_backend=filesystem needs an absolute MEIP_BLOB_ROOT "
+                f"when env={self.env.value}"
             )
         if not self.documents_enabled:
             return self
@@ -191,8 +230,18 @@ class Settings(BaseSettings):
                     "MEIP_BLOB_CONNECTION_STRING must not be the Azurite development account "
                     f"when env={self.env.value}"
                 )
-        # Last: until a real provider is connected, this keeps document processing off
-        # wherever real data could exist, even when every other setting is right.
+        if self.extraction_provider is ExtractionProvider.OPENAI and self.openai_api_key is None:
+            raise ConfigurationError("extraction_provider=openai requires MEIP_OPENAI_API_KEY")
+        if (
+            self.extraction_provider is ExtractionProvider.OPENAI
+            and deployed
+            and not (self.openai_base_url.startswith("https://"))
+        ):
+            raise ConfigurationError(
+                f"MEIP_OPENAI_BASE_URL must use HTTPS when env={self.env.value}"
+            )
+        # Last: the synthetic provider trusts a layout embedded by whoever uploads the file, so
+        # it stays off wherever real data could exist, even when every other setting is right.
         if deployed and self.extraction_provider is ExtractionProvider.SYNTHETIC:
             raise ConfigurationError(
                 "extraction_provider=synthetic is test-only and forbidden "
@@ -206,6 +255,8 @@ class Settings(BaseSettings):
             raise ConfigurationError(
                 f"auth_mode=dev is forbidden when env={self.env.value}; configure OIDC instead"
             )
+        if self.auth_mode is AuthMode.PASSWORD and self.auth_signing_key_path is None:
+            raise ConfigurationError("auth_mode=password requires MEIP_AUTH_SIGNING_KEY_PATH")
         if self.auth_mode is AuthMode.OIDC and not (
             self.oidc_issuer and self.oidc_audience and self.oidc_jwks_url
         ):

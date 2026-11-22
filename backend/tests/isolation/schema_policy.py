@@ -153,6 +153,11 @@ SPECIAL_POLICY: dict[str, tuple[Policy, frozenset[str]]] = {
 # table -> justification. The runtime role must hold no privileges on these.
 EXEMPT: dict[str, str] = {
     "alembic_version": "Migration bookkeeping; no tenant data; owner role only.",
+    "local_accounts": (
+        "Phase 4 password accounts: global, not tenant data. The runtime role holds no "
+        "privileges; it reaches one account at a time only through app_local_account and "
+        "app_local_account_write (security definer), so hashes can't be read in bulk."
+    ),
 }
 
 # `users` is visible across firms (via each firm's memberships), so it must never hold

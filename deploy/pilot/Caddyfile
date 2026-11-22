@@ -1,0 +1,22 @@
+# The only public entry point. Automatic HTTPS (Let's Encrypt) for MEIP_DOMAIN; HTTP
+# redirects to HTTPS. The API is not exposed: the frontend reaches it on a private network.
+{
+	email {$MEIP_ACME_EMAIL}
+}
+
+{$MEIP_DOMAIN} {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+	# Uploads are limited by the API (20 MB); keep the proxy a little above that.
+	request_body {
+		max_size 25MB
+	}
+	reverse_proxy frontend:3000
+	log {
+		output stdout
+		format json
+	}
+}

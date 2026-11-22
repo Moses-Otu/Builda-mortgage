@@ -220,6 +220,12 @@ Single deployable backend codebase (modular monolith) with API and worker proces
     Readiness and approval facts are derived and kept outside the fingerprint and snapshot.
     Attestation wordings live in a registry pinned by hash. A stored `profile/1` snapshot is
     kept as a test fixture, so old approvals stay readable.
+  - **Evidence pack (Stage 3-C):** `profile/pack.py` reads only the approval row (its
+    hash checked) and the relied-on originals (each checked against the SHA-256 in the
+    snapshot; any failure refuses the whole pack). It writes `summary.pdf` (ReportLab, invariant
+    mode), `snapshot.json`, `attestation.txt`, `originals/` and `manifest.json` into a ZIP with
+    fixed order and timestamps, so it's deterministic. Generated on request, never stored;
+    each download is audited (`evidence_pack.downloaded`).
   - **Bank checks (Stage 2-B, 2B-3):** a second, separately versioned rule set
     (`bank-checks/1`, `reconciliation/bank_rules.py`), also pure and computed in the request,
     over **confirmed** statements (summary values as confirmed, the chosen account and its

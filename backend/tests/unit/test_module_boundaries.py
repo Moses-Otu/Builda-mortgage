@@ -66,6 +66,8 @@ ALLOWED["profile"] = {
     "financial",
     "reconciliation",
 }
+# retention (Phase 4): owner-run erasure, used only by the operator CLI.
+ALLOWED["retention"] = {"core", "retention", "audit", "tenancy", "documents"}
 HTTP_FRAMEWORKS = {"fastapi", "starlette"}
 
 

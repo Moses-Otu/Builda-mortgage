@@ -17,6 +17,9 @@ dependencies = [
     "anyio>=4.6",
     "azure-storage-blob>=12.24",
     "pypdfium2>=4.30",
+    "reportlab>=4.2",  # Stage 3-C: the evidence pack's summary.pdf
+    "httpx>=0.28",  # Phase 4: the OpenAI extraction provider
+    "pillow>=10",  # Phase 4: page images for the OpenAI provider (via pypdfium2)
 ]
 
 [dependency-groups]
@@ -28,7 +31,6 @@ dev = [
     "mypy>=1.13",
     "ruff>=0.8",
     "asyncpg-stubs>=0.30",
-    "reportlab>=4.2",
 ]
 
 [project.scripts]

@@ -37,6 +37,11 @@ class ProviderError(Exception):
     """The provider could not produce a layout. The message is never logged or stored."""
 
 
+class ProviderUnavailableError(Exception):
+    """The provider couldn't be reached or is overloaded (timeouts, rate limits, server
+    errors): worth retrying later. The message is a code, never document content."""
+
+
 # --- layout ------------------------------------------------------------------------------
 
 
@@ -147,6 +152,10 @@ def _layout(raw: Any) -> Layout:
 def build_layout_provider(settings: Settings) -> LayoutProvider:
     if settings.extraction_provider is ExtractionProvider.SYNTHETIC:
         return SyntheticLayoutProvider()
+    if settings.extraction_provider is ExtractionProvider.OPENAI:
+        from meip.documents.openai_provider import OpenAILayoutProvider
+
+        return OpenAILayoutProvider(settings)
     raise ValueError(f"unknown extraction provider {settings.extraction_provider}")
 
 

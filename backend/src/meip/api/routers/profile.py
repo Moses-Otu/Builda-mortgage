@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Response, status
+from fastapi import APIRouter, Depends, Response, status
 
-from meip.api.deps import DocumentReadCtx, ProfileApproveCtx, etag
-from meip.profile import approvals, service
+from meip.api.deps import DocumentReadCtx, ProfileApproveCtx, Store, etag, require_documents_enabled
+from meip.profile import approvals, pack, service
 from meip.profile.schemas import ApprovalDetailOut, ApprovalOut, ApprovedOut, ApproveIn, ProfileOut
 
 router = APIRouter(prefix="/api/v1/cases/{case_id}/profile", tags=["profile"])
@@ -97,3 +97,37 @@ async def get_approval(
     case_id: uuid.UUID, approval_id: uuid.UUID, ctx: DocumentReadCtx
 ) -> ApprovalDetailOut:
     return await approvals.get_approval(ctx, case_id, approval_id)
+
+
+@router.get(
+    "/approvals/{approval_id}/pack",
+    response_class=Response,
+    dependencies=[Depends(require_documents_enabled)],
+    summary="Download the evidence pack",
+    description=(
+        "A ZIP built only from this approval: `summary.pdf`, `snapshot.json` (the stored "
+        "snapshot, byte for byte), `attestation.txt`, every relied-on original (each checked "
+        "against the SHA-256 recorded in the snapshot) and `manifest.json` (every file's "
+        "SHA-256). The same approval always gives the same bytes. A missing or altered "
+        "original refuses the whole pack (`original-unavailable`). Audited. Nothing is stored."
+    ),
+    responses={
+        200: {"content": {"application/zip": {}}, "description": "The evidence pack"},
+        404: {"description": "Case or approval not found"},
+        409: {"description": "`original-unavailable` or `snapshot-integrity`"},
+    },
+)
+async def download_pack(
+    case_id: uuid.UUID, approval_id: uuid.UUID, ctx: DocumentReadCtx, store: Store
+) -> Response:
+    out = await pack.download(ctx, store, case_id, approval_id)
+    await ctx.commit()
+    return Response(
+        content=out.data,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="{out.filename}"',
+            "X-Content-Type-Options": "nosniff",
+            "Cache-Control": "no-store",
+        },
+    )

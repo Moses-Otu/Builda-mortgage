@@ -17,6 +17,19 @@ def build_auth_provider(settings: Settings) -> AuthProvider:
             leeway_seconds=settings.jwt_leeway_seconds,
         )
 
+    if settings.auth_mode is AuthMode.PASSWORD:
+        assert settings.auth_signing_key_path  # noqa: S101 - Settings validation
+        from meip.auth.accounts import load_signing_key
+
+        key = load_signing_key(settings.auth_signing_key_path)
+        return JWTAuthProvider(
+            issuer=settings.password_auth_issuer,
+            audience=settings.password_auth_audience,
+            key_resolver=StaticKeyResolver(key.public_key()),
+            leeway_seconds=settings.jwt_leeway_seconds,
+            subject_claim="sub",
+        )
+
     # Presence is guaranteed by Settings validation; narrowed here for the type checker.
     assert settings.oidc_issuer  # noqa: S101
     assert settings.oidc_audience  # noqa: S101

@@ -250,6 +250,13 @@ UPDATE_OPENAPI_SNAPSHOT=1 uv run pytest tests/integration/test_schema.py
   - `GET …/profile/approvals[/{id}]` list versions and return a snapshot, after checking its
     hash. The screens add a case status control, a readiness panel, an approve dialog and a
     version history (`/cases/{id}/profile?version=n`).
+- **Evidence pack (Stage 3-C):** `GET /api/v1/cases/{id}/profile/approvals/{approval_id}/pack`
+  (`document:read`) returns a ZIP built only from that approval: `summary.pdf`, `snapshot.json`
+  (byte for byte), `attestation.txt`, the relied-on originals (each checked against the hash in
+  the snapshot) and `manifest.json`.
+  - The same approval always gives the same bytes.
+  - A missing or altered original refuses the whole pack (`original-unavailable`).
+  - Downloads are audited, and nothing is stored.
 - **Checks (Stage 2-A and 2B-3):** `GET /api/v1/cases/{id}/checks` runs two rule sets in the
   request; nothing is stored. `payslip-checks/1` covers the current reviewed payslips and the
   declared basic salary. `bank-checks/1` covers confirmed bank statements: `BANK-TOTALS`,

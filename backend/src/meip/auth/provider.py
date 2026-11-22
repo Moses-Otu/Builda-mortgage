@@ -31,6 +31,8 @@ class Principal:
     subject: str
     email: str | None
     display_name: str | None
+    password_change_required: bool = False
+    """Phase 4: a token issued for a temporary password; usable only to set a new one."""
 
 
 class AuthProvider(Protocol):
@@ -117,4 +119,5 @@ class JWTAuthProvider:
             subject=subject,
             email=str(email) if email else None,
             display_name=str(claims["name"]) if claims.get("name") else None,
+            password_change_required=claims.get("pwd_change") is True,
         )

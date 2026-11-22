@@ -163,12 +163,25 @@ async def _get_member(
     return membership
 
 
-async def add_member(ctx: OperationContext, body: MemberCreate, issuer: str) -> MemberOut:
+async def add_member(
+    ctx: OperationContext, body: MemberCreate, issuer: str, *, password_accounts: bool = False
+) -> MemberOut:
     """Invite an identity to the firm.
 
     The response is built solely from what this firm supplied: it is identical whether or
     not the identity already exists or belongs to other firms.
+
+    Phase 4, password mode: the subject is the person's email. If no account exists for it,
+    one is created with a temporary password, returned once in the response.
     """
+    temporary: str | None = None
+    if password_accounts:
+        from meip.auth import accounts
+
+        if "@" not in body.idp_subject:
+            raise BusinessRuleError("In password mode, invite a person by their email address")
+        body = body.model_copy(update={"idp_subject": accounts.normalise_email(body.idp_subject)})
+        temporary = await accounts.create_account(ctx.session, body.idp_subject)
     user_id = await ctx.session.scalar(
         text("SELECT app_register_user(:id, :issuer, :subject)"),
         {"id": uuid7(), "issuer": issuer, "subject": body.idp_subject},
@@ -203,7 +216,47 @@ async def add_member(ctx: OperationContext, body: MemberCreate, issuer: str) -> 
             {"user_id": user_id, **audit.snapshot(membership, _AUDITED_MEMBER_FIELDS)}
         ),
     )
-    return _member_out(membership)
+    out = _member_out(membership)
+    if temporary is not None:
+        out.temporary_password = temporary
+    return out
+
+
+async def reset_member_password(
+    ctx: OperationContext, membership_id: uuid.UUID, issuer: str
+) -> str:
+    """Phase 4, password mode: give a member a new temporary password (returned once).
+
+    Refused for anyone who also belongs to another firm: an account is global, so one firm's
+    administrator must not be able to take over a person's access elsewhere."""
+    from meip.auth import accounts
+
+    membership = await _get_member(ctx, membership_id, for_update=True)
+    user = await ctx.session.scalar(select(User).where(User.id == membership.user_id))
+    if user is None or user.idp_issuer != issuer:
+        raise BusinessRuleError("This member doesn't sign in with a password account")
+    others = (
+        await ctx.session.execute(
+            text("SELECT tenant_id FROM app_memberships_for_subject(:issuer, :subject)"),
+            {"issuer": user.idp_issuer, "subject": user.idp_subject},
+        )
+    ).scalars()
+    if any(t != ctx.tenant_id for t in others):
+        raise ConflictError(
+            "This person also belongs to another firm; ask the platform operator to reset "
+            "their password"
+        )
+    password = await accounts.reset_password(ctx.session, user.idp_subject)
+    await audit.record(
+        ctx.session,
+        tenant_id=ctx.tenant_id,
+        actor=ctx.actor,
+        action=AuditAction.MEMBER_PASSWORD_RESET,
+        entity_type="membership",
+        entity_id=membership.id,
+        change_set=audit.ChangeSet().note("user_id", membership.user_id),
+    )
+    return password
 
 
 async def _lock_active_admins(ctx: OperationContext) -> set[uuid.UUID]:

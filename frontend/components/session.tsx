@@ -27,6 +27,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const load = useCallback(async () => {
     const me = await get<Me>("me");
     if (!me.ok) {
+      if (me.status === 403 && me.problem?.type?.endsWith("password-change-required")) {
+        window.location.href = "/change-password?first=1";
+        return;
+      }
       setSession({ status: "signed-out" });
       return;
     }

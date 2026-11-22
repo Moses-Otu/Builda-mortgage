@@ -7,6 +7,7 @@ import {
   approveBody,
   blockerLink,
   canApprove,
+  packHref,
   REOPEN_EXPLANATION,
   statusActions,
 } from "@/lib/approval";
@@ -108,6 +109,7 @@ describe("forwarder allowlist for approvals", () => {
     ["GET", `cases/${CASE}/profile/approvals/${APPROVAL}`],
     ["POST", `cases/${CASE}/transitions`],
     ["GET", `cases/${CASE}`],
+    ["GET", `cases/${CASE}/profile/approvals/${APPROVAL}/pack`],
   ])("allows %s %s", (method, path) => expect(isAllowed(method, split(path))).toBe(true));
 
   it.each([
@@ -115,5 +117,13 @@ describe("forwarder allowlist for approvals", () => {
     ["PATCH", `cases/${CASE}/profile/approvals/${APPROVAL}`],
     ["POST", `cases/${CASE}/profile/approvals/${APPROVAL}`],
     ["GET", `cases/${CASE}/profile/approvals/not-a-uuid`],
+    ["POST", `cases/${CASE}/profile/approvals/${APPROVAL}/pack`],
+    ["GET", `cases/${CASE}/profile/approvals/${APPROVAL}/pack/extra`],
   ])("refuses %s %s", (method, path) => expect(isAllowed(method, split(path))).toBe(false));
+});
+
+describe("the evidence pack link", () => {
+  it("points at one approval's pack through the forwarder", () => {
+    expect(packHref(CASE, APPROVAL)).toBe(`/api/meip/cases/${CASE}/profile/approvals/${APPROVAL}/pack`);
+  });
 });

@@ -45,6 +45,7 @@ from meip.documents.extraction import (
     Layout,
     LayoutProvider,
     ProviderError,
+    ProviderUnavailableError,
     build_layout_provider,
     classify,
     extract,
@@ -293,6 +294,9 @@ async def extract_document(
     provider = build_layout_provider(settings)
     try:
         layout = await provider.analyse(pdf)
+    except ProviderUnavailableError as exc:
+        # Timeouts, rate limits, provider outages: the job is retried later (then failed).
+        raise TransientError(str(exc)) from None
     except ProviderError:
         await _set_outcome(ctx, document, pages=None, failure=FailureCode.EXTRACTION_FAILED)
         return FailureCode.EXTRACTION_FAILED.value

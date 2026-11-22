@@ -128,6 +128,7 @@ PROBES: list[tuple[str, str, dict[str, Any]]] = [
     ("GET", "/api/v1/cases/{case_id}/profile", {}),
     ("GET", "/api/v1/cases/{case_id}/profile/approvals", {}),
     ("GET", "/api/v1/cases/{case_id}/profile/approvals/{approval_id}", {}),
+    ("GET", "/api/v1/cases/{case_id}/profile/approvals/{approval_id}/pack", {}),
     (
         "POST",
         "/api/v1/cases/{case_id}/profile/approvals",
@@ -152,6 +153,7 @@ PROBES: list[tuple[str, str, dict[str, Any]]] = [
     ),
     # Not tenant-scoped, but an attacker must not be able to accept someone else's invitation.
     ("POST", "/api/v1/me/invitations/{membership_id}/accept", {}),
+    ("POST", "/api/v1/members/{membership_id}/password-reset", {}),
 ]
 
 

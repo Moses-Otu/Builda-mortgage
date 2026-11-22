@@ -1,8 +1,12 @@
 """Platform operator CLI: ``meip-admin``.
 
 Commands:
-  create-tenant  Onboard a broker firm and its first firm administrator (owner DB role).
-  dev-token      Mint a local development bearer token (auth_mode=dev only).
+  create-tenant         Onboard a broker firm and its first firm administrator (owner DB
+                        role). In password mode, prints the admin's temporary password once.
+  generate-signing-key  Create the RSA key that signs password-mode tokens (Phase 4).
+  erase-case            Permanently erase one case and its documents (owner DB role).
+  retention-sweep       List closed cases past the retention period; --apply erases them.
+  dev-token             Mint a local development bearer token (auth_mode=dev only).
 """
 
 from __future__ import annotations
@@ -12,6 +16,7 @@ import asyncio
 import getpass
 import os
 import sys
+import uuid
 from collections.abc import Sequence
 from datetime import timedelta
 
@@ -55,8 +60,24 @@ async def _create_tenant(args: argparse.Namespace) -> int:
     if operator is None:
         print("Cannot determine the operator; pass --operator", file=sys.stderr)
         return 2
+    password_mode = settings.auth_mode is AuthMode.PASSWORD
+    if password_mode:
+        if not args.admin_email:
+            print("Password mode: --admin-email is required (it is the sign-in)", file=sys.stderr)
+            return 2
+        from meip.auth.accounts import normalise_email
+
+        args.admin_subject = normalise_email(args.admin_email)
+        args.admin_email = args.admin_subject
+    if not args.admin_subject:
+        print("--admin-subject is required (the identity provider's subject)", file=sys.stderr)
+        return 2
     issuer = args.issuer or (
-        settings.dev_auth_issuer if settings.auth_mode is AuthMode.DEV else settings.oidc_issuer
+        settings.dev_auth_issuer
+        if settings.auth_mode is AuthMode.DEV
+        else settings.password_auth_issuer
+        if password_mode
+        else settings.oidc_issuer
     )
     if not issuer:
         print("Cannot determine identity-provider issuer; pass --issuer", file=sys.stderr)
@@ -75,10 +96,144 @@ async def _create_tenant(args: argparse.Namespace) -> int:
                 admin_display_name=args.admin_name,
                 operator=operator,
             )
+            temporary = None
+            if password_mode:
+                from meip.auth.accounts import create_account
+
+                temporary = await create_account(session, args.admin_subject)
     finally:
         await engine.dispose()
     print(f"tenant_id={result.tenant_id}")
     print(f"admin_membership_id={result.admin_membership_id}")
+    if password_mode:
+        if temporary:
+            print(f"admin_sign_in={args.admin_subject}")
+            print(f"temporary_password={temporary}  (shown once; must be changed at sign-in)")
+        else:
+            print("This email already has an account: the admin signs in with their password.")
+    return 0
+
+
+async def _erase(
+    owner_url: str,
+    settings: Settings,
+    cases: list[tuple[uuid.UUID, uuid.UUID]],
+    operator: str,
+    reason: str,
+) -> int:
+    from meip.retention.blobs import erase_blob
+    from meip.retention.erasure import erase_case
+
+    store = build_blob_store(settings)
+    engine = create_engine(owner_url, pool_size=1)
+    failures = 0
+    try:
+        for tenant_id, case_id in cases:
+            async with create_sessionmaker(engine)() as session, session.begin():
+                erased = await erase_case(
+                    session, tenant_id, case_id, operator=operator, reason=reason
+                )
+            for key in erased.blob_keys:  # only after the database commit
+                try:
+                    if not await erase_blob(store, key):
+                        raise OSError
+                except Exception:
+                    erased.blobs_not_deleted.append(key)
+            failures += len(erased.blobs_not_deleted)
+            print(
+                f"erased case={case_id} rows={sum(erased.rows.values())} "
+                f"documents={len(erased.blob_keys)} audit_details={erased.audit_details} "
+                f"blobs_not_deleted={len(erased.blobs_not_deleted)}"
+            )
+            for key in erased.blobs_not_deleted:
+                print(f"  NOT DELETED: {key}", file=sys.stderr)
+    finally:
+        await engine.dispose()
+    return 1 if failures else 0
+
+
+async def _erase_case(args: argparse.Namespace) -> int:
+    owner_url = os.environ.get("MEIP_MIGRATIONS_DATABASE_URL")
+    settings = _load_settings()
+    operator = _operator_ref(args.operator)
+    if not owner_url or settings is None or operator is None:
+        print(
+            "Needs MEIP_MIGRATIONS_DATABASE_URL (owner role), valid settings and an operator",
+            file=sys.stderr,
+        )
+        return 2
+    if not args.confirm:
+        print("Erasure is permanent. Re-run with --confirm to erase.", file=sys.stderr)
+        return 2
+    try:
+        return await _erase(
+            owner_url,
+            settings,
+            [(uuid.UUID(args.tenant), uuid.UUID(args.case))],
+            operator,
+            args.reason,
+        )
+    except LookupError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+
+
+async def _retention_sweep(args: argparse.Namespace) -> int:
+    from meip.retention.erasure import expired_cases
+
+    owner_url = os.environ.get("MEIP_MIGRATIONS_DATABASE_URL")
+    settings = _load_settings()
+    operator = _operator_ref(args.operator)
+    if not owner_url or settings is None or operator is None:
+        print(
+            "Needs MEIP_MIGRATIONS_DATABASE_URL (owner role), valid settings and an operator",
+            file=sys.stderr,
+        )
+        return 2
+    engine = create_engine(owner_url, pool_size=1)
+    try:
+        async with create_sessionmaker(engine)() as session:
+            due = await expired_cases(session, args.days_after_closure)
+    finally:
+        await engine.dispose()
+    for tenant_id, case_id, closed in due:
+        print(f"due tenant={tenant_id} case={case_id} closed={closed:%Y-%m-%d}")
+    print(f"{len(due)} closed case(s) older than {args.days_after_closure} days", file=sys.stderr)
+    if not args.apply or not due:
+        if due:
+            print("Dry run. Re-run with --apply to erase them.", file=sys.stderr)
+        return 0
+    return await _erase(
+        owner_url,
+        settings,
+        [(t, c) for t, c, _ in due],
+        operator,
+        f"Retention: closed more than {args.days_after_closure} days",
+    )
+
+
+def _generate_signing_key(args: argparse.Namespace) -> int:
+    """A new RSA key for password-mode tokens, written with owner-only permissions."""
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    target = os.path.abspath(args.out)
+    if os.path.exists(target):
+        print(
+            f"{target} exists; refusing to overwrite (rotating it signs everyone out)",
+            file=sys.stderr,
+        )
+        return 2
+    key = rsa.generate_private_key(public_exponent=65537, key_size=3072)
+    pem = key.private_bytes(
+        serialization.Encoding.PEM,
+        serialization.PrivateFormat.PKCS8,
+        serialization.NoEncryption(),
+    )
+    fd = os.open(target, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "wb") as out:
+        out.write(pem)
+    print(f"Wrote {target}. Keep it secret; set MEIP_AUTH_SIGNING_KEY_PATH to it.")
     return 0
 
 
@@ -150,7 +305,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     t = sub.add_parser("create-tenant", help="Onboard a broker firm")
     t.add_argument("--name", required=True)
     t.add_argument("--fca-frn", default=None, help="FCA Firm Reference Number (6-7 digits)")
-    t.add_argument("--admin-subject", required=True, help="IdP subject of the first admin")
+    t.add_argument(
+        "--admin-subject",
+        default=None,
+        help="IdP subject of the first admin (OIDC mode); password mode uses --admin-email",
+    )
     t.add_argument("--admin-email", default=None)
     t.add_argument("--admin-name", default=None)
     t.add_argument("--issuer", default=None, help="IdP issuer (defaults from settings)")
@@ -159,6 +318,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=None,
         help="Who is running this command, recorded in the audit log (default: OS user)",
     )
+
+    e = sub.add_parser("erase-case", help="Permanently erase one case (owner role)")
+    e.add_argument("--tenant", required=True, help="The firm's tenant id")
+    e.add_argument("--case", required=True, help="The case id")
+    e.add_argument("--reason", required=True, help="Why: recorded in the audit details")
+    e.add_argument("--confirm", action="store_true", help="Required: erasure is permanent")
+    e.add_argument("--operator", default=None)
+
+    r = sub.add_parser(
+        "retention-sweep", help="Closed cases past retention (dry run unless --apply)"
+    )
+    r.add_argument(
+        "--days-after-closure",
+        type=int,
+        required=True,
+        help="The approved retention period (decision D10); no default on purpose",
+    )
+    r.add_argument("--apply", action="store_true", help="Erase them (permanent)")
+    r.add_argument("--operator", default=None)
+
+    k = sub.add_parser("generate-signing-key", help="Create the password-mode token signing key")
+    k.add_argument("--out", required=True, help="Where to write the PEM file (a secret)")
 
     d = sub.add_parser("dev-token", help="Mint a local development token")
     d.add_argument("--subject", required=True)
@@ -174,6 +355,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.command == "create-tenant":
         return asyncio.run(_create_tenant(args))
+    if args.command == "erase-case":
+        return asyncio.run(_erase_case(args))
+    if args.command == "retention-sweep":
+        return asyncio.run(_retention_sweep(args))
+    if args.command == "generate-signing-key":
+        return _generate_signing_key(args)
     if args.command == "init-storage":
         return asyncio.run(_init_storage())
     if args.command == "find-orphan-blobs":

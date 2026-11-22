@@ -64,13 +64,22 @@ def get_sessionmaker(request: Request) -> async_sessionmaker[AsyncSession]:
     return sessionmaker
 
 
-async def get_principal(
+async def get_principal_for_password_change(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
     provider: Annotated[AuthProvider, Depends(get_auth_provider)],
 ) -> Principal:
+    """Any valid token, including one issued for a temporary password."""
     if credentials is None or credentials.scheme.lower() != "bearer":
         raise UnauthorizedError("Bearer token required")
     return await provider.authenticate(credentials.credentials)
+
+
+async def get_principal(
+    principal: Annotated[Principal, Depends(get_principal_for_password_change)],
+) -> Principal:
+    if principal.password_change_required:
+        raise PasswordChangeRequiredError()
+    return principal
 
 
 async def get_request_context(
@@ -104,6 +113,11 @@ Context = Annotated[OperationContext, Depends(get_request_context)]
 # resource must send it back in ``If-Match``; a stale value gets 412, a missing one 428.
 
 _STRONG_ETAG = re.compile(r'^"(\d{1,9})"$')
+
+
+class PasswordChangeRequiredError(ForbiddenError):
+    error_type = "password-change-required"
+    title = "Set a new password before continuing"
 
 
 def etag(version: int) -> str:

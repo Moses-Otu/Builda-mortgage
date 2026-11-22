@@ -51,6 +51,7 @@ def mint_token(
     name: str | None = None,
     ttl: timedelta = timedelta(hours=1),
     now: datetime | None = None,
+    extra: dict[str, object] | None = None,
 ) -> str:
     issued = now or datetime.now(UTC)
     claims: dict[str, object] = {
@@ -65,4 +66,6 @@ def mint_token(
         claims["email"] = email
     if name:
         claims["name"] = name
+    if extra:
+        claims.update(extra)
     return jwt.encode(claims, key, algorithm="RS256", headers={"kid": DEV_KEY_ID})

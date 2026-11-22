@@ -13,6 +13,7 @@ export interface Membership {
 export interface Me {
   user_id: Uuid | null;
   memberships: Membership[];
+  invitations?: Membership[];
 }
 
 export interface Page<T> {

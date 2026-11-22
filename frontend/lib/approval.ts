@@ -2,6 +2,7 @@
 // and approval wording. Display only: the server decides readiness, checks the fingerprint and
 // supplies the attestation text; nothing here is a second source of those rules.
 
+import { API } from "./api";
 import { formatDate } from "./labels";
 import type { ApprovalStatus, Readiness } from "./types";
 
@@ -73,4 +74,9 @@ export function blockerLink(caseId: string, code: string, ids: string[]): { href
   if (code === "discrepancies_unacknowledged") return { href: `/cases/${caseId}`, label: "Open the checks" };
   if (code === "case_not_in_review") return { href: `/cases/${caseId}`, label: "Go to the case" };
   return null;
+}
+
+/** The evidence pack for one approval (Stage 3-C): a ZIP built only from that approval. */
+export function packHref(caseId: string, approvalId: string): string {
+  return `${API}/cases/${caseId}/profile/approvals/${approvalId}/pack`;
 }

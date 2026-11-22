@@ -1,6 +1,6 @@
 "use client";
 
-import { BadgeCheck, CircleAlert, History, Info, ShieldCheck } from "lucide-react";
+import { BadgeCheck, CircleAlert, Download, History, Info, ShieldCheck } from "lucide-react";
 import Link from "next/link";
 import { type FormEvent, useState } from "react";
 
@@ -20,7 +20,7 @@ import {
 import { FieldHint, Label, Textarea } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { postJson } from "@/lib/api";
-import { approvalBanner, approveBody, blockerLink, canApprove } from "@/lib/approval";
+import { approvalBanner, approveBody, blockerLink, canApprove, packHref } from "@/lib/approval";
 import { formatDateTime } from "@/lib/labels";
 import { problemMessage } from "@/lib/problems";
 import type { Approval, ApprovalDetail, Profile } from "@/lib/types";
@@ -51,9 +51,14 @@ export function ApprovalPanel(props: {
         <p className="mt-2 text-xs text-slate-600">
           <span className="font-medium">Attested ({viewing.attestation_version}):</span> {viewing.attestation_text}
         </p>
-        <Link href={`/cases/${caseId}/profile`} className="mt-2 inline-block text-sm text-brand-700 hover:underline">
-          Back to the current profile
-        </Link>
+        <div className="mt-2 flex flex-wrap gap-4 text-sm">
+          <a href={packHref(caseId, viewing.id)} download className="inline-flex items-center gap-1.5 text-brand-700 hover:underline">
+            <Download className="size-4" /> Download evidence pack (version {viewing.version})
+          </a>
+          <Link href={`/cases/${caseId}/profile`} className="text-brand-700 hover:underline">
+            Back to the current profile
+          </Link>
+        </div>
       </Alert>
     );
   }
@@ -69,6 +74,15 @@ export function ApprovalPanel(props: {
             The case is verified and read-only. Reopen it from the case page to change anything; this version stays in the
             history.
           </p>
+          {profile.approval.approval_id && (
+            <a
+              href={packHref(caseId, profile.approval.approval_id)}
+              download
+              className="mt-2 inline-flex items-center gap-1.5 font-medium text-brand-700 hover:underline"
+            >
+              <Download className="size-4" /> Download evidence pack
+            </a>
+          )}
         </div>
       ) : (
         <Card>
@@ -115,11 +129,21 @@ export function ApprovalPanel(props: {
         <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600">
           <History className="size-4 text-slate-400" /> Versions:
           {approvals.map((a) => (
-            <Link key={a.id} href={`/cases/${caseId}/profile?version=${a.version}`} className="hover:text-brand-700">
-              <Badge tone={a.current ? "success" : "neutral"}>
-                v{a.version} {a.current ? "current" : "superseded"}
-              </Badge>
-            </Link>
+            <span key={a.id} className="inline-flex items-center gap-1">
+              <Link href={`/cases/${caseId}/profile?version=${a.version}`} className="hover:text-brand-700">
+                <Badge tone={a.current ? "success" : "neutral"}>
+                  v{a.version} {a.current ? "current" : "superseded"}
+                </Badge>
+              </Link>
+              <a
+                href={packHref(caseId, a.id)}
+                download
+                aria-label={`Download evidence pack, version ${a.version}`}
+                className="text-slate-400 hover:text-brand-700"
+              >
+                <Download className="size-3.5" />
+              </a>
+            </span>
           ))}
         </div>
       )}

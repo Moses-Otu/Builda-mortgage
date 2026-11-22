@@ -1,0 +1,151 @@
+# Controlled broker pilot (Phase 4): one host, Docker Compose. See docs/PILOT-RUNBOOK.md.
+#
+# Only Caddy is reachable from outside (ports 80 and 443, HTTPS with automatic certificates).
+# The frontend, API, worker and PostgreSQL sit on private networks; PostgreSQL and the
+# document volume are never published. Secrets come from .env (chmod 600) and one key file.
+name: meip-pilot
+
+x-backend-env: &backend-env
+  MEIP_ENV: production
+  MEIP_LOG_JSON: "true"
+  MEIP_DATABASE_URL: postgresql+asyncpg://meip_app:${MEIP_APP_DB_PASSWORD:?set in .env}@postgres:5432/meip
+  # Authentication: the platform's own email and password accounts (no external IdP).
+  MEIP_AUTH_MODE: password
+  MEIP_AUTH_SIGNING_KEY_PATH: /run/secrets/auth_signing_key
+  MEIP_SESSION_MINUTES: ${MEIP_SESSION_MINUTES:-480}
+  # Documents: off unless the operator records the approved retention decision (D10).
+  MEIP_DOCUMENTS_ENABLED: ${MEIP_DOCUMENTS_ENABLED:-false}
+  MEIP_DOCUMENT_RETENTION_APPROVAL: ${MEIP_DOCUMENT_RETENTION_APPROVAL:-}
+  MEIP_BLOB_BACKEND: filesystem
+  MEIP_BLOB_ROOT: /data/documents
+  # Extraction: OpenAI, key held server-side only.
+  MEIP_EXTRACTION_PROVIDER: openai
+  MEIP_OPENAI_API_KEY: ${MEIP_OPENAI_API_KEY:?set in .env}
+  MEIP_OPENAI_MODEL: ${MEIP_OPENAI_MODEL:-gpt-4.1}
+  # Bank statements stay refused unless a DPIA covers them (and the key below is set).
+  MEIP_BANK_STATEMENTS_ENABLED: ${MEIP_BANK_STATEMENTS_ENABLED:-false}
+  MEIP_ACCOUNT_FINGERPRINT_KEY: ${MEIP_ACCOUNT_FINGERPRINT_KEY:-}
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+services:
+  caddy:
+    image: caddy:2.8
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      MEIP_DOMAIN: ${MEIP_DOMAIN:?set in .env}
+      MEIP_ACME_EMAIL: ${MEIP_ACME_EMAIL:?set in .env}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge]
+    depends_on:
+      frontend:
+        condition: service_healthy
+    logging: *logging
+
+  frontend:
+    build: ../../frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      MEIP_API_URL: http://api:8000
+      MEIP_UI_AUTH: password
+    networks: [edge, app]
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/sign-in').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging: *logging
+
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD:?set in .env}
+      MEIP_OWNER_DB_PASSWORD: ${MEIP_OWNER_DB_PASSWORD:?set in .env}
+      MEIP_APP_DB_PASSWORD: ${MEIP_APP_DB_PASSWORD:?set in .env}
+    volumes:
+      - ./db-init:/docker-entrypoint-initdb.d:ro
+      - pgdata:/var/lib/postgresql/data
+    networks: [db]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d meip"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+    logging: *logging
+
+  migrate:
+    build: ../../backend
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      MEIP_MIGRATIONS_DATABASE_URL: postgresql+asyncpg://meip_owner:${MEIP_OWNER_DB_PASSWORD}@postgres:5432/meip
+    networks: [db]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build: ../../backend
+    restart: unless-stopped
+    environment: *backend-env
+    secrets: [auth_signing_key]
+    volumes:
+      - documents:/data/documents
+    networks: [app, db, egress]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=4).status == 200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    logging: *logging
+
+  worker:
+    build: ../../backend
+    command: ["meip-worker"]
+    restart: unless-stopped
+    environment: *backend-env
+    volumes:
+      - documents:/data/documents
+    # The worker reaches the database and, for extraction, the OpenAI API (egress).
+    networks: [db, egress]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    logging: *logging
+
+secrets:
+  auth_signing_key:
+    file: ./secrets/auth_signing_key.pem
+
+volumes:
+  pgdata:
+  documents:
+  caddy_data:
+  caddy_config:
+
+networks:
+  edge: {}            # Caddy <-> frontend
+  app:                # frontend <-> API
+    internal: true
+  db:                 # API, worker, migrations <-> PostgreSQL
+    internal: true
+  egress: {}          # API and worker -> the OpenAI API

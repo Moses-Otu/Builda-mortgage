@@ -2,7 +2,7 @@
 
 import { Building2, ChevronRight, KeyRound, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { Fragment, type ReactNode } from "react";
+import { Fragment, type ReactNode, useState } from "react";
 
 import { useSession } from "@/components/session";
 import { Button } from "@/components/ui/button";
@@ -72,12 +72,11 @@ export function RequireFirm({ children }: { children: (firm: Membership) => Reac
         <div>
           <h1 className="text-lg font-semibold">Sign in to continue</h1>
           <p className="mt-1 text-sm text-slate-500">
-            You&apos;re signed out, or your session has ended. Real sign-in isn&apos;t connected
-            yet; in local development use the development sign-in.
+            You&apos;re signed out, or your session has ended.
           </p>
         </div>
         <Button asChild>
-          <Link href="/dev-sign-in">Development sign-in</Link>
+          <Link href="/sign-in">Sign in</Link>
         </Button>
       </Centered>
     );
@@ -109,7 +108,10 @@ export function RequireFirm({ children }: { children: (firm: Membership) => Reac
               <ChevronRight className="size-4 text-slate-400" />
             </button>
           ))}
-          {session.me.memberships.length === 0 && (
+          {(session.me.invitations ?? []).map((m) => (
+            <InvitationRow key={m.membership_id} invitation={m} />
+          ))}
+          {session.me.memberships.length === 0 && (session.me.invitations ?? []).length === 0 && (
             <p className="text-sm text-slate-500">You aren&apos;t a member of any firm yet.</p>
           )}
         </div>
@@ -118,4 +120,26 @@ export function RequireFirm({ children }: { children: (firm: Membership) => Reac
   }
   // Keyed by firm, so switching firm reloads the page's data from scratch.
   return <Fragment key={session.firm.tenant_id}>{children(session.firm)}</Fragment>;
+}
+
+/** A firm's invitation: the invited person accepts it themselves (Phase 4). */
+function InvitationRow({ invitation }: { invitation: Membership }) {
+  const [busy, setBusy] = useState(false);
+  async function accept() {
+    setBusy(true);
+    const response = await fetch(`/api/meip/me/invitations/${invitation.membership_id}/accept`, { method: "POST" });
+    setBusy(false);
+    if (response.ok) window.location.reload();
+  }
+  return (
+    <div className="flex items-center justify-between rounded-lg border border-dashed border-brand-300 px-4 py-3">
+      <span>
+        <span className="block text-sm font-medium">{invitation.tenant_name}</span>
+        <span className="block text-xs text-slate-500">Invited as {roleLabel(invitation.role)}</span>
+      </span>
+      <Button size="sm" onClick={() => void accept()} disabled={busy}>
+        Accept
+      </Button>
+    </div>
+  );
 }

@@ -10,6 +10,11 @@ const FINDING_KEY = /^[0-9a-f]{64}$/;
 
 const ROUTES: Array<[method: string, pattern: string]> = [
   ["GET", "me"],
+  ["POST", `me/invitations/${ID}/accept`], // accept a firm's invitation (Phase 4)
+  ["GET", "members"], // team page (Phase 4); member:read
+  ["POST", "members"], // invite by email; member:manage
+  ["PATCH", `members/${ID}`], // remove access; member:manage
+  ["POST", `members/${ID}/password-reset`], // password mode; member:manage
   ["GET", "cases"],
   ["POST", "cases"], // new case (Phase 2.1, U2); the API requires case:create
   ["GET", `cases/${ID}`], // one case: its status and version, the ETag for status changes (3-B)
@@ -26,6 +31,7 @@ const ROUTES: Array<[method: string, pattern: string]> = [
   ["GET", `cases/${ID}/profile/approvals`], // approvals (Stage 3-B); document:read
   ["POST", `cases/${ID}/profile/approvals`], // approve; profile:approve
   ["GET", `cases/${ID}/profile/approvals/${ID}`],
+  ["GET", `cases/${ID}/profile/approvals/${ID}/pack`], // evidence pack ZIP (Stage 3-C); document:read
   ["POST", `cases/${ID}/transitions`], // case status (Stage 3-B screens); case:transition
   // Stage 2-B: bank accounts confirmed from statements, and adding a holder.
   ["GET", `cases/${ID}/bank-accounts`],

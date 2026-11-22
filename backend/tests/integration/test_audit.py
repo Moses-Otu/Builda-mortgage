@@ -52,6 +52,18 @@ AUDITED_ROUTES: dict[Route, str] = {
 }
 
 
+# Mutating routes outside this firm-audit coverage, each with the reason.
+NOT_FIRM_AUDITED: dict[Route, str] = {
+    # A person's own sign-in and password: no firm's data changes. Outcomes go to the
+    # operational log without emails (test_password_auth.py).
+    ("POST", "/api/v1/auth/login"): "account sign-in, not firm data",
+    ("POST", "/api/v1/auth/password"): "account password, not firm data",
+    # Password mode only (404 in this suite's dev mode); its audit event is asserted in
+    # test_password_auth.py.
+    ("POST", "/api/v1/members/{membership_id}/password-reset"): "password mode only",
+}
+
+
 def test_every_mutating_route_is_covered(app: FastAPI) -> None:
     mutating = {
         (method.upper(), path)
@@ -59,7 +71,7 @@ def test_every_mutating_route_is_covered(app: FastAPI) -> None:
         for method in operations
         if method.upper() in {"POST", "PUT", "PATCH", "DELETE"}
     }
-    assert mutating == set(AUDITED_ROUTES)
+    assert mutating == set(AUDITED_ROUTES) | set(NOT_FIRM_AUDITED)
 
 
 async def _setup(firm: Firm) -> dict[str, Any]:

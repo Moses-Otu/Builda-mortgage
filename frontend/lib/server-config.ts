@@ -24,3 +24,8 @@ export const SESSION_COOKIE_OPTIONS = {
   path: "/",
   maxAge: 60 * 60 * 8,
 } as const;
+
+/** Phase 4 pilot: email and password sign-in through the API (MEIP_UI_AUTH=password). */
+export function passwordSignInEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.MEIP_UI_AUTH === "password";
+}

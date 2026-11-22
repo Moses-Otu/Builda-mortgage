@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Check, ChevronDown, FileCheck2, LogOut, UserRound } from "lucide-react";
+import { Building2, Check, ChevronDown, FileCheck2, KeyRound, LogOut, UserRound, Users } from "lucide-react";
 import Link from "next/link";
 
 import { useSession } from "@/components/session";
@@ -73,6 +73,14 @@ export function AppHeader() {
                     {session.firm && <span className="block font-normal">{roleLabel(session.firm.role)}</span>}
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  {session.firm?.role === "firm_admin" && (
+                    <DropdownMenuItem onSelect={() => (window.location.href = "/team")}>
+                      <Users /> Team
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onSelect={() => (window.location.href = "/change-password")}>
+                    <KeyRound /> Change password
+                  </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => void signOut()}>
                     <LogOut /> Sign out
                   </DropdownMenuItem>

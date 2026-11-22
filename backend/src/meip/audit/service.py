@@ -94,6 +94,13 @@ NON_PERSONAL_FIELDS = frozenset(
         "attestation_version",
         "profile_rules",
         "superseded_approval_id",
+        # evidence pack downloads (Stage 3-C)
+        "file_count",
+        "pack_sha256",
+        # downloads and erasure (Phase 4)
+        "document_id",
+        "rows_deleted",
+        "documents_deleted",
         "integrity_totals",
         "integrity_running",
         # reconciliation: which versioned rule and finding (a hash) was acknowledged
@@ -139,6 +146,7 @@ class AuditAction(StrEnum):
     MEMBER_UPDATED = "member.updated"
     # Written by the app_accept_invitation() database function, not by Python code.
     MEMBER_INVITATION_ACCEPTED = "member.invitation_accepted"
+    MEMBER_PASSWORD_RESET = "member.password_reset"  # noqa: S105 - an audit action name
     CASE_CREATED = "case.created"
     CASE_UPDATED = "case.updated"
     CASE_STATUS_CHANGED = "case.status_changed"
@@ -160,6 +168,9 @@ class AuditAction(StrEnum):
     CHECK_ACKNOWLEDGED = "check.acknowledged"
     BANK_ACCOUNT_HOLDER_ADDED = "bank_account.holder_added"
     PROFILE_APPROVED = "profile.approved"
+    EVIDENCE_PACK_DOWNLOADED = "evidence_pack.downloaded"
+    DOCUMENT_DOWNLOADED = "document.downloaded"
+    CASE_ERASED = "case.erased"
 
 
 @dataclass

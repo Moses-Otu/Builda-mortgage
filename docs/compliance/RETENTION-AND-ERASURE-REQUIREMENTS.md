@@ -65,6 +65,10 @@ built in a later phase), **External** (held by a third party).
   records without the snapshot (or the reverse) would leave either orphan personal data or an
   unverifiable approval, so the snapshot must be erased **with its case**, by the owner-run
   process, never separately. The approval note is free text, like acknowledgement notes.
+- **Evidence packs (Stage 3-C)** are generated on request and never stored by the platform.
+  A downloaded pack (the snapshot and every relied-on original) **leaves the platform's
+  control**; erasure can't reach it. Each download is audited (`evidence_pack.downloaded`,
+  with the pack's hash), so it's known which version was exported, when and by whom.
 
 ## 3. Technical requirements any policy must satisfy
 

@@ -2,6 +2,7 @@
 
 from meip.applicants.models import Applicant
 from meip.audit.models import AuditEvent, AuditEventDetail
+from meip.auth.models import LocalAccount
 from meip.cases.models import Case
 from meip.core.db import Base
 from meip.documents.models import (
@@ -55,6 +56,7 @@ __all__ = [
     "FirmSettings",
     "IncomeSource",
     "Job",
+    "LocalAccount",
     "MeasureDefinition",
     "MeasureQualifier",
     "Membership",

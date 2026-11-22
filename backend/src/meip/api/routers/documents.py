@@ -139,6 +139,9 @@ async def download_original(
     case_id: uuid.UUID, document_id: uuid.UUID, ctx: DocumentReadCtx, store: Store
 ) -> StreamingResponse:
     original, file = await service.open_original(ctx, store, case_id, document_id)
+    # Phase 4: every original download is audited (retention brief R17).
+    await service.record_download(ctx, case_id, document_id)
+    await ctx.commit()
     digest = base64.b64encode(bytes.fromhex(original.sha256)).decode("ascii")
     return StreamingResponse(
         _chunks(file),

@@ -13,6 +13,7 @@ from meip.api.errors import install_error_handlers
 from meip.api.middleware import RequestContextMiddleware
 from meip.api.routers import (
     applicants,
+    auth,
     bank_accounts,
     cases,
     checks,
@@ -87,6 +88,7 @@ def create_app(
         me,
         firm,
         members,
+        auth,
         cases,
         applicants,
         financial,

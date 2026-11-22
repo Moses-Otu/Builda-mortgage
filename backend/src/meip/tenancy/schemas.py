@@ -48,6 +48,18 @@ class MemberOut(OutputModel):
     accepted_at: datetime | None
     version: int
     created_at: datetime
+    temporary_password: str | None = Field(
+        default=None,
+        description=(
+            "Password mode only: the new account's temporary password, returned once, when "
+            "the account was created by this request. Give it to the person securely; they "
+            "must change it at first sign-in."
+        ),
+    )
+
+
+class TemporaryPasswordOut(OutputModel):
+    temporary_password: str = Field(description="Returned once; must be changed at sign-in")
 
 
 class MemberCreate(InputModel):

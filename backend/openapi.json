@@ -4929,6 +4929,18 @@
           "status": {
             "$ref": "#/components/schemas/MembershipStatus"
           },
+          "temporary_password": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Password mode only: the new account's temporary password, returned once, when the account was created by this request. Give it to the person securely; they must change it at first sign-in.",
+            "title": "Temporary Password"
+          },
           "user_id": {
             "format": "uuid",
             "title": "User Id",
@@ -5690,6 +5702,30 @@
         "title": "PartyRole",
         "type": "string"
       },
+      "PasswordChangeIn": {
+        "additionalProperties": false,
+        "properties": {
+          "current_password": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Current Password",
+            "type": "string"
+          },
+          "new_password": {
+            "description": "At least 12 characters",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "New Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "title": "PasswordChangeIn",
+        "type": "object"
+      },
       "PercentValue-Input": {
         "properties": {
           "percent": {
@@ -6377,6 +6413,60 @@
         "title": "ShareBasis",
         "type": "string"
       },
+      "SignInIn": {
+        "additionalProperties": false,
+        "properties": {
+          "email": {
+            "maxLength": 320,
+            "minLength": 3,
+            "pattern": "^[^@\\s]+@[^@\\s]+$",
+            "title": "Email",
+            "type": "string"
+          },
+          "password": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "title": "SignInIn",
+        "type": "object"
+      },
+      "SignInOut": {
+        "properties": {
+          "access_token": {
+            "title": "Access Token",
+            "type": "string"
+          },
+          "expires_in": {
+            "description": "Seconds",
+            "title": "Expires In",
+            "type": "integer"
+          },
+          "must_change_password": {
+            "description": "A temporary password: the token can only be used to set a new password",
+            "title": "Must Change Password",
+            "type": "boolean"
+          },
+          "token_type": {
+            "default": "Bearer",
+            "title": "Token Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "expires_in",
+          "must_change_password"
+        ],
+        "title": "SignInOut",
+        "type": "object"
+      },
       "SourceKind": {
         "enum": [
           "declared",
@@ -6429,6 +6519,20 @@
         ],
         "title": "TemporalKind",
         "type": "string"
+      },
+      "TemporaryPasswordOut": {
+        "properties": {
+          "temporary_password": {
+            "description": "Returned once; must be changed at sign-in",
+            "title": "Temporary Password",
+            "type": "string"
+          }
+        },
+        "required": [
+          "temporary_password"
+        ],
+        "title": "TemporaryPasswordOut",
+        "type": "object"
       },
       "TenantMembershipOut": {
         "properties": {
@@ -6731,6 +6835,91 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/auth/login": {
+      "post": {
+        "description": "Returns a short-lived bearer token. Five failed attempts lock the account for 15 minutes. A temporary password gives a token that can only set a new password (`POST /api/v1/auth/password`). The same message is returned for an unknown email and a wrong password.",
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SignInIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SignInOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "Email or password incorrect, or temporarily locked"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Sign in with email and password",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
+    "/api/v1/auth/password": {
+      "post": {
+        "description": "Requires the current password. At least 12 characters. Accepts a token issued for a temporary password. Sign in again afterwards.",
+        "operationId": "change_password_api_v1_auth_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordChangeIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Set a new password",
+        "tags": [
+          "identity"
+        ]
+      }
+    },
     "/api/v1/cases": {
       "get": {
         "operationId": "list_cases_api_v1_cases_get",
@@ -10078,6 +10267,79 @@
         ]
       }
     },
+    "/api/v1/cases/{case_id}/profile/approvals/{approval_id}/pack": {
+      "get": {
+        "description": "A ZIP built only from this approval: `summary.pdf`, `snapshot.json` (the stored snapshot, byte for byte), `attestation.txt`, every relied-on original (each checked against the SHA-256 recorded in the snapshot) and `manifest.json` (every file's SHA-256). The same approval always gives the same bytes. A missing or altered original refuses the whole pack (`original-unavailable`). Audited. Nothing is stored.",
+        "operationId": "download_pack_api_v1_cases__case_id__profile_approvals__approval_id__pack_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "approval_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Approval Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/zip": {}
+            },
+            "description": "The evidence pack"
+          },
+          "404": {
+            "description": "Case or approval not found"
+          },
+          "409": {
+            "description": "`original-unavailable` or `snapshot-integrity`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Download the evidence pack",
+        "tags": [
+          "profile"
+        ]
+      }
+    },
     "/api/v1/cases/{case_id}/transitions": {
       "post": {
         "description": "Moves the case through its lifecycle. Transitions that depend on capabilities not yet delivered return 409 with `available: false`.",
@@ -10490,7 +10752,7 @@
         ]
       },
       "post": {
-        "description": "Creates an *invited* membership for the identity-provider subject. The person gains access only after accepting via `POST /api/v1/me/invitations/{membership_id}/accept`. Contact details supplied here are visible to this firm only. Firm administrators only.",
+        "description": "Creates an *invited* membership for the identity-provider subject. The person gains access only after accepting via `POST /api/v1/me/invitations/{membership_id}/accept`. Contact details supplied here are visible to this firm only. Firm administrators only. Password mode: the subject is the person's email; a new account gets a temporary password, returned once as `temporary_password`.",
         "operationId": "add_member_api_v1_members_post",
         "parameters": [
           {
@@ -10632,6 +10894,73 @@
           }
         ],
         "summary": "Change a member's role, or deactivate them",
+        "tags": [
+          "members"
+        ]
+      }
+    },
+    "/api/v1/members/{membership_id}/password-reset": {
+      "post": {
+        "description": "Password mode only. Returns a temporary password once; the member must change it at their next sign-in. Refused (409) for a person who also belongs to another firm. Firm administrators only. Audited (the password itself is never recorded).",
+        "operationId": "reset_password_api_v1_members__membership_id__password_reset_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "membership_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Membership Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TemporaryPasswordOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Member not found, or not password mode"
+          },
+          "409": {
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Give a member a new temporary password",
         "tags": [
           "members"
         ]

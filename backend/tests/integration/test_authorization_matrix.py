@@ -50,6 +50,12 @@ PROBES: list[Probe] = [
         lambda s: {"json": {"idp_subject": "matrix-invitee", "role": "read_only"}},
     ),
     Probe(
+        "reset member password",
+        "POST",
+        "/api/v1/members/{membership_id}/password-reset",
+        frozenset({ADMIN}),
+    ),
+    Probe(
         "update member",
         "PATCH",
         "/api/v1/members/{membership_id}",
@@ -332,12 +338,22 @@ PROBES: list[Probe] = [
         "/api/v1/cases/{case_id}/profile/approvals/{approval_id}",
         EVERYONE,
     ),
+    # --- evidence pack (Stage 3-C) ------------------------------------------------------------
+    Probe(
+        "download evidence pack",
+        "GET",
+        "/api/v1/cases/{case_id}/profile/approvals/{approval_id}/pack",
+        EVERYONE,
+    ),
 ]
 
 # Routes that do not act within a firm and so have no role-based permission.
 NOT_TENANT_SCOPED = {
     ("GET", "/api/v1/me"),
     ("POST", "/api/v1/me/invitations/{membership_id}/accept"),
+    # Phase 4 password accounts: a person's own sign-in, not firm data (test_password_auth.py).
+    ("POST", "/api/v1/auth/login"),
+    ("POST", "/api/v1/auth/password"),
 }
 
 

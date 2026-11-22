@@ -383,6 +383,22 @@ async def open_original(
     return original, spool
 
 
+async def record_download(
+    ctx: OperationContext, case_id: uuid.UUID, document_id: uuid.UUID
+) -> None:
+    """Phase 4: one audit event per original download (who, which document, when)."""
+    await audit.record(
+        ctx.session,
+        tenant_id=ctx.tenant_id,
+        actor=ctx.actor,
+        action=AuditAction.DOCUMENT_DOWNLOADED,
+        entity_type="document",
+        entity_id=document_id,
+        case_id=case_id,
+        change_set=audit.ChangeSet().note("document_id", document_id),
+    )
+
+
 # --- extraction results --------------------------------------------------------------------
 
 
