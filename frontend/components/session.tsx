@@ -28,8 +28,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     const me = await get<Me>("me");
     if (!me.ok) {
       if (me.status === 403 && me.problem?.type?.endsWith("password-change-required")) {
-        window.location.href = "/change-password?first=1";
-        return;
+        // This provider wraps every page, the change-password page included: redirecting from
+        // there would reload it forever.
+        if (window.location.pathname !== "/change-password") {
+          window.location.href = "/change-password?first=1";
+          return;
+        }
       }
       setSession({ status: "signed-out" });
       return;
