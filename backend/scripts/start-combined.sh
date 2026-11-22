@@ -14,9 +14,31 @@ umask 077
 if [[ -n "${MEIP_AUTH_SIGNING_KEY_PEM:-}" ]]; then
   key_path="${MEIP_AUTH_SIGNING_KEY_PATH:?MEIP_AUTH_SIGNING_KEY_PATH must be set}"
   mkdir -p "$(dirname "${key_path}")"
-  # The pattern is quoted so it matches a backslash followed by "n". Unquoted, bash reads
-  # \\n as the letter n and would corrupt every key.
-  printf '%s\n' "${MEIP_AUTH_SIGNING_KEY_PEM//'\n'/$'\n'}" > "${key_path}"
+  # Hosts' variable editors mangle multi-line values in different ways: surrounding quotes
+  # kept, line breaks turned into "\n" or into spaces, CRLF. Rebuild a clean PEM from
+  # whatever arrived. On failure, print only the value's shape, never its content.
+  KEY_PATH="${key_path}" python - <<'PY'
+import os, re, sys
+
+raw = os.environ["MEIP_AUTH_SIGNING_KEY_PEM"].strip()
+if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in "\"'":
+    raw = raw[1:-1].strip()
+raw = raw.replace("\\n", "\n").replace("\r", "")
+m = re.search(r"-----BEGIN ([A-Z ]+)-----(.*?)-----END \1-----", raw, re.S)
+if not m:
+    print(
+        "MEIP_AUTH_SIGNING_KEY_PEM is not a PEM key: "
+        f"length={len(raw)} lines={raw.count(chr(10)) + 1} "
+        f"has_begin={'-----BEGIN' in raw} has_end={'-----END' in raw}",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+label, body = m.group(1), re.sub(r"\s", "", m.group(2))
+lines = [body[i : i + 64] for i in range(0, len(body), 64)]
+pem = f"-----BEGIN {label}-----\n" + "\n".join(lines) + f"\n-----END {label}-----\n"
+with open(os.environ["KEY_PATH"], "w") as f:
+    f.write(pem)
+PY
 fi
 unset MEIP_AUTH_SIGNING_KEY_PEM
 
