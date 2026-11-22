@@ -14,7 +14,9 @@ umask 077
 if [[ -n "${MEIP_AUTH_SIGNING_KEY_PEM:-}" ]]; then
   key_path="${MEIP_AUTH_SIGNING_KEY_PATH:?MEIP_AUTH_SIGNING_KEY_PATH must be set}"
   mkdir -p "$(dirname "${key_path}")"
-  printf '%s\n' "${MEIP_AUTH_SIGNING_KEY_PEM//\\n/$'\n'}" > "${key_path}"
+  # The pattern is quoted so it matches a backslash followed by "n". Unquoted, bash reads
+  # \\n as the letter n and would corrupt every key.
+  printf '%s\n' "${MEIP_AUTH_SIGNING_KEY_PEM//'\n'/$'\n'}" > "${key_path}"
 fi
 unset MEIP_AUTH_SIGNING_KEY_PEM
 
