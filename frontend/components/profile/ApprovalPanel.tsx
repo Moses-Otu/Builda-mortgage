@@ -32,8 +32,10 @@ export function ApprovalPanel(props: {
   approvals: Approval[];
   viewing: ApprovalDetail | null;
   onChanged: () => void;
+  /** After a successful approval (the assessment has started by itself). */
+  onApproved?: () => void;
 }) {
-  const { caseId, profile, approvals, viewing, onChanged } = props;
+  const { caseId, profile, approvals, viewing, onChanged, onApproved } = props;
   const { session } = useSession();
   const role = session.status === "ready" ? session.firm?.role : null;
   const [approving, setApproving] = useState(false);
@@ -71,8 +73,8 @@ export function ApprovalPanel(props: {
             <BadgeCheck className="size-4" /> {banner}
           </p>
           <p className="mt-1">
-            The case is verified and read-only. Reopen it from the case page to change anything; this version stays in the
-            history.
+            The case is verified and read-only. To change anything, use “Add new evidence…” on the case page; this
+            version stays in the history.
           </p>
           {profile.approval.approval_id && (
             <a
@@ -152,9 +154,10 @@ export function ApprovalPanel(props: {
           caseId={caseId}
           profile={profile}
           onClose={() => setApproving(false)}
-          onDone={() => {
+          onDone={(approved) => {
             setApproving(false);
             onChanged();
+            if (approved) onApproved?.();
           }}
         />
       )}
@@ -162,7 +165,12 @@ export function ApprovalPanel(props: {
   );
 }
 
-function ApproveDialog(props: { caseId: string; profile: Profile; onClose: () => void; onDone: () => void }) {
+function ApproveDialog(props: {
+  caseId: string;
+  profile: Profile;
+  onClose: () => void;
+  onDone: (approved: boolean) => void;
+}) {
   const { caseId, profile, onClose, onDone } = props;
   const toast = useToast();
   const [confirmed, setConfirmed] = useState(false);
@@ -179,11 +187,11 @@ function ApproveDialog(props: { caseId: string; profile: Profile; onClose: () =>
     const result = await postJson(`cases/${caseId}/profile/approvals`, approveBody(profile.fingerprint, r, note));
     setBusy(false);
     if (result.ok) {
-      toast("success", "Profile approved. The case is verified.");
-      onDone();
+      toast("success", "Profile approved. The mortgage assessment has started.");
+      onDone(true);
     } else if (result.status === 409) {
       toast("error", problemMessage(result.status, result.problem));
-      onDone(); // the profile changed or is blocked: show the current one
+      onDone(false); // the profile changed or is blocked: show the current one
     } else {
       setError(problemMessage(result.status, result.problem));
     }
@@ -199,7 +207,7 @@ function ApproveDialog(props: { caseId: string; profile: Profile; onClose: () =>
             </DialogTitle>
             <DialogDescription>
               This records the profile exactly as shown, as a new version that can&apos;t be changed. The case becomes
-              verified.
+              verified and the mortgage assessment starts. It does not approve the mortgage.
             </DialogDescription>
           </DialogHeader>
           {r.notices.length > 0 && (

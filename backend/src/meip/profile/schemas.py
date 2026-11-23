@@ -215,7 +215,7 @@ class ProfileSnapshot(OutputModel):
 
 class Blocker(OutputModel):
     code: Literal[
-        "case_not_in_review",
+        "case_not_open",
         "documents_outstanding",
         "discrepancies_unacknowledged",
         "nothing_recorded",

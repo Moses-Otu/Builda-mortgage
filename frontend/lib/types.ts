@@ -44,6 +44,9 @@ export interface IncomeSource {
   applicant_id: Uuid;
   kind: string;
   name: string | null;
+  basis?: string | null;
+  start_date?: string | null;
+  version?: number;
   withdrawn_at: string | null;
 }
 
@@ -470,7 +473,7 @@ export interface ApprovalStatus {
 // --- profile approval (Stage 3-B) ---
 
 export type BlockerCode =
-  | "case_not_in_review"
+  | "case_not_open"
   | "documents_outstanding"
   | "discrepancies_unacknowledged"
   | "nothing_recorded";

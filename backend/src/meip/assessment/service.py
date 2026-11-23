@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import uuid
+from dataclasses import asdict
 from datetime import date, timedelta
 
 from sqlalchemy import func, select
@@ -29,24 +30,33 @@ from meip.assessment.models import (
     EvidenceRequest,
     RequestStatus,
 )
-from meip.assessment.policy import POLICIES, get_policy
+from meip.assessment.policy import DEFAULT_POLICY, POLICIES, get_policy
 from meip.assessment.schemas import (
     AssessmentOut,
     AssessmentResult,
     AssessmentSummaryOut,
+    CommitmentLineOut,
     DecisionIn,
     DecisionOut,
     EvidenceRequestOut,
     PolicyOut,
+    PositionOut,
     ScenariosIn,
     ScenariosOut,
     StartedOut,
     StartIn,
     StepOut,
 )
-from meip.assessment.tools import affordability_out, base_inputs, canonical, scenarios_for
+from meip.assessment.tools import (
+    affordability_out,
+    base_inputs,
+    canonical,
+    income_out,
+    scenarios_for,
+)
 from meip.audit import service as audit
 from meip.audit.service import AuditAction
+from meip.cases.models import Case, CaseStatus
 from meip.cases.service import get_case
 from meip.core.db import utcnow
 from meip.core.errors import BusinessRuleError, ConflictError, NotFoundError
@@ -55,11 +65,53 @@ from meip.tenancy.context import OperationContext
 from meip.tenancy.permissions import Permission
 
 STALE_AFTER = timedelta(minutes=15)
+# Decisions that complete the journey; requesting information or escalating keep it open.
+FINAL_DECISIONS = frozenset({DecisionKind.ACCEPT.value, DecisionKind.OVERRIDE.value})
 
 
 class AssessmentInProgressError(ConflictError):
     error_type = "assessment-in-progress"
     title = "An assessment is already running for this case"
+
+
+class AssessmentBlockedError(ConflictError):
+    error_type = "assessment-blocked"
+    title = "The assessment can't run yet"
+
+
+def blockers(case: Case) -> list[dict[str, str]]:
+    """What must be true before an assessment can run (enforced here, not by the screens):
+    an approved financial profile, and the loan details it's assessed for."""
+    out: list[dict[str, str]] = []
+    if case.status != CaseStatus.VERIFIED.value or case.approval_id is None:
+        out.append(
+            {
+                "code": "profile_not_approved",
+                "message": "Approve the financial profile first: the assessment uses the "
+                "approved figures.",
+            }
+        )
+    missing = [
+        name
+        for name, value in (
+            ("property value", case.property_value_minor),
+            ("loan amount", case.loan_amount_minor),
+            ("term", case.term_months),
+        )
+        if not value
+    ]
+    if missing:
+        out.append(
+            {
+                "code": "loan_details_missing",
+                "message": f"Add the {', '.join(missing)} to the case.",
+            }
+        )
+    return out
+
+
+def policy_for(case: Case, requested: str | None) -> str:
+    return requested or case.policy_code or DEFAULT_POLICY
 
 
 class AssessmentNotFinishedError(ConflictError):
@@ -89,6 +141,8 @@ async def current_inputs_sha256(ctx: OperationContext, case_id: uuid.UUID, polic
                 "property": c.property_value_minor,
                 "term": c.term_months,
                 "use": c.property_use,
+                "rate": str(c.product_rate_percent) if c.product_rate_percent is not None else None,
+                "approval": str(c.approval_id) if c.approval_id else None,
             }
         )
     )
@@ -111,9 +165,18 @@ async def _expire_stale(ctx: OperationContext, case_id: uuid.UUID) -> None:
 async def start(
     ctx: OperationContext, case_id: uuid.UUID, body: StartIn
 ) -> tuple[StartedOut, bool]:
-    """Queue an assessment. Returns the output and whether a run must be started."""
-    get_policy(body.policy_code)  # 404 for an unknown policy
-    await get_case(ctx, case_id, for_update=True)
+    """Queue an assessment. Returns the output and whether a run must be started.
+
+    Refused (``assessment-blocked``) unless the financial profile is approved and the loan
+    details are on the case. The assessment records the approval it assesses."""
+    case = await get_case(ctx, case_id, for_update=True)
+    policy_code = policy_for(case, body.policy_code)
+    get_policy(policy_code)  # 404 for an unknown policy
+    blocked = blockers(case)
+    if blocked:
+        raise AssessmentBlockedError(
+            " ".join(b["message"] for b in blocked), extra={"blockers": blocked}
+        )
     await _expire_stale(ctx, case_id)
     active = await ctx.session.scalar(
         select(Assessment).where(
@@ -123,7 +186,7 @@ async def start(
     )
     if active is not None:
         raise AssessmentInProgressError(extra={"assessment_id": str(active.id)})
-    inputs_sha = await current_inputs_sha256(ctx, case_id, body.policy_code)
+    inputs_sha = await current_inputs_sha256(ctx, case_id, policy_code)
     latest = await ctx.session.scalar(
         select(Assessment)
         .where(Assessment.case_id == case_id, Assessment.status == AssessmentStatus.COMPLETED.value)
@@ -143,13 +206,14 @@ async def start(
         case_id=case_id,
         version=version,
         status=AssessmentStatus.QUEUED.value,
-        policy_code=body.policy_code,
+        policy_code=policy_code,
         planner="pending",
         trigger="reassessment" if latest is not None else "initial",
         inputs_sha256=inputs_sha,
         previous_assessment_id=latest.id if latest else None,
         started_by_user_id=ctx.actor.user_id,
         step_count=0,
+        approval_id=case.approval_id,
     )
     ctx.session.add(a)
     try:
@@ -160,8 +224,9 @@ async def start(
     for name, value in (
         ("assessment_id", a.id),
         ("assessment_version", version),
-        ("policy_code", body.policy_code),
+        ("policy_code", policy_code),
         ("trigger", a.trigger),
+        ("approval_id", case.approval_id),
     ):
         change.note(name, value)
     await audit.record(
@@ -209,6 +274,7 @@ async def _summary(
         trigger=a.trigger,
         profile_fingerprint=a.profile_fingerprint,
         previous_assessment_id=a.previous_assessment_id,
+        approval_id=a.approval_id,
         started_by=names.get(a.started_by_user_id) if a.started_by_user_id else None,
         created_at=a.created_at,
         started_at=a.started_at,
@@ -220,6 +286,55 @@ async def _summary(
         and current_sha != a.inputs_sha256,
         final_outcome=(override.override_outcome if override else a.outcome),
         decision=decisions[-1].decision if decisions else None,
+        decided=any(d.decision in FINAL_DECISIONS for d in decisions),
+    )
+
+
+async def start_after_approval(
+    ctx: OperationContext, case_id: uuid.UUID
+) -> tuple[StartedOut, bool] | None:
+    """Guided journey: approving the profile starts the assessment, in the same transaction.
+    Returns None when it can't start yet (no loan details, or the actor may not run it); the
+    journey then shows what's needed."""
+    if not ctx.actor.can(Permission.ASSESSMENT_RUN):
+        return None
+    case = await get_case(ctx, case_id)
+    if blockers(case):
+        return None
+    try:
+        return await start(ctx, case_id, StartIn(force=True))
+    except AssessmentInProgressError:
+        return None
+
+
+async def position(ctx: OperationContext, case_id: uuid.UUID, today: date) -> PositionOut:
+    case = await get_case(ctx, case_id)
+    policy = get_policy(policy_for(case, None))
+    inputs, _ = await load_inputs(ctx, case_id, policy, today)
+    return PositionOut(
+        policy_code=policy.code,
+        income=[income_out(x) for x in inputs.income],
+        commitments=[CommitmentLineOut(**asdict(c)) for c in inputs.commitments],
+        gross_monthly_minor=inputs.gross_monthly_minor,
+        net_monthly_minor=inputs.net_monthly_minor,
+        verified_gross_monthly_minor=sum(
+            x.qualifying_gross_monthly_minor
+            for x in inputs.counted_income
+            if x.verification == "verified"
+        ),
+        commitments_monthly_minor=inputs.commitments_monthly_minor,
+        living_costs_monthly_minor=inputs.living_costs_monthly_minor,
+        living_costs_basis=inputs.living_costs_basis,
+        property_value_minor=inputs.property_value_minor,
+        loan_amount_minor=inputs.loan_amount_minor,
+        deposit_minor=(
+            inputs.property_value_minor - inputs.loan_amount_minor
+            if inputs.property_value_minor is not None and inputs.loan_amount_minor is not None
+            else None
+        ),
+        product_rate_percent=inputs.product_rate_percent,
+        term_months=case.term_months,
+        notes=inputs.notes,
     )
 
 
@@ -414,7 +529,7 @@ async def scenarios(
     ctx: OperationContext, case_id: uuid.UUID, body: ScenariosIn, today: date | None = None
 ) -> ScenariosOut:
     """The broker's scenario calculator: the same deterministic engine, read-only."""
-    policy = get_policy(body.policy_code)
+    policy = get_policy(policy_for(await get_case(ctx, case_id), body.policy_code))
     inputs, _ = await load_inputs(ctx, case_id, policy, today or date.today())  # noqa: DTZ011
     if not inputs.counted_income:
         return ScenariosOut(base=None, scenarios=[])

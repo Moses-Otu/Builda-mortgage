@@ -70,7 +70,12 @@ class Case:
         )
 
     async def ready_for_approval(self) -> None:
-        for to in ("collecting_evidence", "in_review"):
+        """Move the case to in review, skipping steps already taken (the first upload starts
+        evidence collection by itself). Approval no longer needs this; tests that exercise
+        the status route still use it."""
+        status = (await self.firm.request("GET", self.base)).json()["status"]
+        order = ["draft", "collecting_evidence", "in_review"]
+        for to in order[order.index(status) + 1 :] if status in order else []:
             resp = await self.move(to)
             assert resp.status_code == 200, resp.text
 
@@ -274,17 +279,13 @@ async def test_snapshot_members_resolve_every_user_it_references(
 
 
 async def test_blockers_are_genuine_outstanding_work(case: Case, worker: Worker) -> None:
-    # Not in review.
+    # Guided journey: no separate "ready for approval" status step. A document extracted but
+    # not reviewed is genuine outstanding work.
+    [slip] = payslip_series(months=1)
+    doc = await case.upload(worker, slip.document.pdf())
     resp = await case.approve()
     assert resp.status_code == 409
     assert resp.json()["type"].endswith("approval-blocked")
-    assert blockers(resp) == ["case_not_in_review"]
-
-    # A document extracted but not reviewed.
-    [slip] = payslip_series(months=1)
-    doc = await case.upload(worker, slip.document.pdf())
-    await case.ready_for_approval()
-    resp = await case.approve()
     assert blockers(resp) == ["documents_outstanding"]
     assert resp.json()["blockers"][0]["ids"] == [doc["id"]]
     profile = await case.profile()
@@ -505,7 +506,7 @@ async def test_two_approvals_at_once_give_exactly_one(
     codes = sorted([first.status_code, second.status_code])
     assert codes == [201, 409], (first.text, second.text)
     loser = first if first.status_code == 409 else second
-    assert blockers(loser) == ["case_not_in_review"]
+    assert blockers(loser) == ["case_not_open"]  # the winner verified it
     assert (
         await owner.fetchval("SELECT count(*) FROM profile_approvals WHERE case_id = $1", case.id)
         == 1
@@ -577,3 +578,18 @@ async def test_another_firm_cannot_read_or_approve(case: Case, make_firm: MakeFi
         },
     )
     assert resp.status_code == 404
+
+
+async def test_approval_needs_no_manual_status_steps_and_a_verified_case_must_be_reopened(
+    case: Case,
+) -> None:
+    """Guided journey: approving from draft verifies the case directly (audited once, with the
+    status change); approving again needs the case reopened."""
+    await case.declare(45_000)
+    resp = await case.approve()
+    assert resp.status_code == 201, resp.text
+    got = (await case.firm.request("GET", case.base)).json()
+    assert got["status"] == "verified"
+    again = await case.approve()
+    assert again.status_code == 409
+    assert blockers(again) == ["case_not_open"]

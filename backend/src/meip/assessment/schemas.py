@@ -240,7 +240,11 @@ class AssessmentResult(OutputModel):
 
 
 class StartIn(InputModel):
-    policy_code: str = Field(default="uk-resi-standard/1", examples=["uk-resi-standard/1"])
+    policy_code: str | None = Field(
+        default=None,
+        examples=["uk-resi-standard/1"],
+        description="Default: the case's lending policy, else uk-resi-standard/1",
+    )
     force: bool = Field(
         default=False,
         description="Run again even if nothing changed since the latest completed assessment",
@@ -281,6 +285,9 @@ class AssessmentSummaryOut(OutputModel):
     trigger: str
     profile_fingerprint: str | None
     previous_assessment_id: uuid.UUID | None
+    approval_id: uuid.UUID | None = Field(
+        default=None, description="The approved financial profile this assessment assessed"
+    )
     started_by: str | None
     created_at: datetime
     started_at: datetime | None
@@ -294,6 +301,10 @@ class AssessmentSummaryOut(OutputModel):
         description="The broker's override if any, else the assessed outcome"
     )
     decision: str | None = Field(description="The broker's latest decision, if any")
+    decided: bool = Field(
+        default=False,
+        description="A final broker decision (accept or override) has been recorded",
+    )
 
 
 class AssessmentOut(AssessmentSummaryOut):
@@ -353,7 +364,7 @@ class ScenarioIn(InputModel):
 
 
 class ScenariosIn(InputModel):
-    policy_code: str = "uk-resi-standard/1"
+    policy_code: str | None = Field(default=None, description="Default: the case's policy")
     scenarios: list[ScenarioIn] = Field(default_factory=list, max_length=8)
 
 
@@ -365,3 +376,80 @@ class ScenariosOut(OutputModel):
 
 class AsOf(OutputModel):
     today: date
+
+
+# --- the guided journey ------------------------------------------------------------------------
+
+
+class EvidenceCountsOut(OutputModel):
+    received: int
+    processing: int = Field(description="Uploaded, still being read")
+    to_review: int = Field(description="Read, waiting for the broker's review or confirmation")
+    reviewed: int
+    failed: int
+
+
+class JourneyStageOut(OutputModel):
+    key: Literal["details", "income", "statements", "profile", "assessment", "decision"]
+    number: int
+    title: str
+    done: bool
+    optional: bool = False
+    summary: str
+    requirements: list[str] = Field(description="What's outstanding for this stage, and why")
+
+
+class JourneyActionOut(OutputModel):
+    label: str = Field(examples=["Next: Upload Payslips"])
+    target: Literal["details", "income", "statements", "profile", "assessment", "decision"]
+    kind: Literal["navigate", "start_assessment"]
+
+
+class JourneyOut(OutputModel):
+    """Where the case is in the guided journey and the single next action. Derived from the
+    case's real state on every read."""
+
+    case_id: uuid.UUID
+    case_status: str
+    stage: Literal[
+        "details", "income", "statements", "profile", "assessment", "decision", "complete"
+    ]
+    stages: list[JourneyStageOut]
+    next_action: JourneyActionOut
+    reassessment_required: bool
+    reassessment_message: str | None
+    profile_approved: bool
+    approval_id: uuid.UUID | None
+    latest_assessment_id: uuid.UUID | None
+    assessment_running: bool
+    assessment_failed: bool
+    assessment_blockers: list[str]
+    approval_blockers: list[str]
+    open_evidence_requests: int
+    policy_code: str
+    payslips: EvidenceCountsOut
+    statements: EvidenceCountsOut
+
+
+class PositionOut(OutputModel):
+    """The consolidated financial position the assessment will use, before it runs: each
+    income source with its verification status, commitments, living costs and the deposit.
+    Computed by the same rules as the assessment; read-only."""
+
+    policy_code: str
+    income: list[IncomeLineOut]
+    commitments: list[CommitmentLineOut]
+    gross_monthly_minor: int = Field(description="Qualifying gross income a month")
+    net_monthly_minor: int = Field(description="Qualifying net income a month (evidenced only)")
+    verified_gross_monthly_minor: int
+    commitments_monthly_minor: int
+    living_costs_monthly_minor: int
+    living_costs_basis: str
+    property_value_minor: int | None
+    loan_amount_minor: int | None
+    deposit_minor: int | None = Field(
+        description="Property value less the loan: stated on the case, not yet evidenced"
+    )
+    product_rate_percent: Decimal | None
+    term_months: int | None
+    notes: list[str]

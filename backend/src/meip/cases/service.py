@@ -42,6 +42,8 @@ AUDITED_FIELDS = (
     "property_value_minor",
     "loan_amount_minor",
     "term_months",
+    "product_rate_percent",
+    "policy_code",
 )
 
 
@@ -105,6 +107,8 @@ def to_out(case: Case, applicant_count: int) -> CaseOut:
         property_value=Money.from_optional_minor(case.property_value_minor),
         loan_amount=Money.from_optional_minor(case.loan_amount_minor),
         term_months=case.term_months,
+        product_rate_percent=case.product_rate_percent,
+        policy_code=case.policy_code,
         applicant_count=applicant_count,
         warnings=warnings_for(case),
         created_by_user_id=case.created_by_user_id,
@@ -184,6 +188,8 @@ async def create_case(ctx: OperationContext, body: CaseCreate) -> CaseOut:
         property_value_minor=property_value,
         loan_amount_minor=loan_amount,
         term_months=body.term_months,
+        product_rate_percent=body.product_rate_percent,
+        policy_code=body.policy_code,
         created_by_user_id=ctx.actor.user_id,
     )
     ctx.session.add(case)
@@ -243,6 +249,10 @@ async def update_case(
         updates["loan_amount_minor"] = body.loan_amount.amount_minor if body.loan_amount else None
     if "term_months" in provided:
         updates["term_months"] = body.term_months
+    if "product_rate_percent" in provided:
+        updates["product_rate_percent"] = body.product_rate_percent
+    if "policy_code" in provided:
+        updates["policy_code"] = body.policy_code
 
     before = audit.snapshot(case, AUDITED_FIELDS)
     for name, value in updates.items():

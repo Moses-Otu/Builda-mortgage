@@ -98,6 +98,11 @@ class Assessment(Base):
         UniqueConstraint("tenant_id", "case_id", "id"),
         UniqueConstraint("tenant_id", "case_id", "version"),
         _case_fk("fk_assessments_case"),
+        ForeignKeyConstraint(
+            ["tenant_id", "case_id", "approval_id"],
+            ["profile_approvals.tenant_id", "profile_approvals.case_id", "profile_approvals.id"],
+            name="fk_assessments_approval",
+        ),
         CheckConstraint(check_in("status", AssessmentStatus), name="status"),
         CheckConstraint(f"outcome IS NULL OR {check_in('outcome', Outcome)}", name="outcome"),
         CheckConstraint("version >= 1", name="version"),
@@ -127,6 +132,8 @@ class Assessment(Base):
     profile_fingerprint: Mapped[str | None] = mapped_column(String(64))
     inputs_sha256: Mapped[str | None] = mapped_column(String(64))
     previous_assessment_id: Mapped[uuid.UUID | None] = mapped_column()
+    # The approved financial profile this assessment assessed (0022).
+    approval_id: Mapped[uuid.UUID | None] = mapped_column()
     started_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
     created_at: Mapped[datetime] = mapped_column(default=utcnow)
     started_at: Mapped[datetime | None] = mapped_column()

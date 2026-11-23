@@ -216,8 +216,13 @@ def base_inputs(
         living_costs_basis=inputs.living_costs_basis,
         property_value_minor=inputs.property_value_minor,
         loan_amount_minor=inputs.loan_amount_minor,
-        rate_percent=policy.default_rate_percent,
+        rate_percent=(
+            inputs.product_rate_percent
+            if inputs.product_rate_percent is not None
+            else policy.default_rate_percent
+        ),
         term_months=inputs.term_months or policy.default_term_months,
+        rate_basis="product" if inputs.product_rate_percent is not None else "policy_default",
     )
 
 

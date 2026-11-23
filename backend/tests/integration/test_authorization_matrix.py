@@ -76,14 +76,14 @@ PROBES: list[Probe] = [
         "PATCH",
         "/api/v1/cases/{case_id}",
         CASE_WORKERS,
-        lambda s: {"if_match": 1, "json": {"term_months": 300}},
+        lambda s: {"if_match": s["case_version"], "json": {"term_months": 300}},
     ),
     Probe(
         "transition case",
         "POST",
         "/api/v1/cases/{case_id}/transitions",
         CASE_WORKERS,
-        lambda s: {"if_match": 1, "json": {"to_status": "collecting_evidence"}},
+        lambda s: {"if_match": s["case_version"], "json": {"to_status": "collecting_evidence"}},
     ),
     Probe("case events", "GET", "/api/v1/cases/{case_id}/events", EVERYONE),
     Probe("list applicants", "GET", "/api/v1/cases/{case_id}/applicants", EVERYONE),
@@ -124,7 +124,7 @@ PROBES: list[Probe] = [
         "/api/v1/cases/{case_id}/transitions",
         frozenset({ADMIN, ADVISER}),
         lambda s: {
-            "if_match": 1,
+            "if_match": s["case_version"],
             "json": {
                 "to_status": "closed",
                 "closure_reason": "not_proceeding",
@@ -157,7 +157,10 @@ PROBES: list[Probe] = [
         "PATCH",
         "/api/v1/cases/{case_id}",
         frozenset({ADMIN, ADVISER}),
-        lambda s: {"if_match": 1, "json": {"adviser_membership_id": s["adviser_membership_id"]}},
+        lambda s: {
+            "if_match": s["case_version"],
+            "json": {"adviser_membership_id": s["adviser_membership_id"]},
+        },
     ),
     Probe("get firm settings", "GET", "/api/v1/firm/settings", EVERYONE),
     Probe(
@@ -347,6 +350,8 @@ PROBES: list[Probe] = [
     ),
     # --- agentic assessment (2026-11-23) ------------------------------------------------------
     Probe("list policies", "GET", "/api/v1/assessment/policies", EVERYONE),
+    Probe("get journey", "GET", "/api/v1/cases/{case_id}/journey", EVERYONE),
+    Probe("get financial position", "GET", "/api/v1/cases/{case_id}/financial-position", EVERYONE),
     Probe(
         "start assessment",
         "POST",
@@ -453,7 +458,10 @@ async def _state(firm: Firm) -> State:
     assert observation.status_code == 201, observation.text
     document = await firm.upload(case["id"])
     assert document.status_code == 201, document.text
+    # The first upload starts evidence collection, so the case is past version 1.
+    live = await firm.request("GET", f"/api/v1/cases/{case['id']}")
     return {
+        "case_version": live.json()["version"],
         "document_id": document.json()["id"],
         "income_source_id": source.json()["id"],
         "commitment_id": commitment.json()["id"],

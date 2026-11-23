@@ -107,3 +107,41 @@ The brief's 12-step journey works end to end on the QA site with synthetic docum
 decisions**; the pre-qualification outcome and affordability figures are **indicative**,
 labelled so in the API and the UI, computed by versioned rules from visible assumptions, and
 always subject to the broker's decision.
+
+## 9. Guided journey (2026-11-23, second brief)
+The case page is the hub of a six-stage journey, shown on every stage's page with the current
+stage highlighted, done stages ticked, stages passed with something outstanding in amber, and
+**one** primary action. Everything comes from `GET /cases/{id}/journey`
+(`assessment/journey.py`), derived from the case's real state; the screens add nothing.
+
+| # | Stage | Where | Done when |
+|---|---|---|---|
+| 1 | Applicant and loan details | case page | a borrower, an income source (employment needs a start date), property value, loan amount and term |
+| 2 | Payslips (or "Income evidence") | case page | the evidence the policy needs for each income is reviewed |
+| 3 | Bank statements | case page | statements confirmed and each salary seen arriving; optional when no payroll income. Once every statement on file is confirmed, a month still unshown stays listed (amber) but doesn't hold up approval |
+| 4 | Approve financial profile | `/profile` | the profile is approved (case `verified`) |
+| 5 | Mortgage assessment | `/assessment` | an assessment completed for the **current** approval |
+| 6 | Broker decision | `/decision` | an accept or override recorded on it |
+
+**Backend-enforced transitions.** The first upload moves a draft case to `collecting_evidence`
+(in the upload's own audit event). Approval needs only genuine work (documents reviewed,
+discrepancies acknowledged): no manual "ready for approval" step. Approving starts the
+assessment by itself, bound to that approval (`assessments.approval_id`, migration 0022);
+`POST …/assessments` refuses with 409 `assessment-blocked` when the profile isn't approved or
+the loan details are missing. Adding evidence to a verified case reopens it (with a reason),
+superseding the approval; the journey then shows "New evidence received — Reassessment
+required." and the single action "Reassess Mortgage Application". Approving again starts the
+next version; earlier versions and decisions stay in the history.
+
+**Case details.** Cases carry an optional product rate (`product_rate_percent`; blank uses the
+policy's assumed rate, stated in the results) and a lending policy (`policy_code`). The New
+case form captures the applicant, their income type, employer and start date, and the loan in
+one step. `GET /cases/{id}/financial-position` gives the consolidated position for the profile
+review, with each line's status (verified, extracted, declared, inferred, unverified).
+
+**Screens.** Profile review: the position, discrepancies prominent, and "approving the profile
+is not approving the mortgage". Assessment: the agent's real steps as they're saved, then
+pre-qualification, affordability and scenario analysis as three separate sections; no manual
+run button. Decision: the overall assessment, findings, risks, discrepancies, evidence,
+recommendations and limitations beside the decision form (override and every non-accept
+decision need a reason) and its history.

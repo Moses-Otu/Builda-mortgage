@@ -650,16 +650,22 @@ async def test_a_discrepancy_is_investigated_then_escalated() -> None:
     assert "abc" in escalation.args["refs"]
 
 
-async def test_an_acknowledged_discrepancy_is_not_escalated() -> None:
-    disc = {"key": "abc", "title": "t", "message": "m", "acknowledged": True}
-    tools = [
-        c.tool
-        for c in await drive(
-            RulesPlanner(), world(reconcile_financial_evidence={"discrepancies": [disc]})
-        )
-    ]
+async def test_an_acknowledged_discrepancy_is_noted_with_the_broker_note_not_escalated() -> None:
+    disc = {
+        "key": "abc",
+        "title": "t",
+        "message": "m",
+        "acknowledged": True,
+        "acknowledgement_note": "Employer confirmed",
+    }
+    calls = await drive(
+        RulesPlanner(), world(reconcile_financial_evidence={"discrepancies": [disc]})
+    )
+    tools = [c.tool for c in calls]
     assert "escalate_to_broker" not in tools
-    assert "record_finding" not in tools
+    finding = next(c for c in calls if c.tool == "record_finding")
+    assert finding.args["severity"] == "info"
+    assert "Employer confirmed" in finding.args["detail"]
 
 
 async def test_a_shortfall_explores_scenarios_and_a_failed_criterion_escalates() -> None:

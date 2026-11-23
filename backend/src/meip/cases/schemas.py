@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from typing import Annotated, Literal
 
 from pydantic import Field
@@ -12,6 +13,25 @@ from meip.core.schemas import InputModel, OutputModel, Reason, ShortText
 
 TermMonths = Annotated[
     int, Field(ge=1, le=600, description="Mortgage term in months (sanity range only)")
+]
+
+ProductRate = Annotated[
+    Decimal,
+    Field(
+        ge=0,
+        le=20,
+        max_digits=6,
+        decimal_places=3,
+        description="The mortgage product's interest rate, % (when known)",
+    ),
+]
+PolicyCode = Annotated[
+    str,
+    Field(
+        pattern=r"^[a-z0-9-]+/[0-9]+$",
+        max_length=48,
+        description="Lending policy to assess against, e.g. uk-resi-standard/1",
+    ),
 ]
 
 WarningCode = Literal["loan_exceeds_property_value", "term_outside_typical_range"]
@@ -36,6 +56,8 @@ class CaseOut(OutputModel):
     property_value: Money | None
     loan_amount: Money | None
     term_months: int | None
+    product_rate_percent: Decimal | None = None
+    policy_code: str | None = None
     applicant_count: int = Field(description="Active applicants (removed ones excluded)")
     warnings: list[CaseWarning]
     created_by_user_id: uuid.UUID | None = Field(
@@ -60,6 +82,8 @@ class CaseCreate(InputModel):
         description="Total borrowing sought. For a further advance: the total, not the increase.",
     )
     term_months: TermMonths | None = None
+    product_rate_percent: ProductRate | None = None
+    policy_code: PolicyCode | None = None
 
 
 class CaseUpdate(InputModel):
@@ -75,6 +99,8 @@ class CaseUpdate(InputModel):
     property_value: Money | None = None
     loan_amount: Money | None = None
     term_months: TermMonths | None = None
+    product_rate_percent: ProductRate | None = None
+    policy_code: PolicyCode | None = None
 
 
 class CaseTransition(InputModel):

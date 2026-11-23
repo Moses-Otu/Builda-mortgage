@@ -1199,6 +1199,19 @@
       },
       "AssessmentOut": {
         "properties": {
+          "approval_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The approved financial profile this assessment assessed",
+            "title": "Approval Id"
+          },
           "case_id": {
             "format": "uuid",
             "title": "Case Id",
@@ -1208,6 +1221,12 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "decided": {
+            "default": false,
+            "description": "A final broker decision (accept or override) has been recorded",
+            "title": "Decided",
+            "type": "boolean"
           },
           "decision": {
             "anyOf": [
@@ -1610,6 +1629,19 @@
       },
       "AssessmentSummaryOut": {
         "properties": {
+          "approval_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The approved financial profile this assessment assessed",
+            "title": "Approval Id"
+          },
           "case_id": {
             "format": "uuid",
             "title": "Case Id",
@@ -1619,6 +1651,12 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "decided": {
+            "default": false,
+            "description": "A final broker decision (accept or override) has been recorded",
+            "title": "Decided",
+            "type": "boolean"
           },
           "decision": {
             "anyOf": [
@@ -2048,7 +2086,7 @@
         "properties": {
           "code": {
             "enum": [
-              "case_not_in_review",
+              "case_not_open",
               "documents_outstanding",
               "discrepancies_unacknowledged",
               "nothing_recorded"
@@ -2115,6 +2153,41 @@
               }
             ],
             "description": "Total borrowing sought. For a further advance: the total, not the increase."
+          },
+          "policy_code": {
+            "anyOf": [
+              {
+                "description": "Lending policy to assess against, e.g. uk-resi-standard/1",
+                "maxLength": 48,
+                "pattern": "^[a-z0-9-]+/[0-9]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Code"
+          },
+          "product_rate_percent": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "maximum": 20.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ],
+                "description": "The mortgage product's interest rate, % (when known)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Rate Percent"
           },
           "property_use": {
             "anyOf": [
@@ -2243,6 +2316,28 @@
                 "type": "null"
               }
             ]
+          },
+          "policy_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Code"
+          },
+          "product_rate_percent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Rate Percent"
           },
           "property_use": {
             "anyOf": [
@@ -2425,6 +2520,41 @@
                 "type": "null"
               }
             ]
+          },
+          "policy_code": {
+            "anyOf": [
+              {
+                "description": "Lending policy to assess against, e.g. uk-resi-standard/1",
+                "maxLength": 48,
+                "pattern": "^[a-z0-9-]+/[0-9]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Policy Code"
+          },
+          "product_rate_percent": {
+            "anyOf": [
+              {
+                "anyOf": [
+                  {
+                    "maximum": 20.0,
+                    "minimum": 0.0,
+                    "type": "number"
+                  },
+                  {
+                    "type": "string"
+                  }
+                ],
+                "description": "The mortgage product's interest rate, % (when known)"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Rate Percent"
           },
           "property_use": {
             "anyOf": [
@@ -3949,6 +4079,41 @@
           "y1"
         ],
         "title": "Evidence",
+        "type": "object"
+      },
+      "EvidenceCountsOut": {
+        "properties": {
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "processing": {
+            "description": "Uploaded, still being read",
+            "title": "Processing",
+            "type": "integer"
+          },
+          "received": {
+            "title": "Received",
+            "type": "integer"
+          },
+          "reviewed": {
+            "title": "Reviewed",
+            "type": "integer"
+          },
+          "to_review": {
+            "description": "Read, waiting for the broker's review or confirmation",
+            "title": "To Review",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "received",
+          "processing",
+          "to_review",
+          "reviewed",
+          "failed"
+        ],
+        "title": "EvidenceCountsOut",
         "type": "object"
       },
       "EvidenceOut": {
@@ -6484,6 +6649,237 @@
         "title": "ItemSupport",
         "type": "object"
       },
+      "JourneyActionOut": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "navigate",
+              "start_assessment"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "examples": [
+              "Next: Upload Payslips"
+            ],
+            "title": "Label",
+            "type": "string"
+          },
+          "target": {
+            "enum": [
+              "details",
+              "income",
+              "statements",
+              "profile",
+              "assessment",
+              "decision"
+            ],
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "target",
+          "kind"
+        ],
+        "title": "JourneyActionOut",
+        "type": "object"
+      },
+      "JourneyOut": {
+        "description": "Where the case is in the guided journey and the single next action. Derived from the\ncase's real state on every read.",
+        "properties": {
+          "approval_blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Approval Blockers",
+            "type": "array"
+          },
+          "approval_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Id"
+          },
+          "assessment_blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Assessment Blockers",
+            "type": "array"
+          },
+          "assessment_failed": {
+            "title": "Assessment Failed",
+            "type": "boolean"
+          },
+          "assessment_running": {
+            "title": "Assessment Running",
+            "type": "boolean"
+          },
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "case_status": {
+            "title": "Case Status",
+            "type": "string"
+          },
+          "latest_assessment_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Assessment Id"
+          },
+          "next_action": {
+            "$ref": "#/components/schemas/JourneyActionOut"
+          },
+          "open_evidence_requests": {
+            "title": "Open Evidence Requests",
+            "type": "integer"
+          },
+          "payslips": {
+            "$ref": "#/components/schemas/EvidenceCountsOut"
+          },
+          "policy_code": {
+            "title": "Policy Code",
+            "type": "string"
+          },
+          "profile_approved": {
+            "title": "Profile Approved",
+            "type": "boolean"
+          },
+          "reassessment_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reassessment Message"
+          },
+          "reassessment_required": {
+            "title": "Reassessment Required",
+            "type": "boolean"
+          },
+          "stage": {
+            "enum": [
+              "details",
+              "income",
+              "statements",
+              "profile",
+              "assessment",
+              "decision",
+              "complete"
+            ],
+            "title": "Stage",
+            "type": "string"
+          },
+          "stages": {
+            "items": {
+              "$ref": "#/components/schemas/JourneyStageOut"
+            },
+            "title": "Stages",
+            "type": "array"
+          },
+          "statements": {
+            "$ref": "#/components/schemas/EvidenceCountsOut"
+          }
+        },
+        "required": [
+          "case_id",
+          "case_status",
+          "stage",
+          "stages",
+          "next_action",
+          "reassessment_required",
+          "reassessment_message",
+          "profile_approved",
+          "approval_id",
+          "latest_assessment_id",
+          "assessment_running",
+          "assessment_failed",
+          "assessment_blockers",
+          "approval_blockers",
+          "open_evidence_requests",
+          "policy_code",
+          "payslips",
+          "statements"
+        ],
+        "title": "JourneyOut",
+        "type": "object"
+      },
+      "JourneyStageOut": {
+        "properties": {
+          "done": {
+            "title": "Done",
+            "type": "boolean"
+          },
+          "key": {
+            "enum": [
+              "details",
+              "income",
+              "statements",
+              "profile",
+              "assessment",
+              "decision"
+            ],
+            "title": "Key",
+            "type": "string"
+          },
+          "number": {
+            "title": "Number",
+            "type": "integer"
+          },
+          "optional": {
+            "default": false,
+            "title": "Optional",
+            "type": "boolean"
+          },
+          "requirements": {
+            "description": "What's outstanding for this stage, and why",
+            "items": {
+              "type": "string"
+            },
+            "title": "Requirements",
+            "type": "array"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "number",
+          "title",
+          "done",
+          "summary",
+          "requirements"
+        ],
+        "title": "JourneyStageOut",
+        "type": "object"
+      },
       "LiabilityRole": {
         "enum": [
           "principal",
@@ -7630,6 +8026,137 @@
         "title": "PolicyOut",
         "type": "object"
       },
+      "PositionOut": {
+        "description": "The consolidated financial position the assessment will use, before it runs: each\nincome source with its verification status, commitments, living costs and the deposit.\nComputed by the same rules as the assessment; read-only.",
+        "properties": {
+          "commitments": {
+            "items": {
+              "$ref": "#/components/schemas/CommitmentLineOut"
+            },
+            "title": "Commitments",
+            "type": "array"
+          },
+          "commitments_monthly_minor": {
+            "title": "Commitments Monthly Minor",
+            "type": "integer"
+          },
+          "deposit_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Property value less the loan: stated on the case, not yet evidenced",
+            "title": "Deposit Minor"
+          },
+          "gross_monthly_minor": {
+            "description": "Qualifying gross income a month",
+            "title": "Gross Monthly Minor",
+            "type": "integer"
+          },
+          "income": {
+            "items": {
+              "$ref": "#/components/schemas/IncomeLineOut"
+            },
+            "title": "Income",
+            "type": "array"
+          },
+          "living_costs_basis": {
+            "title": "Living Costs Basis",
+            "type": "string"
+          },
+          "living_costs_monthly_minor": {
+            "title": "Living Costs Monthly Minor",
+            "type": "integer"
+          },
+          "loan_amount_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loan Amount Minor"
+          },
+          "net_monthly_minor": {
+            "description": "Qualifying net income a month (evidenced only)",
+            "title": "Net Monthly Minor",
+            "type": "integer"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "policy_code": {
+            "title": "Policy Code",
+            "type": "string"
+          },
+          "product_rate_percent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Product Rate Percent"
+          },
+          "property_value_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Property Value Minor"
+          },
+          "term_months": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term Months"
+          },
+          "verified_gross_monthly_minor": {
+            "title": "Verified Gross Monthly Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "policy_code",
+          "income",
+          "commitments",
+          "gross_monthly_minor",
+          "net_monthly_minor",
+          "verified_gross_monthly_minor",
+          "commitments_monthly_minor",
+          "living_costs_monthly_minor",
+          "living_costs_basis",
+          "property_value_minor",
+          "loan_amount_minor",
+          "deposit_minor",
+          "product_rate_percent",
+          "term_months",
+          "notes"
+        ],
+        "title": "PositionOut",
+        "type": "object"
+      },
       "ProfileApplicant": {
         "description": "Only what the profile needs: no date of birth or contact details.",
         "properties": {
@@ -8579,9 +9106,16 @@
         "additionalProperties": false,
         "properties": {
           "policy_code": {
-            "default": "uk-resi-standard/1",
-            "title": "Policy Code",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Default: the case's policy",
+            "title": "Policy Code"
           },
           "scenarios": {
             "items": {
@@ -8708,12 +9242,19 @@
             "type": "boolean"
           },
           "policy_code": {
-            "default": "uk-resi-standard/1",
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Default: the case's lending policy, else uk-resi-standard/1",
             "examples": [
               "uk-resi-standard/1"
             ],
-            "title": "Policy Code",
-            "type": "string"
+            "title": "Policy Code"
           }
         },
         "title": "StartIn",
@@ -10342,7 +10883,7 @@
             "description": "Successful Response"
           },
           "409": {
-            "description": "`assessment-in-progress`"
+            "description": "`assessment-in-progress`, or `assessment-blocked`: the profile isn't approved or the loan details are missing"
           },
           "422": {
             "content": {
@@ -11643,6 +12184,67 @@
         ]
       }
     },
+    "/api/v1/cases/{case_id}/financial-position": {
+      "get": {
+        "description": "Each income source with its verification status (verified, extracted, declared, missing), what counts under the case's policy, commitments, living costs and the deposit. The assessment's own rules, read-only, for the profile review.",
+        "operationId": "get_position_api_v1_cases__case_id__financial_position_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PositionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "The consolidated financial position the assessment will use",
+        "tags": [
+          "assessment"
+        ]
+      }
+    },
     "/api/v1/cases/{case_id}/financial/commitments": {
       "get": {
         "operationId": "list_commitments_api_v1_cases__case_id__financial_commitments_get",
@@ -12910,6 +13512,67 @@
         ]
       }
     },
+    "/api/v1/cases/{case_id}/journey": {
+      "get": {
+        "description": "The six stages (applicant and loan details, income evidence, bank statements, profile approval, mortgage assessment, broker decision), each with its outstanding requirements; the current stage; and the single next action. Derived from the case's state on every read. Evidence requirements adapt to the applicant's income and the lending policy.",
+        "operationId": "get_journey_api_v1_cases__case_id__journey_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JourneyOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Where the case is in the guided journey",
+        "tags": [
+          "assessment"
+        ]
+      }
+    },
     "/api/v1/cases/{case_id}/profile": {
       "get": {
         "description": "The case's financial profile under rule `profile/1`: every current (not retired) figure from items that are not withdrawn, labelled by origin (extracted, corrected, declared or broker entry), each with its provenance; what supports each item; the applicants, items, bank accounts, both rule sets' checks, every document, and the members referenced. Nothing is chosen, averaged, annualised or summed. Also, derived and outside the fingerprint: `readiness` (what blocks approval, notices, and the attestation wording) and `approval` (the current approval and superseded versions). `fingerprint` is the SHA-256 of the profile's canonical JSON. Needs `document:read`.",
@@ -13042,7 +13705,7 @@
         ]
       },
       "post": {
-        "description": "Attests the profile exactly as loaded: send its `fingerprint` and the current `attestation_version` with `confirmed: true`. In one transaction under the case lock, the profile is rebuilt; any blocker, or a different fingerprint, refuses. Otherwise the approval is stored (the canonical snapshot text, its hash, and the exact attestation wording) as the next version, and the case becomes `verified`. Approving is the only way to verify a case. Needs `profile:approve` (firm admin, adviser).",
+        "description": "Attests the profile exactly as loaded: send its `fingerprint` and the current `attestation_version` with `confirmed: true`. In one transaction under the case lock, the profile is rebuilt; any blocker, or a different fingerprint, refuses. Otherwise the approval is stored (the canonical snapshot text, its hash, and the exact attestation wording) as the next version, and the case becomes `verified`. Approving is the only way to verify a case. Approving the profile accepts the reviewed figures as supported enough to assess; it does not approve a mortgage. Guided journey: if the case has its loan details, the mortgage assessment starts in the same transaction and runs in the background (`X-Assessment-Id`). Needs `profile:approve` (firm admin, adviser).",
         "operationId": "approve_api_v1_cases__case_id__profile_approvals_post",
         "parameters": [
           {

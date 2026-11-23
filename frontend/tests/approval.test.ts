@@ -27,14 +27,9 @@ const readiness: Readiness = {
 
 describe("case status actions (decision V4)", () => {
   it("offers the forward steps, going back, and reopening; never verifying or closing", () => {
-    expect(statusActions("draft").map((a) => a.label)).toEqual(["Start collecting evidence"]);
-    expect(statusActions("collecting_evidence")).toEqual([{ to: "in_review", label: "Ready for approval", reopen: false }]);
-    expect(statusActions("in_review").map((a) => a.to)).toEqual(["collecting_evidence"]);
-    expect(statusActions("verified")).toEqual([{ to: "in_review", label: "Reopen…", reopen: true }]);
-    expect(statusActions("closed")).toEqual([]);
-    for (const s of ["draft", "collecting_evidence", "in_review", "verified"]) {
-      expect(statusActions(s).map((a) => a.to)).not.toContain("verified");
-    }
+    // Guided journey: no manual "collecting evidence" / "ready for approval" steps.
+    for (const s of ["draft", "collecting_evidence", "in_review", "closed"]) expect(statusActions(s)).toEqual([]);
+    expect(statusActions("verified")).toEqual([{ to: "collecting_evidence", label: "Add new evidence…", reopen: true }]);
     expect(REOPEN_EXPLANATION).toContain("supersedes the current approval");
   });
 

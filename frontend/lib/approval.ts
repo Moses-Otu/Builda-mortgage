@@ -16,22 +16,15 @@ export interface StatusAction {
 /** The status changes the screens offer (decision V4). Closing stays API-only. Verifying is
  * never a status change: only approving the profile verifies a case. */
 export function statusActions(status: string): StatusAction[] {
-  switch (status) {
-    case "draft":
-      return [{ to: "collecting_evidence", label: "Start collecting evidence", reopen: false }];
-    case "collecting_evidence":
-      return [{ to: "in_review", label: "Ready for approval", reopen: false }];
-    case "in_review":
-      return [{ to: "collecting_evidence", label: "Back to collecting evidence", reopen: false }];
-    case "verified":
-      return [{ to: "in_review", label: "Reopen…", reopen: true }];
-    default:
-      return [];
-  }
+  // Guided journey: evidence collection starts with the first upload and approving the profile
+  // verifies the case, so the only status action left in normal use is adding new evidence to a
+  // verified case (a reopen, with a reason).
+  if (status === "verified") return [{ to: "collecting_evidence", label: "Add new evidence…", reopen: true }];
+  return [];
 }
 
 export const REOPEN_EXPLANATION =
-  "Reopening supersedes the current approval. It stays in the version history, unchanged; approving again creates a new version.";
+  "Adding new evidence reopens the case and supersedes the current approval. The approval and the assessments stay in the version history, unchanged; approving again starts a new assessment version.";
 
 export const APPROVE_ROLES = new Set(["firm_admin", "adviser"]);
 
@@ -72,7 +65,7 @@ export function approveBody(fingerprint: string, readiness: Readiness, note: str
 export function blockerLink(caseId: string, code: string, ids: string[]): { href: string; label: string } | null {
   if (code === "documents_outstanding" && ids[0]) return { href: `/cases/${caseId}/documents/${ids[0]}`, label: "Open the first one" };
   if (code === "discrepancies_unacknowledged") return { href: `/cases/${caseId}`, label: "Open the checks" };
-  if (code === "case_not_in_review") return { href: `/cases/${caseId}`, label: "Go to the case" };
+  if (code === "case_not_open") return { href: `/cases/${caseId}`, label: "Go to the case" };
   return null;
 }
 

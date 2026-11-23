@@ -25,6 +25,7 @@ from meip.core.config import AuthMode, Settings
 from meip.core.db import create_engine, create_sessionmaker
 from meip.documents.processing import run_once
 from meip.documents.storage import FilesystemBlobStore
+from meip.profile import attestation
 from meip.profile.service import sha256_of
 from tests.conftest import TEST_DB, Firm, MakeFirm, db_url
 from tests.synthetic_docs import bank_statement_series, payslip_series, salaries_from
@@ -142,20 +143,69 @@ class Case:
         resp = await self.firm.request("POST", f"{self.base}/financial/observations", json=body)
         assert resp.status_code == 201, resp.text
 
-    async def assess(
-        self, *, force: bool = False, policy: str = "uk-resi-standard/1", expect: int = 202
-    ) -> dict[str, Any]:
+    async def status(self) -> str:
+        out: str = (await self.firm.request("GET", self.base)).json()["status"]
+        return out
+
+    async def approve(self) -> httpx.Response:
+        """Approve the profile as loaded (the guided journey's stage 4)."""
+        fingerprint = (await self.firm.request("GET", f"{self.base}/profile")).json()["fingerprint"]
+        return await self.firm.request(
+            "POST",
+            f"{self.base}/profile/approvals",
+            json={
+                "fingerprint": fingerprint,
+                "attestation_version": attestation.CURRENT,
+                "confirmed": True,
+            },
+        )
+
+    async def acknowledge_all(self, note: str = "Explained by the employer (synthetic).") -> None:
+        checks = (await self.firm.request("GET", f"{self.base}/checks")).json()
+        for f in checks["findings"]:
+            if f["status"] == "discrepancy" and f["acknowledgement"] is None:
+                resp = await self.firm.request(
+                    "POST", f"{self.base}/checks/{f['key']}/acknowledgement", json={"note": note}
+                )
+                assert resp.status_code == 201, resp.text
+
+    async def reopen(self, note: str = "New evidence from the applicant.") -> None:
+        version = (await self.firm.request("GET", self.base)).json()["version"]
         resp = await self.firm.request(
-            "POST", f"{self.base}/assessments", json={"force": force, "policy_code": policy}
+            "POST",
+            f"{self.base}/transitions",
+            if_match=version,
+            json={"to_status": "collecting_evidence", "note": note},
         )
-        assert resp.status_code == expect, resp.text
-        started = resp.json()
-        got = await self.firm.request(
-            "GET", f"{self.base}/assessments/{started['assessment']['id']}"
-        )
+        assert resp.status_code == 200, resp.text
+
+    async def journey(self) -> dict[str, Any]:
+        resp = await self.firm.request("GET", f"{self.base}/journey")
+        assert resp.status_code == 200, resp.text
+        out: dict[str, Any] = resp.json()
+        return out
+
+    async def assess(
+        self, *, force: bool = False, policy: str | None = None, expect: int = 202
+    ) -> dict[str, Any]:
+        """Approving the profile starts the assessment (guided journey); on an approved case,
+        start (or re-run) it directly."""
+        if await self.status() != "verified":
+            approved = await self.approve()
+            assert approved.status_code == 201, approved.text
+            assessment_id = approved.headers["X-Assessment-Id"]
+            reused = False
+        else:
+            resp = await self.firm.request(
+                "POST", f"{self.base}/assessments", json={"force": force, "policy_code": policy}
+            )
+            assert resp.status_code == expect, resp.text
+            assessment_id = resp.json()["assessment"]["id"]
+            reused = resp.json()["reused"]
+        got = await self.firm.request("GET", f"{self.base}/assessments/{assessment_id}")
         assert got.status_code == 200, got.text
         out: dict[str, Any] = got.json()
-        out["_reused"] = started["reused"]
+        out["_reused"] = reused
         return out
 
     async def requests(self) -> list[dict[str, Any]]:
@@ -211,6 +261,13 @@ async def test_a_complete_assessment_end_to_end(case: Case, owner: asyncpg.Conne
     assert a["planner"] == "rules"
     assert a["version"] == 1
     assert a["trigger"] == "initial"
+    # It assessed the approved profile, and approving started it (guided journey).
+    case_row = (await case.firm.request("GET", case.base)).json()
+    assert case_row["status"] == "verified"
+    assert a["approval_id"] is not None
+    journey = await case.journey()
+    assert journey["stage"] == "decision"
+    assert journey["next_action"]["label"] == "Next: Review Assessment and Decide"
     result = a["result"]
     assert result["eligibility"]["outcome"] == "potentially_eligible", result["eligibility"][
         "outstanding"
@@ -270,6 +327,12 @@ async def test_missing_statements_are_requested_then_new_evidence_is_reassessed(
     assert len(statements["months"]) == 3
     assert "salary" in statements["reason"]
 
+    # New evidence: reopen the approved case, add the statements, re-approve. Approving starts
+    # the reassessment; the journey says one is needed until then.
+    await case.reopen()
+    journey = await case.journey()
+    assert journey["reassessment_required"] is True
+    assert journey["reassessment_message"] == "New evidence received — Reassessment required."
     await case.statements()
     listed = (await case.firm.request("GET", f"{case.base}/assessments")).json()
     assert listed[0]["stale"] is True  # new evidence since the assessment
@@ -296,34 +359,30 @@ async def test_missing_statements_are_requested_then_new_evidence_is_reassessed(
 # --- 3. conflicting salary ------------------------------------------------------------------------
 
 
-async def test_a_salary_discrepancy_is_investigated_recorded_and_escalated(case: Case) -> None:
+async def test_a_salary_discrepancy_must_be_reviewed_then_is_investigated_with_the_note(
+    case: Case,
+) -> None:
     await case.payslips()
     await case.statements(faults=frozenset({"short_credit"}), fault_at=1)
+    # The profile can't be approved (so no assessment) while a discrepancy is unreviewed.
+    blocked = await case.approve()
+    assert blocked.status_code == 409
+    assert "discrepancies_unacknowledged" in [b["code"] for b in blocked.json()["blockers"]]
+    journey = await case.journey()
+    assert journey["stage"] == "profile"
+    assert any("discrepanc" in r for r in journey["approval_blockers"])
+
+    await case.acknowledge_all("Employer confirmed a one-off £100 salary sacrifice.")
     a = await case.assess()
-    trail = tools(a)
-    assert trail.index("record_finding") < trail.index("escalate_to_broker")
     result = a["result"]
     (disc,) = [d for d in result["discrepancies"] if d["rule_code"] == "SALARY-CREDIT"]
-    assert not disc["acknowledged"]
+    assert disc["acknowledged"]
     assert any("short by £100.00" in x for x in disc["analysis"])
-    assert result["escalations"]
-    assert disc["key"] in result["escalations"][0]["refs"]
-    assert result["findings"][0]["refs"] == [disc["key"]]
-    assert result["eligibility"]["outcome"] == "eligible_subject_to_verification"
-    assert criterion(a, "discrepancies")["status"] == "unknown"
-
-    ack = await case.firm.request(
-        "POST",
-        f"{case.base}/checks/{disc['key']}/acknowledgement",
-        json={"note": "Employer confirmed a one-off £100 salary sacrifice."},
-    )
-    assert ack.status_code == 201, ack.text
-    b = await case.assess()
-    assert any(
-        c["kind"] == "discrepancy_acknowledged" for c in b["result"]["reassessment"]["changes"]
-    )
-    assert criterion(b, "discrepancies")["status"] == "met"
-    assert "escalate_to_broker" not in tools(b)
+    finding = next(f for f in result["findings"] if f["refs"] == [disc["key"]])
+    assert finding["severity"] == "info"
+    assert "salary sacrifice" in finding["detail"]
+    assert criterion(a, "discrepancies")["status"] == "met"
+    assert "escalate_to_broker" not in tools(a)
 
 
 # --- 4, 5. multiple income sources and existing commitments ---------------------------------------
@@ -374,6 +433,7 @@ async def test_multiple_incomes_are_counted_once_and_commitments_reduce_affordab
         frequency="monthly",
     )
 
+    await case.acknowledge_all("The declared salary was last year's; payslips are current.")
     a = await case.assess()
     by_kind = {i["kind"]: i for i in a["result"]["income"]}
     employment, letting = by_kind["employment"], by_kind["property_rental"]
@@ -737,3 +797,127 @@ async def test_an_open_evidence_request_can_be_withdrawn_once_and_is_audited(
         uuid.UUID(case.id),
     )
     assert closed == 1
+
+
+# --- guided journey and workflow integrity --------------------------------------------------------
+
+
+async def test_the_journey_guides_each_stage_and_the_backend_enforces_the_workflow(
+    firm: Firm, worker: Worker, owner: asyncpg.Connection
+) -> None:
+    # 1. A case with no applicant or loan details: details first.
+    bare = await firm.create_case(property_use="residential")
+    base = f"/api/v1/cases/{bare['id']}"
+    j = (await firm.request("GET", f"{base}/journey")).json()
+    assert j["stage"] == "details"
+    assert j["next_action"]["label"] == "Next: Add Applicant Details"
+    assert j["stages"][0]["requirements"]
+    # The assessment is refused on the backend: no approved profile, no loan details.
+    refused = await firm.request("POST", f"{base}/assessments", json={})
+    assert refused.status_code == 409
+    assert refused.json()["type"].endswith("assessment-blocked")
+    codes = {b["code"] for b in refused.json()["blockers"]}
+    assert codes == {"profile_not_approved", "loan_details_missing"}
+
+    # Loan details and the applicant given at creation: on to the payslips.
+    case = await _case(firm, worker)
+    j = await case.journey()
+    assert j["stage"] == "income"
+    assert j["next_action"]["label"] == "Next: Upload Payslips"
+    assert [s["key"] for s in j["stages"]] == [
+        "details",
+        "income",
+        "statements",
+        "profile",
+        "assessment",
+        "decision",
+    ]
+    assert j["stages"][0]["done"] is True
+    assert await case.status() == "draft"
+
+    # The first upload starts evidence collection, in the upload's own audit event.
+    await case.payslips(months=1)
+    assert await case.status() == "collecting_evidence"
+    events = await owner.fetch(
+        "SELECT action, changes FROM audit_events WHERE case_id = $1 "
+        "AND action = 'document.uploaded'",
+        uuid.UUID(case.id),
+    )
+    assert json.loads(events[0]["changes"])["case_status"] == "collecting_evidence"
+    j = await case.journey()
+    assert j["stage"] == "income"
+    assert any("Payslips for" in r for r in j["stages"][1]["requirements"])
+    # Statements aren't "done" just because none are due yet: they're asked for up front.
+    assert j["stages"][2]["done"] is False
+    assert any("bank statements" in r for r in j["stages"][2]["requirements"])
+
+    # More payslips, then statements: the journey moves on by itself.
+    await case.payslips(months=2, start=_start_month(2))
+    j = await case.journey()
+    assert j["stages"][1]["done"] is True
+    assert j["stage"] == "statements"
+    assert j["next_action"]["label"] == "Next: Upload Bank Statements"
+    await case.statements()
+    j = await case.journey()
+    assert j["stage"] == "profile"
+    assert j["next_action"]["label"] == "Next: Review and Approve Profile"
+
+    # Approving moves the case straight to verified (no manual "ready for approval") and
+    # starts the assessment, bound to that approval.
+    a = await case.assess()
+    assert a["status"] == "completed"
+    approvals = (await case.firm.request("GET", f"{case.base}/profile/approvals")).json()
+    assert a["approval_id"] == approvals[0]["id"]
+    j = await case.journey()
+    assert j["stage"] == "decision"
+    assert j["stages"][3]["done"]
+    assert j["stages"][4]["done"]
+
+    # A duplicate run is refused while one is active; the decision completes the journey.
+    accept = await case.firm.request(
+        "POST", f"{case.base}/assessments/{a['id']}/decisions", json={"decision": "accept"}
+    )
+    assert accept.status_code == 201, accept.text
+    j = await case.journey()
+    assert j["stage"] == "complete"
+    assert j["stages"][5]["done"] is True
+    listed = (await case.firm.request("GET", f"{case.base}/assessments")).json()
+    assert listed[0]["decided"] is True
+
+
+async def test_approving_without_loan_details_does_not_start_an_assessment(
+    firm: Firm, worker: Worker, owner: asyncpg.Connection
+) -> None:
+    c = await firm.create_case(property_use="residential")
+    alex = await firm.add_applicant(c["id"])
+    source = await firm.request(
+        "POST",
+        f"/api/v1/cases/{c['id']}/financial/income-sources",
+        json={"applicant_id": alex["id"], "kind": "employment"},
+    )
+    case = Case(firm, worker, c, alex, source.json()["id"])
+    await case.payslips(months=1)
+    approved = await case.approve()
+    assert approved.status_code == 201, approved.text
+    assert "X-Assessment-Id" not in approved.headers
+    j = await case.journey()
+    assert j["profile_approved"] is True
+    assert j["next_action"]["label"] == "Next: Add Loan Details"
+    assert any("loan amount" in m for m in j["assessment_blockers"])
+    assert (
+        await owner.fetchval(
+            "SELECT count(*) FROM assessments WHERE case_id = $1", uuid.UUID(case.id)
+        )
+        == 0
+    )
+
+
+async def test_the_financial_position_shows_verification_and_the_deposit(case: Case) -> None:
+    await case.payslips(months=1)
+    position = (await case.firm.request("GET", f"{case.base}/financial-position")).json()
+    (income,) = position["income"]
+    assert income["verification"] == "extracted"  # read from a reviewed payslip, not confirmed
+    assert position["verified_gross_monthly_minor"] == 0
+    assert position["deposit_minor"] == 10_000_000  # £250,000 less £150,000, as stated
+    assert position["living_costs_basis"] == "policy_default"
+    assert position["policy_code"] == "uk-resi-standard/1"

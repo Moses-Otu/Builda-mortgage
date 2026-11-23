@@ -25,6 +25,8 @@ const ROUTES: Array<[method: string, pattern: string]> = [
   ["POST", `cases/${ID}/applicants`], // add applicant (Phase 2.1, U2); applicant:write
   ["GET", `cases/${ID}/financial/income-sources`],
   ["POST", `cases/${ID}/financial/income-sources`],
+  // The employment start date and basis, completed on the journey's details stage.
+  ["PATCH", `cases/${ID}/financial/income-sources/${ID}`],
   ["GET", `cases/${ID}/financial/observations`],
   // Stage 2-A: the declared basic salary (financial:write; the API checks the measure).
   ["POST", `cases/${ID}/financial/observations`],
@@ -39,6 +41,8 @@ const ROUTES: Array<[method: string, pattern: string]> = [
   // Agentic assessment (2026-11-23): run the agent, read results, broker decisions, evidence
   // requests and the scenario calculator. The API checks every permission.
   ["GET", "assessment/policies"],
+  ["GET", `cases/${ID}/journey`], // the guided journey: stages and the next action
+  ["GET", `cases/${ID}/financial-position`], // consolidated position for the profile review
   ["GET", `cases/${ID}/assessments`],
   ["POST", `cases/${ID}/assessments`], // assessment:run
   ["GET", `cases/${ID}/assessments/${ID}`],

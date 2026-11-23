@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from enum import StrEnum
 
 from sqlalchemy import (
@@ -12,6 +13,7 @@ from sqlalchemy import (
     ForeignKey,
     ForeignKeyConstraint,
     Integer,
+    Numeric,
     String,
     UniqueConstraint,
 )
@@ -110,6 +112,10 @@ class Case(Base):
             "property_value_minor IS NULL OR property_value_minor >= 0", name="property_value"
         ),
         CheckConstraint("loan_amount_minor IS NULL OR loan_amount_minor >= 0", name="loan_amount"),
+        CheckConstraint(
+            "product_rate_percent IS NULL OR product_rate_percent BETWEEN 0 AND 20",
+            name="product_rate_percent",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid7)
@@ -122,6 +128,10 @@ class Case(Base):
     property_value_minor: Mapped[int | None] = mapped_column(BigInteger)
     loan_amount_minor: Mapped[int | None] = mapped_column(BigInteger)
     term_months: Mapped[int | None] = mapped_column(Integer)
+    # Guided journey (0022): the product's rate when known, and the lending policy to assess
+    # against. Both optional; nothing is assumed without saying so.
+    product_rate_percent: Mapped[Decimal | None] = mapped_column(Numeric(6, 3))
+    policy_code: Mapped[str | None] = mapped_column(String(48))
     # Nullable: integrations may create cases. The audit log is the authoritative record of
     # who performed an operation (D11).
     created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))

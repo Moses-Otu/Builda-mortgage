@@ -78,6 +78,7 @@ class AffordabilityInputs:
     loan_amount_minor: int | None
     rate_percent: Decimal
     term_months: int
+    rate_basis: str = "policy_default"  # "product" when the case gives the product's rate
 
     @property
     def deposit_minor(self) -> int | None:
@@ -213,7 +214,13 @@ def assess(policy: Policy, i: AffordabilityInputs) -> AffordabilityResult:
 
     assumptions = [
         f"Policy {policy.code}: {policy.name}.",
-        f"Product rate {i.rate_percent} %; stressed at {stress} % "
+        f"Rate {i.rate_percent} % "
+        + (
+            "(the product's rate, from the case); "
+            if i.rate_basis == "product"
+            else "(the policy's assumed rate: no product rate on the case); "
+        )
+        + f"stressed at {stress} % "
         f"(rate + {policy.stress_margin_percent} %, at least {policy.stress_floor_percent} %).",
         f"Term {i.term_months} months, capital and interest.",
         f"Buffer £{policy.min_monthly_buffer_minor / 100:,.2f} a month; "

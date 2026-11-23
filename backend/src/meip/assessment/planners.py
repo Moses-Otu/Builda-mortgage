@@ -118,19 +118,27 @@ class RulesPlanner:
         ):
             if tool not in d:
                 return PlannedCall(tool, {}, why)
-        for disc in self._open_discrepancies():
+        for disc in d.get("reconcile_financial_evidence", {}).get("discrepancies", []):
             if disc["key"] not in self.findings_recorded:
                 self.findings_recorded.add(disc["key"])
-                detail = " ".join([disc["message"], *disc.get("analysis", [])])[:1000]
+                acknowledged = bool(disc.get("acknowledged"))
+                parts = [disc["message"], *disc.get("analysis", [])]
+                if acknowledged and disc.get("acknowledgement_note"):
+                    parts.append(f"Broker's note: {disc['acknowledgement_note']}")
                 return PlannedCall(
                     "record_finding",
                     {
-                        "title": f"Discrepancy: {disc['title']}"[:200],
-                        "detail": detail,
-                        "severity": "warning",
+                        "title": (
+                            f"{'Reviewed discrepancy' if acknowledged else 'Discrepancy'}: "
+                            f"{disc['title']}"
+                        )[:200],
+                        "detail": " ".join(parts)[:1000],
+                        "severity": "info" if acknowledged else "warning",
                         "refs": [disc["key"]],
                     },
-                    "Record what the evidence comparison shows for this discrepancy.",
+                    "Record what the evidence comparison shows for this discrepancy."
+                    if not acknowledged
+                    else "Note this discrepancy and how the broker explained it.",
                 )
         for tool, why in (
             (

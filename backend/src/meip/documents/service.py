@@ -24,7 +24,9 @@ from sqlalchemy.exc import IntegrityError
 from meip.applicants.models import Applicant, ApplicantStatus
 from meip.audit import service as audit
 from meip.audit.service import AuditAction
+from meip.cases.models import CaseStatus
 from meip.cases.service import get_case, require_editable
+from meip.core.db import utcnow
 from meip.core.errors import (
     BusinessRuleError,
     ConflictError,
@@ -209,7 +211,8 @@ async def store_upload(
 ) -> DocumentOut:
     # The case lock serialises uploads to this case: the duplicate check below cannot race,
     # and nothing is stored for a duplicate.
-    require_editable(await get_case(ctx, case_id, for_update=True))
+    case = await get_case(ctx, case_id, for_update=True)
+    require_editable(case)
     await _check_applicant(ctx, case_id, applicant_id)
     existing = await _existing_document(ctx, case_id, received.sha256)
     if existing is not None:
@@ -259,6 +262,14 @@ async def store_upload(
     # Same transaction as the upload: no job without its document, no document without its job.
     await enqueue_ingest(ctx.session, ctx.tenant_id, case_id, version_id)
 
+    # Guided journey: the first evidence starts evidence collection. Recorded on this upload's
+    # own audit event (one event per mutation), as the case's status change.
+    started_collection = case.status == CaseStatus.DRAFT.value
+    if started_collection:
+        case.status = CaseStatus.COLLECTING_EVIDENCE.value
+        case.status_changed_at = utcnow()
+        await ctx.session.flush()
+
     change_set = audit.creation(
         {
             "document_type": document.document_type,
@@ -274,6 +285,8 @@ async def store_upload(
         ("original_filename", filename),  # erasable personal data
     ):
         change_set.note(name, value)
+    if started_collection:
+        change_set.note("case_status", CaseStatus.COLLECTING_EVIDENCE.value)
     await audit.record(
         ctx.session,
         tenant_id=ctx.tenant_id,

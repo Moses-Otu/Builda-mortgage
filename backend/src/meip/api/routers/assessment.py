@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date
 
 from fastapi import APIRouter, BackgroundTasks, Request, Response, status
 
@@ -12,14 +13,16 @@ from meip.api.deps import (
     CaseReadCtx,
     DocumentReadCtx,
 )
-from meip.assessment import agent, service
+from meip.assessment import agent, journey, service
 from meip.assessment.schemas import (
     AssessmentOut,
     AssessmentSummaryOut,
     DecisionIn,
     DecisionOut,
     EvidenceRequestOut,
+    JourneyOut,
     PolicyOut,
+    PositionOut,
     ScenariosIn,
     ScenariosOut,
     StartedOut,
@@ -44,6 +47,36 @@ async def policies(ctx: CaseReadCtx) -> list[PolicyOut]:
     return service.list_policies()
 
 
+@router.get(
+    "/journey",
+    response_model=JourneyOut,
+    summary="Where the case is in the guided journey",
+    description=(
+        "The six stages (applicant and loan details, income evidence, bank statements, profile "
+        "approval, mortgage assessment, broker decision), each with its outstanding "
+        "requirements; the current stage; and the single next action. Derived from the "
+        "case's state on every read. Evidence requirements adapt to the applicant's income "
+        "and the lending policy."
+    ),
+)
+async def get_journey(case_id: uuid.UUID, ctx: DocumentReadCtx) -> JourneyOut:
+    return await journey.journey(ctx, case_id, date.today())  # noqa: DTZ011
+
+
+@router.get(
+    "/financial-position",
+    response_model=PositionOut,
+    summary="The consolidated financial position the assessment will use",
+    description=(
+        "Each income source with its verification status (verified, extracted, declared, "
+        "missing), what counts under the case's policy, commitments, living costs and the "
+        "deposit. The assessment's own rules, read-only, for the profile review."
+    ),
+)
+async def get_position(case_id: uuid.UUID, ctx: DocumentReadCtx) -> PositionOut:
+    return await service.position(ctx, case_id, date.today())  # noqa: DTZ011
+
+
 @router.post(
     "/assessments",
     response_model=StartedOut,
@@ -58,7 +91,12 @@ async def policies(ctx: CaseReadCtx) -> list[PolicyOut]:
         "completed assessment, that one is returned (`reused`) unless `force` is set. "
         "Needs `assessment:run`." + INDICATIVE
     ),
-    responses={409: {"description": "`assessment-in-progress`"}},
+    responses={
+        409: {
+            "description": "`assessment-in-progress`, or `assessment-blocked`: the profile "
+            "isn't approved or the loan details are missing"
+        }
+    },
 )
 async def start(
     case_id: uuid.UUID,

@@ -371,11 +371,13 @@ def readiness(case: Case, content: ProfileSnapshot) -> Readiness:
     an item without figures, declared-only evidence) never blocks; it may be shown as a
     notice, which never blocks either."""
     blockers: list[Blocker] = []
-    if case.status != CaseStatus.IN_REVIEW.value:
+    # Guided journey: no separate "ready for approval" step. Approval is open while the case
+    # is being worked on; a verified case must be reopened (new evidence), a closed one too.
+    if case.status in {CaseStatus.VERIFIED.value, CaseStatus.CLOSED.value}:
         blockers.append(
             Blocker(
-                code="case_not_in_review",
-                message="Mark the case ready for approval first.",
+                code="case_not_open",
+                message="This case is already verified or is closed: reopen it to approve again.",
             )
         )
     outstanding = [d for d in content.documents if d.status in OUTSTANDING]

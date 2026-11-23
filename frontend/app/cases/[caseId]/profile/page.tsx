@@ -2,10 +2,13 @@
 
 import { Briefcase, ExternalLink, FileText, History, Landmark, ListChecks, UserRound, X } from "lucide-react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { ChecksCard } from "@/components/ChecksCard";
+import { JourneyBar, useJourney } from "@/components/journey/JourneyBar";
 import { Breadcrumbs, Loading, PageContainer, RequireFirm } from "@/components/Page";
+import { PositionSummary } from "@/components/profile/PositionSummary";
 import { ApprovalPanel } from "@/components/profile/ApprovalPanel";
 import { caseTitle, useCaseSummary } from "@/components/useCaseSummary";
 import { Alert } from "@/components/ui/alert";
@@ -67,6 +70,8 @@ function OriginMark({ origin }: { origin: Origin }) {
 
 function ProfilePage({ caseId }: { caseId: string }) {
   const summary = useCaseSummary(caseId);
+  const router = useRouter();
+  const { journey, reload: reloadJourney } = useJourney(caseId);
   const [live, setLive] = useState<Profile | null>(null);
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [viewing, setViewing] = useState<ApprovalDetail | null>(null);
@@ -84,6 +89,7 @@ function ProfilePage({ caseId }: { caseId: string }) {
     }
     setLive(result.data);
     setError(null);
+    void reloadJourney();
     const all = list.ok ? list.data : [];
     setApprovals(all);
     // ?version=n opens that approval's stored snapshot, read-only.
@@ -94,7 +100,7 @@ function ProfilePage({ caseId }: { caseId: string }) {
       if (detail.ok) setViewing(detail.data);
       else setError(problemMessage(detail.status, detail.problem));
     } else setViewing(null);
-  }, [caseId]);
+  }, [caseId, reloadJourney]);
 
   // A stored version renders exactly as approved, with its own approval as the fifth kind.
   const profile: Profile | null = useMemo(() => {
@@ -122,7 +128,7 @@ function ProfilePage({ caseId }: { caseId: string }) {
   const crumbs = [
     { label: "Cases", href: "/" },
     { label: title, href: `/cases/${caseId}` },
-    { label: "Financial profile" },
+    { label: "Review and approve profile" },
   ];
   const figure = profile?.figures.find((f) => f.id === selected) ?? null;
   const nameOf = useCallback(
@@ -148,6 +154,7 @@ function ProfilePage({ caseId }: { caseId: string }) {
   return (
     <PageContainer wide>
       <Breadcrumbs items={crumbs} />
+      <JourneyBar caseId={caseId} journey={journey} showing="profile" />
       <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Financial profile</h1>
@@ -171,9 +178,30 @@ function ProfilePage({ caseId }: { caseId: string }) {
         </div>
       </div>
 
+      {!viewing && (
+        <Alert tone="info" title="Approving the profile is not approving the mortgage">
+          Approval confirms that the evidence and figures below are complete and correct. The mortgage assessment then
+          starts by itself, and the lending recommendation and final decision come after it.
+        </Alert>
+      )}
       {live && (
-        <div className="mb-6">
-          <ApprovalPanel caseId={caseId} profile={live} approvals={approvals} viewing={viewing} onChanged={() => void load()} />
+        <div className="my-6">
+          <ApprovalPanel
+            caseId={caseId}
+            profile={live}
+            approvals={approvals}
+            viewing={viewing}
+            onChanged={() => void load()}
+            onApproved={() => router.push(`/cases/${caseId}/assessment`)}
+          />
+        </div>
+      )}
+      {!viewing && (
+        <div className="mb-6 flex flex-col gap-6">
+          {(live?.checks.findings ?? []).some((f) => f.status === "discrepancy") && (
+            <ChecksCard caseId={caseId} refreshKey={live?.fingerprint ?? ""} />
+          )}
+          <PositionSummary caseId={caseId} refreshKey={live?.fingerprint} />
         </div>
       )}
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_380px]">

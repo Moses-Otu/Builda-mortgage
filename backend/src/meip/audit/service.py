@@ -150,6 +150,8 @@ NON_PERSONAL_FIELDS = frozenset(
         "error_code",
         "request_count",
         "fulfilled_count",
+        "case_status",
+        "auto_started",
     }
 )
 

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import uuid
 
-from fastapi import APIRouter, Depends, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response, status
 
 from meip.api.deps import DocumentReadCtx, ProfileApproveCtx, Store, etag, require_documents_enabled
+from meip.assessment import agent
+from meip.assessment import service as assessment_service
 from meip.profile import approvals, pack, service
 from meip.profile.schemas import ApprovalDetailOut, ApprovalOut, ApprovedOut, ApproveIn, ProfileOut
 
@@ -44,7 +46,11 @@ async def get_profile(case_id: uuid.UUID, ctx: DocumentReadCtx) -> ProfileOut:
         "the profile is rebuilt; any blocker, or a different fingerprint, refuses. Otherwise "
         "the approval is stored (the canonical snapshot text, its hash, and the exact "
         "attestation wording) as the next version, and the case becomes `verified`. Approving "
-        "is the only way to verify a case. Needs `profile:approve` (firm admin, adviser)."
+        "is the only way to verify a case. Approving the profile accepts the reviewed figures "
+        "as supported enough to assess; it does not approve a mortgage. Guided journey: if the "
+        "case has its loan details, the mortgage assessment starts in the same transaction and "
+        "runs in the background (`X-Assessment-Id`). Needs `profile:approve` (firm admin, "
+        "adviser)."
     ),
     responses={
         404: {"description": "Case not found"},
@@ -56,11 +62,28 @@ async def get_profile(case_id: uuid.UUID, ctx: DocumentReadCtx) -> ProfileOut:
     },
 )
 async def approve(
-    case_id: uuid.UUID, body: ApproveIn, ctx: ProfileApproveCtx, response: Response
+    case_id: uuid.UUID,
+    body: ApproveIn,
+    ctx: ProfileApproveCtx,
+    response: Response,
+    request: Request,
+    background: BackgroundTasks,
 ) -> ApprovedOut:
     out = await approvals.approve(ctx, case_id, body)
+    started = await assessment_service.start_after_approval(ctx, case_id)
     await ctx.commit()
     response.headers["ETag"] = etag(out.case_version)
+    if started is not None:
+        response.headers["X-Assessment-Id"] = str(started[0].assessment.id)
+        if started[1]:
+            background.add_task(
+                agent.run,
+                request.app.state.sessionmaker,
+                request.app.state.settings,
+                ctx.tenant_id,
+                started[0].assessment.id,
+                ctx.actor.user_id,
+            )
     return out
 
 

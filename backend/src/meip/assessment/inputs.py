@@ -141,6 +141,8 @@ class AssessmentInputs:
     profile_fingerprint: str
     profile_approved: bool
     notes: list[str] = field(default_factory=list)
+    product_rate_percent: Decimal | None = None
+    approval_id: uuid.UUID | None = None
 
     @property
     def counted_income(self) -> list[IncomeLine]:
@@ -187,6 +189,8 @@ def derive(
     property_value_minor: int | None,
     loan_amount_minor: int | None,
     term_months: int | None,
+    product_rate_percent: Decimal | None = None,
+    approval_id: uuid.UUID | None = None,
     dates_of_birth: dict[uuid.UUID, date | None],
     policy: Policy,
     today: date,
@@ -457,6 +461,8 @@ def derive(
         profile_fingerprint=fingerprint,
         profile_approved=approved,
         notes=[] if term_months else [f"No term on the case: {term} months assumed."],
+        product_rate_percent=product_rate_percent,
+        approval_id=approval_id,
     )
 
 
@@ -479,6 +485,8 @@ async def load(
         property_value_minor=case.property_value_minor,
         loan_amount_minor=case.loan_amount_minor,
         term_months=case.term_months,
+        product_rate_percent=case.product_rate_percent,
+        approval_id=case.approval_id,
         dates_of_birth=dobs,
         policy=policy,
         today=today,

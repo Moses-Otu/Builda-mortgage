@@ -152,6 +152,8 @@ PROBES: list[tuple[str, str, dict[str, Any]]] = [
         {"json": {"note": "Probe"}},
     ),
     # Agentic assessment (real assessment IDs across firms: test_assessment.py).
+    ("GET", "/api/v1/cases/{case_id}/journey", {}),
+    ("GET", "/api/v1/cases/{case_id}/financial-position", {}),
     ("POST", "/api/v1/cases/{case_id}/assessments", {"json": {}}),
     ("GET", "/api/v1/cases/{case_id}/assessments", {}),
     ("GET", "/api/v1/cases/{case_id}/assessments/{assessment_id}", {}),
@@ -251,14 +253,16 @@ async def test_foreign_firm_gets_404(
     owner, ids = victim
     attacker = await make_firm("Attacker Firm")
     path = template.format(**ids)
+    # The first upload already moved the case to evidence collection (version 2).
+    before = (await owner.request("GET", f"/api/v1/cases/{ids['case_id']}")).json()
 
     resp = await attacker.request(method, path, **_fill(kwargs, ids))
     assert resp.status_code == 404, resp.text
 
     # And the victim's data is untouched.
     case = await owner.request("GET", f"/api/v1/cases/{ids['case_id']}")
-    assert case.json()["version"] == 1
-    assert case.json()["status"] == "draft"
+    assert case.json()["version"] == before["version"]
+    assert case.json()["status"] == before["status"] == "collecting_evidence"
     base = f"/api/v1/cases/{ids['case_id']}/financial"
     observations = (await owner.request("GET", f"{base}/observations")).json()
     assert [o["id"] for o in observations] == [ids["observation_id"]]
