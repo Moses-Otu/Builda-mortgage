@@ -2,6 +2,7 @@
 
 import {
   ArrowRight,
+  Bot,
   Briefcase,
   Check,
   FileText,
@@ -170,6 +171,12 @@ function CasePage({ caseId }: { caseId: string }) {
             className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 hover:border-brand-500 hover:text-brand-700"
           >
             <ListChecks className="size-4" /> Financial profile
+          </Link>
+          <Link
+            href={`/cases/${caseId}/assessment`}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-brand-600 px-3 text-sm font-medium text-white shadow-sm hover:bg-brand-700"
+          >
+            <Bot className="size-4" /> Assessment
           </Link>
           <AddApplicantDialog caseId={caseId} onAdded={() => void load()} />
         </div>

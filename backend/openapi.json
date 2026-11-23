@@ -93,6 +93,309 @@
         "title": "AcknowledgementOut",
         "type": "object"
       },
+      "AffordabilityOut": {
+        "properties": {
+          "assumptions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Assumptions",
+            "type": "array"
+          },
+          "binding_constraint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Binding Constraint"
+          },
+          "commitments_monthly_minor": {
+            "title": "Commitments Monthly Minor",
+            "type": "integer"
+          },
+          "deposit_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deposit Minor"
+          },
+          "disposable_after_mortgage_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disposable After Mortgage Minor"
+          },
+          "disposable_before_mortgage_minor": {
+            "title": "Disposable Before Mortgage Minor",
+            "type": "integer"
+          },
+          "dti_percent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dti Percent"
+          },
+          "gross_monthly_income_minor": {
+            "title": "Gross Monthly Income Minor",
+            "type": "integer"
+          },
+          "limits": {
+            "items": {
+              "$ref": "#/components/schemas/LimitOut"
+            },
+            "title": "Limits",
+            "type": "array"
+          },
+          "living_costs_basis": {
+            "title": "Living Costs Basis",
+            "type": "string"
+          },
+          "living_costs_monthly_minor": {
+            "title": "Living Costs Monthly Minor",
+            "type": "integer"
+          },
+          "loan_amount_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loan Amount Minor"
+          },
+          "lti": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lti"
+          },
+          "ltv_percent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ltv Percent"
+          },
+          "max_affordable_monthly_repayment_minor": {
+            "title": "Max Affordable Monthly Repayment Minor",
+            "type": "integer"
+          },
+          "max_mortgage_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Mortgage Minor"
+          },
+          "min_deposit_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Deposit Minor"
+          },
+          "monthly_repayment_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Repayment Minor"
+          },
+          "net_monthly_income_minor": {
+            "title": "Net Monthly Income Minor",
+            "type": "integer"
+          },
+          "policy_code": {
+            "title": "Policy Code",
+            "type": "string"
+          },
+          "property_value_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Property Value Minor"
+          },
+          "rate_percent": {
+            "title": "Rate Percent",
+            "type": "string"
+          },
+          "requested_within_limits": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requested Within Limits"
+          },
+          "risks": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Risks",
+            "type": "array"
+          },
+          "shortfall_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shortfall Minor"
+          },
+          "stressed_monthly_repayment_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stressed Monthly Repayment Minor"
+          },
+          "stressed_rate_percent": {
+            "title": "Stressed Rate Percent",
+            "type": "string"
+          },
+          "term_months": {
+            "title": "Term Months",
+            "type": "integer"
+          },
+          "total_repayable_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Repayable Minor"
+          }
+        },
+        "required": [
+          "policy_code",
+          "gross_monthly_income_minor",
+          "net_monthly_income_minor",
+          "commitments_monthly_minor",
+          "living_costs_monthly_minor",
+          "living_costs_basis",
+          "property_value_minor",
+          "loan_amount_minor",
+          "deposit_minor",
+          "min_deposit_minor",
+          "rate_percent",
+          "stressed_rate_percent",
+          "term_months",
+          "disposable_before_mortgage_minor",
+          "max_affordable_monthly_repayment_minor",
+          "limits",
+          "max_mortgage_minor",
+          "binding_constraint",
+          "monthly_repayment_minor",
+          "stressed_monthly_repayment_minor",
+          "total_repayable_minor",
+          "disposable_after_mortgage_minor",
+          "dti_percent",
+          "ltv_percent",
+          "lti",
+          "requested_within_limits",
+          "shortfall_minor",
+          "risks",
+          "assumptions"
+        ],
+        "title": "AffordabilityOut",
+        "type": "object"
+      },
+      "AgentFindingOut": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Refs",
+            "type": "array"
+          },
+          "severity": {
+            "enum": [
+              "info",
+              "warning",
+              "critical"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "detail",
+          "severity",
+          "refs"
+        ],
+        "title": "AgentFindingOut",
+        "type": "object"
+      },
       "ApplicantCreate": {
         "additionalProperties": false,
         "description": "The first active borrower on a case becomes its primary applicant automatically.",
@@ -850,6 +1153,666 @@
         "title": "ApprovedOut",
         "type": "object"
       },
+      "AssessmentApplicantOut": {
+        "properties": {
+          "age_at_term_end": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age At Term End"
+          },
+          "applicant_id": {
+            "format": "uuid",
+            "title": "Applicant Id",
+            "type": "string"
+          },
+          "is_primary": {
+            "title": "Is Primary",
+            "type": "boolean"
+          },
+          "label": {
+            "examples": [
+              "Applicant 1"
+            ],
+            "title": "Label",
+            "type": "string"
+          },
+          "party_role": {
+            "title": "Party Role",
+            "type": "string"
+          }
+        },
+        "required": [
+          "applicant_id",
+          "label",
+          "party_role",
+          "is_primary",
+          "age_at_term_end"
+        ],
+        "title": "AssessmentApplicantOut",
+        "type": "object"
+      },
+      "AssessmentOut": {
+        "properties": {
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The broker's latest decision, if any",
+            "title": "Decision"
+          },
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/DecisionOut"
+            },
+            "title": "Decisions",
+            "type": "array"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "final_outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "potentially_eligible",
+                  "eligible_subject_to_verification",
+                  "not_currently_eligible",
+                  "insufficient_information"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The broker's override if any, else the assessed outcome",
+            "title": "Final Outcome"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "potentially_eligible",
+                  "eligible_subject_to_verification",
+                  "not_currently_eligible",
+                  "insufficient_information"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "planner": {
+            "title": "Planner",
+            "type": "string"
+          },
+          "policy_code": {
+            "title": "Policy Code",
+            "type": "string"
+          },
+          "previous_assessment_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Assessment Id"
+          },
+          "profile_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Fingerprint"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AssessmentResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "result_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Sha256"
+          },
+          "stale": {
+            "description": "The profile or case inputs changed since this assessment ran: re-run it",
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "started_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started By"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "step_count": {
+            "title": "Step Count",
+            "type": "integer"
+          },
+          "steps": {
+            "items": {
+              "$ref": "#/components/schemas/StepOut"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "trigger": {
+            "title": "Trigger",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "case_id",
+          "version",
+          "status",
+          "outcome",
+          "policy_code",
+          "planner",
+          "model",
+          "trigger",
+          "profile_fingerprint",
+          "previous_assessment_id",
+          "started_by",
+          "created_at",
+          "started_at",
+          "finished_at",
+          "error_code",
+          "step_count",
+          "stale",
+          "final_outcome",
+          "decision",
+          "summary",
+          "result",
+          "result_sha256",
+          "steps",
+          "decisions"
+        ],
+        "title": "AssessmentOut",
+        "type": "object"
+      },
+      "AssessmentResult": {
+        "description": "What a completed assessment concluded. Stored as canonical JSON; its SHA-256 is kept.",
+        "properties": {
+          "affordability": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AffordabilityOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "applicants": {
+            "items": {
+              "$ref": "#/components/schemas/AssessmentApplicantOut"
+            },
+            "title": "Applicants",
+            "type": "array"
+          },
+          "case": {
+            "additionalProperties": true,
+            "title": "Case",
+            "type": "object"
+          },
+          "commitments": {
+            "items": {
+              "$ref": "#/components/schemas/CommitmentLineOut"
+            },
+            "title": "Commitments",
+            "type": "array"
+          },
+          "discrepancies": {
+            "items": {
+              "$ref": "#/components/schemas/DiscrepancyOut"
+            },
+            "title": "Discrepancies",
+            "type": "array"
+          },
+          "eligibility": {
+            "$ref": "#/components/schemas/EligibilityOut"
+          },
+          "escalations": {
+            "items": {
+              "$ref": "#/components/schemas/EscalationOut"
+            },
+            "title": "Escalations",
+            "type": "array"
+          },
+          "evidence_gaps": {
+            "items": {
+              "$ref": "#/components/schemas/GapOut"
+            },
+            "title": "Evidence Gaps",
+            "type": "array"
+          },
+          "evidence_request_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Evidence Request Ids",
+            "type": "array"
+          },
+          "findings": {
+            "items": {
+              "$ref": "#/components/schemas/AgentFindingOut"
+            },
+            "title": "Findings",
+            "type": "array"
+          },
+          "income": {
+            "items": {
+              "$ref": "#/components/schemas/IncomeLineOut"
+            },
+            "title": "Income",
+            "type": "array"
+          },
+          "limitations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Limitations",
+            "type": "array"
+          },
+          "notice": {
+            "default": "Indicative pre-qualification and affordability assessment, computed by versioned rules from the evidence on file and the stated assumptions. It is not a lending decision, a mortgage offer or advice. The broker makes every final decision.",
+            "title": "Notice",
+            "type": "string"
+          },
+          "policy": {
+            "$ref": "#/components/schemas/PolicyOut"
+          },
+          "profile_approved": {
+            "title": "Profile Approved",
+            "type": "boolean"
+          },
+          "profile_fingerprint": {
+            "title": "Profile Fingerprint",
+            "type": "string"
+          },
+          "reassessment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ReassessmentOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recommendations": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Recommendations",
+            "type": "array"
+          },
+          "scenarios": {
+            "items": {
+              "$ref": "#/components/schemas/ScenarioOut"
+            },
+            "title": "Scenarios",
+            "type": "array"
+          },
+          "summary": {
+            "description": "The agent's explanation (text only; no figures of its own)",
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "policy",
+          "case",
+          "applicants",
+          "income",
+          "commitments",
+          "affordability",
+          "eligibility",
+          "scenarios",
+          "evidence_gaps",
+          "discrepancies",
+          "findings",
+          "escalations",
+          "evidence_request_ids",
+          "reassessment",
+          "summary",
+          "recommendations",
+          "limitations",
+          "profile_fingerprint",
+          "profile_approved"
+        ],
+        "title": "AssessmentResult",
+        "type": "object"
+      },
+      "AssessmentSummaryOut": {
+        "properties": {
+          "case_id": {
+            "format": "uuid",
+            "title": "Case Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The broker's latest decision, if any",
+            "title": "Decision"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "final_outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "potentially_eligible",
+                  "eligible_subject_to_verification",
+                  "not_currently_eligible",
+                  "insufficient_information"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The broker's override if any, else the assessed outcome",
+            "title": "Final Outcome"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "potentially_eligible",
+                  "eligible_subject_to_verification",
+                  "not_currently_eligible",
+                  "insufficient_information"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outcome"
+          },
+          "planner": {
+            "title": "Planner",
+            "type": "string"
+          },
+          "policy_code": {
+            "title": "Policy Code",
+            "type": "string"
+          },
+          "previous_assessment_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Assessment Id"
+          },
+          "profile_fingerprint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Fingerprint"
+          },
+          "stale": {
+            "description": "The profile or case inputs changed since this assessment ran: re-run it",
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "started_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started By"
+          },
+          "status": {
+            "enum": [
+              "queued",
+              "running",
+              "completed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "step_count": {
+            "title": "Step Count",
+            "type": "integer"
+          },
+          "trigger": {
+            "title": "Trigger",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "case_id",
+          "version",
+          "status",
+          "outcome",
+          "policy_code",
+          "planner",
+          "model",
+          "trigger",
+          "profile_fingerprint",
+          "previous_assessment_id",
+          "started_by",
+          "created_at",
+          "started_at",
+          "finished_at",
+          "error_code",
+          "step_count",
+          "stale",
+          "final_outcome",
+          "decision"
+        ],
+        "title": "AssessmentSummaryOut",
+        "type": "object"
+      },
       "Attestation": {
         "properties": {
           "text": {
@@ -1562,6 +2525,24 @@
         "title": "CellOut",
         "type": "object"
       },
+      "ChangeOut": {
+        "properties": {
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "detail"
+        ],
+        "title": "ChangeOut",
+        "type": "object"
+      },
       "ChecksOut": {
         "properties": {
           "findings": {
@@ -1692,6 +2673,84 @@
         ],
         "title": "CommitmentKind",
         "type": "string"
+      },
+      "CommitmentLineOut": {
+        "properties": {
+          "basis": {
+            "title": "Basis",
+            "type": "string"
+          },
+          "commitment_id": {
+            "format": "uuid",
+            "title": "Commitment Id",
+            "type": "string"
+          },
+          "counted": {
+            "title": "Counted",
+            "type": "boolean"
+          },
+          "creditor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Creditor"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "monthly_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Minor"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "outstanding_balance_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outstanding Balance Minor"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "commitment_id",
+          "kind",
+          "creditor",
+          "status",
+          "monthly_minor",
+          "basis",
+          "counted",
+          "outstanding_balance_minor",
+          "notes"
+        ],
+        "title": "CommitmentLineOut",
+        "type": "object"
       },
       "CommitmentOut": {
         "properties": {
@@ -2111,6 +3170,60 @@
         "title": "CountValue",
         "type": "object"
       },
+      "CriterionOut": {
+        "properties": {
+          "applicant_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applicant Label"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail",
+            "type": "string"
+          },
+          "evidence": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Evidence",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "met",
+              "not_met",
+              "unknown",
+              "not_assessed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "title",
+          "status",
+          "detail",
+          "applicant_label",
+          "evidence"
+        ],
+        "title": "CriterionOut",
+        "type": "object"
+      },
       "DateValue": {
         "properties": {
           "date": {
@@ -2139,6 +3252,214 @@
         ],
         "title": "Decision",
         "type": "string"
+      },
+      "DecisionIn": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "enum": [
+              "accept",
+              "override",
+              "request_information",
+              "escalate"
+            ],
+            "title": "Decision",
+            "type": "string"
+          },
+          "override_outcome": {
+            "anyOf": [
+              {
+                "enum": [
+                  "potentially_eligible",
+                  "eligible_subject_to_verification",
+                  "not_currently_eligible",
+                  "insufficient_information"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Override Outcome"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "request_document_type": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Document Type"
+          },
+          "request_title": {
+            "anyOf": [
+              {
+                "maxLength": 300,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Title"
+          }
+        },
+        "required": [
+          "decision"
+        ],
+        "title": "DecisionIn",
+        "type": "object"
+      },
+      "DecisionOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "decided_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided By"
+          },
+          "decision": {
+            "title": "Decision",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "override_outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Override Outcome"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "id",
+          "decision",
+          "override_outcome",
+          "reason",
+          "decided_by",
+          "created_at"
+        ],
+        "title": "DecisionOut",
+        "type": "object"
+      },
+      "DiscrepancyOut": {
+        "properties": {
+          "acknowledged": {
+            "title": "Acknowledged",
+            "type": "boolean"
+          },
+          "acknowledgement_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acknowledgement Note"
+          },
+          "amounts": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Amounts",
+            "type": "object"
+          },
+          "analysis": {
+            "description": "Deterministic comparison of the evidence",
+            "items": {
+              "type": "string"
+            },
+            "title": "Analysis",
+            "type": "array"
+          },
+          "applicant_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applicant Label"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "rule_code": {
+            "title": "Rule Code",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "rule_code",
+          "title",
+          "message",
+          "applicant_label",
+          "amounts",
+          "acknowledged",
+          "acknowledgement_note",
+          "analysis"
+        ],
+        "title": "DiscrepancyOut",
+        "type": "object"
       },
       "DiscrepancyRef": {
         "properties": {
@@ -2486,6 +3807,83 @@
         "title": "DurationValue",
         "type": "object"
       },
+      "EligibilityOut": {
+        "properties": {
+          "criteria": {
+            "items": {
+              "$ref": "#/components/schemas/CriterionOut"
+            },
+            "title": "Criteria",
+            "type": "array"
+          },
+          "indicative_range_minor": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "[low, high]: verified income only, and all counted income",
+            "title": "Indicative Range Minor"
+          },
+          "outcome": {
+            "enum": [
+              "potentially_eligible",
+              "eligible_subject_to_verification",
+              "not_currently_eligible",
+              "insufficient_information"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "outcome_label": {
+            "title": "Outcome Label",
+            "type": "string"
+          },
+          "outstanding": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Outstanding",
+            "type": "array"
+          },
+          "policy_code": {
+            "title": "Policy Code",
+            "type": "string"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "unmet": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unmet",
+            "type": "array"
+          }
+        },
+        "required": [
+          "policy_code",
+          "outcome",
+          "outcome_label",
+          "criteria",
+          "reasons",
+          "unmet",
+          "outstanding",
+          "indicative_range_minor"
+        ],
+        "title": "EligibilityOut",
+        "type": "object"
+      },
       "EmploymentBasis": {
         "enum": [
           "permanent",
@@ -2497,6 +3895,27 @@
         ],
         "title": "EmploymentBasis",
         "type": "string"
+      },
+      "EscalationOut": {
+        "properties": {
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Refs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "reason",
+          "refs"
+        ],
+        "title": "EscalationOut",
+        "type": "object"
       },
       "Evidence": {
         "description": "Where a value (or its label) appears: a box on a page, origin top-left.",
@@ -2672,6 +4091,127 @@
           "label"
         ],
         "title": "EvidenceOut",
+        "type": "object"
+      },
+      "EvidenceRequestOut": {
+        "properties": {
+          "applicant_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applicant Id"
+          },
+          "assessment_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assessment Id"
+          },
+          "category": {
+            "title": "Category",
+            "type": "string"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "document_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Type"
+          },
+          "gap_code": {
+            "title": "Gap Code",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "months": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Months"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "requested_by": {
+            "title": "Requested By",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "supported_on_platform": {
+            "title": "Supported On Platform",
+            "type": "boolean"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "assessment_id",
+          "applicant_id",
+          "gap_code",
+          "category",
+          "title",
+          "reason",
+          "document_type",
+          "months",
+          "supported_on_platform",
+          "requested_by",
+          "status",
+          "created_at",
+          "closed_at"
+        ],
+        "title": "EvidenceRequestOut",
         "type": "object"
       },
       "ExpenditureCategory": {
@@ -4116,6 +5656,93 @@
         "title": "Frequency",
         "type": "string"
       },
+      "GapOut": {
+        "properties": {
+          "affects_outcome": {
+            "title": "Affects Outcome",
+            "type": "boolean"
+          },
+          "applicant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applicant Id"
+          },
+          "applicant_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applicant Label"
+          },
+          "category": {
+            "enum": [
+              "document",
+              "information",
+              "action"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "document_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Document Type"
+          },
+          "months": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Months",
+            "type": "array"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "supported_on_platform": {
+            "title": "Supported On Platform",
+            "type": "boolean"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "category",
+          "title",
+          "reason",
+          "applicant_id",
+          "applicant_label",
+          "document_type",
+          "months",
+          "supported_on_platform",
+          "affects_outcome"
+        ],
+        "title": "GapOut",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -4196,6 +5823,179 @@
         ],
         "title": "IncomeKind",
         "type": "string"
+      },
+      "IncomeLineOut": {
+        "properties": {
+          "applicant_label": {
+            "title": "Applicant Label",
+            "type": "string"
+          },
+          "basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis"
+          },
+          "corroborated_periods": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Corroborated Periods",
+            "type": "array"
+          },
+          "counted": {
+            "title": "Counted",
+            "type": "boolean"
+          },
+          "declared_gross_monthly_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Declared Gross Monthly Minor"
+          },
+          "figure_ids": {
+            "items": {
+              "format": "uuid",
+              "type": "string"
+            },
+            "title": "Figure Ids",
+            "type": "array"
+          },
+          "gross_monthly_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gross Monthly Minor"
+          },
+          "income_source_id": {
+            "format": "uuid",
+            "title": "Income Source Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "months_in_employment": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Months In Employment"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "net_monthly_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Net Monthly Minor"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "periods_evidenced": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Periods Evidenced",
+            "type": "array"
+          },
+          "qualifying_gross_monthly_minor": {
+            "title": "Qualifying Gross Monthly Minor",
+            "type": "integer"
+          },
+          "qualifying_net_monthly_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Qualifying Net Monthly Minor"
+          },
+          "recurring": {
+            "title": "Recurring",
+            "type": "boolean"
+          },
+          "variable_monthly_minor": {
+            "title": "Variable Monthly Minor",
+            "type": "integer"
+          },
+          "verification": {
+            "description": "verified: reviewed documents and an exact salary credit; extracted: reviewed documents only; declared: stated only; missing: no figures",
+            "enum": [
+              "verified",
+              "extracted",
+              "declared",
+              "missing"
+            ],
+            "title": "Verification",
+            "type": "string"
+          }
+        },
+        "required": [
+          "income_source_id",
+          "applicant_label",
+          "kind",
+          "name",
+          "basis",
+          "verification",
+          "recurring",
+          "periods_evidenced",
+          "corroborated_periods",
+          "gross_monthly_minor",
+          "net_monthly_minor",
+          "variable_monthly_minor",
+          "qualifying_gross_monthly_minor",
+          "qualifying_net_monthly_minor",
+          "counted",
+          "declared_gross_monthly_minor",
+          "months_in_employment",
+          "figure_ids",
+          "notes"
+        ],
+        "title": "IncomeLineOut",
+        "type": "object"
       },
       "IncomeSourceCreate": {
         "additionalProperties": false,
@@ -4691,6 +6491,29 @@
         ],
         "title": "LiabilityRole",
         "type": "string"
+      },
+      "LimitOut": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "explanation": {
+            "title": "Explanation",
+            "type": "string"
+          },
+          "max_loan_minor": {
+            "title": "Max Loan Minor",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "code",
+          "max_loan_minor",
+          "explanation"
+        ],
+        "title": "LimitOut",
+        "type": "object"
       },
       "MeOut": {
         "properties": {
@@ -5778,6 +7601,35 @@
         "title": "PercentValue",
         "type": "object"
       },
+      "PolicyOut": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "description": {
+            "title": "Description",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "title": "Parameters",
+            "type": "object"
+          }
+        },
+        "required": [
+          "code",
+          "name",
+          "description",
+          "parameters"
+        ],
+        "title": "PolicyOut",
+        "type": "object"
+      },
       "ProfileApplicant": {
         "description": "Only what the profile needs: no date of birth or contact details.",
         "properties": {
@@ -6124,6 +7976,54 @@
         "title": "Readiness",
         "type": "object"
       },
+      "ReassessmentOut": {
+        "properties": {
+          "affected": {
+            "description": "Earlier findings or results these changes affect",
+            "items": {
+              "type": "string"
+            },
+            "title": "Affected",
+            "type": "array"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/ChangeOut"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "previous_assessment_id": {
+            "format": "uuid",
+            "title": "Previous Assessment Id",
+            "type": "string"
+          },
+          "previous_outcome": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Previous Outcome"
+          },
+          "previous_version": {
+            "title": "Previous Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "previous_assessment_id",
+          "previous_version",
+          "previous_outcome",
+          "changes",
+          "affected"
+        ],
+        "title": "ReassessmentOut",
+        "type": "object"
+      },
       "RelationshipOut": {
         "description": "For a salary credit: whose payslip, which account the money arrived in (sole or joint,\nand its holders), who the statement was filed under, and the matched row.",
         "properties": {
@@ -6405,6 +8305,328 @@
         "title": "ScanStatus",
         "type": "string"
       },
+      "ScenarioIn": {
+        "additionalProperties": false,
+        "properties": {
+          "deposit_minor": {
+            "anyOf": [
+              {
+                "maximum": 10000000000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deposit Minor"
+          },
+          "include_unverified_income": {
+            "default": false,
+            "description": "Also count income excluded as unverified, as if it were verified",
+            "title": "Include Unverified Income",
+            "type": "boolean"
+          },
+          "label": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Label",
+            "type": "string"
+          },
+          "loan_amount_minor": {
+            "anyOf": [
+              {
+                "maximum": 10000000000.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loan Amount Minor"
+          },
+          "rate_percent": {
+            "anyOf": [
+              {
+                "maximum": 20.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rate Percent"
+          },
+          "term_months": {
+            "anyOf": [
+              {
+                "maximum": 480.0,
+                "minimum": 12.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term Months"
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "title": "ScenarioIn",
+        "type": "object"
+      },
+      "ScenarioOut": {
+        "properties": {
+          "binding_constraint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Binding Constraint"
+          },
+          "changed": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Changed",
+            "type": "array"
+          },
+          "deposit_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deposit Minor"
+          },
+          "disposable_after_mortgage_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disposable After Mortgage Minor"
+          },
+          "dti_percent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dti Percent"
+          },
+          "hypothetical": {
+            "const": true,
+            "default": true,
+            "title": "Hypothetical",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "loan_amount_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loan Amount Minor"
+          },
+          "lti": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lti"
+          },
+          "ltv_percent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ltv Percent"
+          },
+          "max_mortgage_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Mortgage Minor"
+          },
+          "monthly_repayment_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Monthly Repayment Minor"
+          },
+          "rate_percent": {
+            "title": "Rate Percent",
+            "type": "string"
+          },
+          "shortfall_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shortfall Minor"
+          },
+          "stressed_monthly_repayment_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stressed Monthly Repayment Minor"
+          },
+          "term_months": {
+            "title": "Term Months",
+            "type": "integer"
+          },
+          "total_repayable_minor": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Repayable Minor"
+          },
+          "within_limits": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Within Limits"
+          }
+        },
+        "required": [
+          "label",
+          "changed",
+          "loan_amount_minor",
+          "deposit_minor",
+          "term_months",
+          "rate_percent",
+          "monthly_repayment_minor",
+          "stressed_monthly_repayment_minor",
+          "total_repayable_minor",
+          "max_mortgage_minor",
+          "binding_constraint",
+          "ltv_percent",
+          "lti",
+          "dti_percent",
+          "within_limits",
+          "shortfall_minor",
+          "disposable_after_mortgage_minor"
+        ],
+        "title": "ScenarioOut",
+        "type": "object"
+      },
+      "ScenariosIn": {
+        "additionalProperties": false,
+        "properties": {
+          "policy_code": {
+            "default": "uk-resi-standard/1",
+            "title": "Policy Code",
+            "type": "string"
+          },
+          "scenarios": {
+            "items": {
+              "$ref": "#/components/schemas/ScenarioIn"
+            },
+            "maxItems": 8,
+            "title": "Scenarios",
+            "type": "array"
+          }
+        },
+        "title": "ScenariosIn",
+        "type": "object"
+      },
+      "ScenariosOut": {
+        "properties": {
+          "base": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AffordabilityOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "notice": {
+            "default": "Indicative pre-qualification and affordability assessment, computed by versioned rules from the evidence on file and the stated assumptions. It is not a lending decision, a mortgage offer or advice. The broker makes every final decision.",
+            "title": "Notice",
+            "type": "string"
+          },
+          "scenarios": {
+            "items": {
+              "$ref": "#/components/schemas/ScenarioOut"
+            },
+            "title": "Scenarios",
+            "type": "array"
+          }
+        },
+        "required": [
+          "base",
+          "scenarios"
+        ],
+        "title": "ScenariosOut",
+        "type": "object"
+      },
       "ShareBasis": {
         "enum": [
           "declared",
@@ -6475,6 +8697,148 @@
         ],
         "title": "SourceKind",
         "type": "string"
+      },
+      "StartIn": {
+        "additionalProperties": false,
+        "properties": {
+          "force": {
+            "default": false,
+            "description": "Run again even if nothing changed since the latest completed assessment",
+            "title": "Force",
+            "type": "boolean"
+          },
+          "policy_code": {
+            "default": "uk-resi-standard/1",
+            "examples": [
+              "uk-resi-standard/1"
+            ],
+            "title": "Policy Code",
+            "type": "string"
+          }
+        },
+        "title": "StartIn",
+        "type": "object"
+      },
+      "StartedOut": {
+        "properties": {
+          "assessment": {
+            "$ref": "#/components/schemas/AssessmentSummaryOut"
+          },
+          "reused": {
+            "description": "Nothing changed: the latest completed assessment is returned",
+            "title": "Reused",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "assessment",
+          "reused"
+        ],
+        "title": "StartedOut",
+        "type": "object"
+      },
+      "StepOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "input": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "output": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output"
+          },
+          "rationale": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rationale"
+          },
+          "seq": {
+            "title": "Seq",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "seq",
+          "kind",
+          "tool",
+          "rationale",
+          "input",
+          "output",
+          "status",
+          "error_code",
+          "duration_ms",
+          "created_at"
+        ],
+        "title": "StepOut",
+        "type": "object"
       },
       "SubjectKind": {
         "enum": [
@@ -6835,6 +9199,61 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/assessment/policies": {
+      "get": {
+        "description": "Each policy's version code and every parameter its figures are computed from.",
+        "operationId": "policies_api_v1_assessment_policies_get",
+        "parameters": [
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PolicyOut"
+                  },
+                  "title": "Response Policies Api V1 Assessment Policies Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Lending policies the assessment can use",
+        "tags": [
+          "assessment"
+        ]
+      }
+    },
     "/api/v1/auth/login": {
       "post": {
         "description": "Returns a short-lived bearer token. Five failed attempts lock the account for 15 minutes. A temporary password gives a token that can only set a new password (`POST /api/v1/auth/password`). The same message is returned for an unknown email and a wrong password.",
@@ -7227,6 +9646,77 @@
         "summary": "Update case details",
         "tags": [
           "cases"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/affordability/scenarios": {
+      "post": {
+        "description": "The deterministic affordability engine on the case's current figures, with each scenario changing only the assumptions given. Read-only. Indicative only: not a lending decision or advice; the broker makes the final decision.",
+        "operationId": "scenarios_api_v1_cases__case_id__affordability_scenarios_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScenariosIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScenariosOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Compare mortgage scenarios",
+        "tags": [
+          "assessment"
         ]
       }
     },
@@ -7736,6 +10226,301 @@
         "summary": "Remove an applicant from the case",
         "tags": [
           "applicants"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/assessments": {
+      "get": {
+        "description": "Newest first. `stale` means the profile or case inputs changed since it ran.",
+        "operationId": "list_assessments_api_v1_cases__case_id__assessments_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AssessmentSummaryOut"
+                  },
+                  "title": "Response List Assessments Api V1 Cases  Case Id  Assessments Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List the case's assessments",
+        "tags": [
+          "assessment"
+        ]
+      },
+      "post": {
+        "description": "Queues an assessment and runs the agent in the background: it establishes the case context, inspects the profile and evidence, reconciles discrepancies, identifies and requests missing evidence, runs the deterministic affordability and pre-qualification rules, explores scenarios, escalates to the broker and writes an evidence-backed report. Poll `GET \u2026/assessments/{id}` for its steps. If nothing changed since the latest completed assessment, that one is returned (`reused`) unless `force` is set. Needs `assessment:run`. Indicative only: not a lending decision or advice; the broker makes the final decision.",
+        "operationId": "start_api_v1_cases__case_id__assessments_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartedOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "`assessment-in-progress`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Start the assessment agent",
+        "tags": [
+          "assessment"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/assessments/{assessment_id}": {
+      "get": {
+        "description": "The agent's steps (each tool call with its input, output and the short reason it gave), the result (affordability, pre-qualification, scenarios, evidence gaps, discrepancies, findings, escalations, what changed since the previous assessment) and the broker's decisions. Indicative only: not a lending decision or advice; the broker makes the final decision.",
+        "operationId": "get_assessment_api_v1_cases__case_id__assessments__assessment_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "assessment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assessment Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssessmentOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Case or assessment not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get an assessment with its steps and result",
+        "tags": [
+          "assessment"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/assessments/{assessment_id}/decisions": {
+      "post": {
+        "description": "`accept`, `override` (with `override_outcome` and a documented `reason`), `request_information` (opens an evidence request) or `escalate`. Audited. Needs `assessment:decide` (firm admin, adviser).",
+        "operationId": "decide_api_v1_cases__case_id__assessments__assessment_id__decisions_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "assessment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Assessment Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DecisionIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DecisionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "`assessment-not-finished`"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Record the broker's decision on an assessment",
+        "tags": [
+          "assessment"
         ]
       }
     },
@@ -8720,6 +11505,141 @@
         "summary": "Audit history for a case (oldest first)",
         "tags": [
           "cases"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/evidence-requests": {
+      "get": {
+        "description": "Open requests first. Raised by the agent for identified gaps, or by the broker.",
+        "operationId": "list_requests_api_v1_cases__case_id__evidence_requests_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EvidenceRequestOut"
+                  },
+                  "title": "Response List Requests Api V1 Cases  Case Id  Evidence Requests Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List evidence requests",
+        "tags": [
+          "assessment"
+        ]
+      }
+    },
+    "/api/v1/cases/{case_id}/evidence-requests/{request_id}/withdrawal": {
+      "post": {
+        "operationId": "withdraw_request_api_v1_cases__case_id__evidence_requests__request_id__withdrawal_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "case_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Case Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "request_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Request Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "The firm this request acts within",
+            "in": "header",
+            "name": "X-Tenant-ID",
+            "required": true,
+            "schema": {
+              "description": "The firm this request acts within",
+              "format": "uuid",
+              "title": "X-Tenant-Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvidenceRequestOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Withdraw an open evidence request",
+        "tags": [
+          "assessment"
         ]
       }
     },

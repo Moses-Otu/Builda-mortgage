@@ -79,7 +79,15 @@ class TestPermissions:
             "document:read",
             "document:write",
             "profile:approve",
+            "assessment:run",
+            "assessment:decide",
         }
+
+    def test_assessment_decisions_are_for_advisers_and_firm_admins_only(self) -> None:
+        decide = {r for r, p in ROLE_PERMISSIONS.items() if Permission.ASSESSMENT_DECIDE in p}
+        run = {r for r, p in ROLE_PERMISSIONS.items() if Permission.ASSESSMENT_RUN in p}
+        assert decide == {Role.FIRM_ADMIN, Role.ADVISER}
+        assert run == {Role.FIRM_ADMIN, Role.ADVISER, Role.CASE_ADMINISTRATOR}
 
     def test_profile_approval_is_for_advisers_and_firm_admins_only(self) -> None:
         holders = {

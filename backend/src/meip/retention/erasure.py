@@ -38,6 +38,11 @@ from meip.tenancy.context import Actor
 
 # Children before parents. Every table with a case_id column must appear (a test checks).
 CASE_TABLES: tuple[str, ...] = (
+    # Agentic assessment (2026-11-23): children before their assessments.
+    "assessment_decisions",
+    "evidence_requests",
+    "assessment_steps",
+    "assessments",
     "check_acknowledgements",
     "profile_approvals",
     "financial_observations",
@@ -60,6 +65,7 @@ CASE_TABLES: tuple[str, ...] = (
 )
 # Tables whose user triggers refuse deletes (immutability, frozen items, supersession).
 TRIGGERED: tuple[str, ...] = (
+    "assessments",
     "financial_observations",
     "document_versions",
     "commitment_parties",

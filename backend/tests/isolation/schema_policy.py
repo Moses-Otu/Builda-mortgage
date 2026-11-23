@@ -69,6 +69,13 @@ TENANT_SCOPED: dict[str, frozenset[str]] = {
     # Acknowledgements of reconciliation discrepancies: written once, never changed by the
     # application (the owner role can erase them under the retention policy).
     "check_acknowledgements": frozenset({"SELECT", "INSERT"}),
+    # Agentic assessment: runs are updated only through column grants and are final once
+    # finished (trigger); steps and broker decisions are insert-only; evidence requests are
+    # only ever closed (column grants).
+    "assessments": frozenset({"SELECT", "INSERT"}),
+    "assessment_steps": frozenset({"SELECT", "INSERT"}),
+    "assessment_decisions": frozenset({"SELECT", "INSERT"}),
+    "evidence_requests": frozenset({"SELECT", "INSERT"}),
 }
 
 # table -> columns the runtime role may UPDATE through column-level grants only.
@@ -76,6 +83,24 @@ COLUMN_UPDATES: dict[str, frozenset[str]] = {
     "financial_observations": frozenset({"retired_at", "retired_reason"}),
     # Processing outcome only; uploads never change.
     "documents": frozenset({"status", "failure_code", "page_count", "updated_at", "version"}),
+    "assessments": frozenset(
+        {
+            "status",
+            "outcome",
+            "planner",
+            "model",
+            "profile_fingerprint",
+            "inputs_sha256",
+            "started_at",
+            "finished_at",
+            "error_code",
+            "summary",
+            "result",
+            "result_sha256",
+            "step_count",
+        }
+    ),
+    "evidence_requests": frozenset({"status", "closed_at", "closed_by_assessment_id"}),
 }
 
 # Platform reference data: no tenant_id, no RLS, read-only for the runtime role, changed
@@ -129,6 +154,7 @@ EXPECTED_TRIGGERS: dict[str, str] = {
     "expenditure_items_frozen_after_withdrawal": "expenditure_items",
     "measure_definitions_append_only": "measure_definitions",
     "measure_qualifiers_append_only": "measure_qualifiers",
+    "assessments_final": "assessments",
 }
 
 # table -> (policy, runtime privileges)

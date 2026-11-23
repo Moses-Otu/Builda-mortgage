@@ -61,6 +61,14 @@ NOT_FIRM_AUDITED: dict[Route, str] = {
     # Password mode only (404 in this suite's dev mode); its audit event is asserted in
     # test_password_auth.py.
     ("POST", "/api/v1/members/{membership_id}/password-reset"): "password mode only",
+    # Agentic assessment: these need a finished assessment or an open request, or start the
+    # agent, whose own system-actor events follow. Their audit events are asserted in
+    # test_assessment.py (started, completed, evidence requested, decided, request closed).
+    ("POST", _C + "/assessments"): "assessment.started, then the agent's own events",
+    ("POST", _C + "/assessments/{assessment_id}/decisions"): "assessment.decided (test_assessment)",
+    ("POST", _C + "/evidence-requests/{request_id}/withdrawal"): "evidence.request_closed",
+    # Read-only: the deterministic calculator changes nothing.
+    ("POST", _C + "/affordability/scenarios"): "read-only calculation",
 }
 
 

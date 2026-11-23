@@ -151,6 +151,18 @@ PROBES: list[tuple[str, str, dict[str, Any]]] = [
         "/api/v1/cases/{case_id}/checks/{finding_key}/acknowledgement",
         {"json": {"note": "Probe"}},
     ),
+    # Agentic assessment (real assessment IDs across firms: test_assessment.py).
+    ("POST", "/api/v1/cases/{case_id}/assessments", {"json": {}}),
+    ("GET", "/api/v1/cases/{case_id}/assessments", {}),
+    ("GET", "/api/v1/cases/{case_id}/assessments/{assessment_id}", {}),
+    (
+        "POST",
+        "/api/v1/cases/{case_id}/assessments/{assessment_id}/decisions",
+        {"json": {"decision": "accept"}},
+    ),
+    ("GET", "/api/v1/cases/{case_id}/evidence-requests", {}),
+    ("POST", "/api/v1/cases/{case_id}/evidence-requests/{request_id}/withdrawal", {}),
+    ("POST", "/api/v1/cases/{case_id}/affordability/scenarios", {"json": {}}),
     # Not tenant-scoped, but an attacker must not be able to accept someone else's invitation.
     ("POST", "/api/v1/me/invitations/{membership_id}/accept", {}),
     ("POST", "/api/v1/members/{membership_id}/password-reset", {}),
@@ -212,6 +224,8 @@ async def victim(make_firm: MakeFirm) -> tuple[Firm, dict[str, str]]:
         "finding_key": "a" * 64,
         "account_id": "00000000-0000-7000-8000-00000000000b",
         "approval_id": "00000000-0000-7000-8000-00000000000c",
+        "assessment_id": "00000000-0000-7000-8000-00000000000d",
+        "request_id": "00000000-0000-7000-8000-00000000000e",
     }
     return firm, ids
 

@@ -6,7 +6,7 @@ Status: **Draft for agreement** · Date: 2026-11-17 · Applies from Phase 1
 
 A multi-tenant B2B SaaS that turns borrower financial documents into a **reconciled, source-linked, broker-approved borrower financial profile** for a mortgage case.
 
-It is **not** an affordability/sourcing engine, a lending decision engine, or an advice tool. Any affordability output is an *indicative scenario* computed from transparent, versioned, broker-configurable assumptions.
+It is **not** a sourcing engine, a lending decision engine, or an advice tool. Since 2026-11-23 it includes an **agentic pre-qualification and affordability assessment** ([plan](phases/AGENTIC-ASSESSMENT-PLAN.md)): an agent orchestrates the assessment through tools, while every figure, ratio and outcome is computed by deterministic, versioned rules from visible assumptions. Its outputs are **indicative**, and the broker makes every final decision.
 
 The differentiator is **cross-document reconciliation with explainable provenance**, not OCR.
 
@@ -22,7 +22,8 @@ The differentiator is **cross-document reconciliation with explainable provenanc
 | Confidence ≠ proof | `confidence` is a separate field from `verification_status`; status changes only through deterministic corroboration rules or a broker action. |
 | Verification status on every important fact | Enum: `extracted` → `single_source` / `corroborated` / `conflicting` → `broker_confirmed` / `broker_corrected` / `rejected`. |
 | Broker responsibility | Approval is an explicit, attributable, audited act on an immutable snapshot of the profile. |
-| No automated advice/decisions | No lender selection, no pass/fail outputs; affordability labelled "indicative" in API schema and UI. |
+| No automated advice/decisions | No lender selection and **no final lending decisions**. The pre-qualification outcome and affordability figures are **indicative**, labelled so in the API schema and the UI, computed by versioned policies (`uk-resi-standard/1`, …) and always subject to the broker's decision (accept, override with a reason, or escalate). |
+| Agent bounded by tools | The assessment agent chooses actions and writes explanations; it acts as a system actor with an explicit capability allowlist, calls only registered tools with validated schemas, never computes figures, and cannot set an outcome. Every tool call is recorded. |
 | Versioned, auditable rules | Rule sets and extraction schemas are code-defined, semver'd, and their version is recorded on every run. Runs are reproducible from (inputs snapshot, version). |
 | No training on customer data | Only providers whose contractual terms exclude training/retention are allowed; enforced in a provider allow-list in config; documented in DPIA. |
 | Future integrations | Export layer builds from a stable, versioned canonical JSON schema; transactional outbox for events/webhooks. |
@@ -73,7 +74,7 @@ Single deployable backend codebase (modular monolith) with API and worker proces
 | 8 | `transactions` | bank transaction parsing & categorisation | 5 |
 | 9 | `liabilities` | commitments from credit reports + recurring bank outgoings | 6 |
 | 10 | `reconciliation` | cross-document rules, discrepancies, tolerances | 7 |
-| 11 | `rules` | versioned rule sets, indicative affordability calc | 8 |
+| 11 | `assessment` | the assessment agent and its tools; versioned lending policies; deterministic affordability, pre-qualification and evidence-gap rules; assessment state, evidence requests and broker decisions (replaces the planned `rules` module) | Agentic assessment (2026-11-23) |
 | 12 | `profile` | the financial profile and provenance (3-A), approval snapshots (3-B), evidence pack (3-C); replaces the planned `review` and `evidence` modules | Stage 3 |
 | 15 | `integrations` | canonical export schema, outbox, webhooks, CRM adapters | 11 |
 

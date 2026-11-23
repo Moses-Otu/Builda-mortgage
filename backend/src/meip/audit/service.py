@@ -135,6 +135,21 @@ NON_PERSONAL_FIELDS = frozenset(
         "accept_count",
         "correct_count",
         "reject_count",
+        # agentic assessment: versions, codes and counts (reasons and summaries are erasable)
+        "assessment_id",
+        "assessment_version",
+        "policy_code",
+        "planner",
+        "outcome",
+        "override_outcome",
+        "decision",
+        "gap_code",
+        "step_count",
+        "trigger",
+        "result_sha256",
+        "error_code",
+        "request_count",
+        "fulfilled_count",
     }
 )
 
@@ -171,6 +186,13 @@ class AuditAction(StrEnum):
     EVIDENCE_PACK_DOWNLOADED = "evidence_pack.downloaded"
     DOCUMENT_DOWNLOADED = "document.downloaded"
     CASE_ERASED = "case.erased"
+    ASSESSMENT_STARTED = "assessment.started"
+    ASSESSMENT_COMPLETED = "assessment.completed"
+    ASSESSMENT_FAILED = "assessment.failed"
+    ASSESSMENT_ESCALATED = "assessment.escalated"
+    ASSESSMENT_DECIDED = "assessment.decided"
+    EVIDENCE_REQUESTED = "evidence.requested"
+    EVIDENCE_REQUEST_CLOSED = "evidence.request_closed"
 
 
 @dataclass

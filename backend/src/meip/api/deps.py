@@ -175,3 +175,5 @@ AuditReadCtx = Annotated[OperationContext, Depends(requires(Permission.AUDIT_REA
 DocumentReadCtx = Annotated[OperationContext, Depends(requires(Permission.DOCUMENT_READ))]
 DocumentWriteCtx = Annotated[OperationContext, Depends(requires(Permission.DOCUMENT_WRITE))]
 ProfileApproveCtx = Annotated[OperationContext, Depends(requires(Permission.PROFILE_APPROVE))]
+AssessmentRunCtx = Annotated[OperationContext, Depends(requires(Permission.ASSESSMENT_RUN))]
+AssessmentDecideCtx = Annotated[OperationContext, Depends(requires(Permission.ASSESSMENT_DECIDE))]

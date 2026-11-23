@@ -28,6 +28,10 @@ class Permission(StrEnum):
     DOCUMENT_PROCESS = "document:process"
     # Stage 3-B: attest the financial profile (decision S3: advisers and firm admins).
     PROFILE_APPROVE = "profile:approve"
+    # Agentic assessment: run the agent (case work), and decide on its result (the same people
+    # who approve profiles: advisers and firm admins).
+    ASSESSMENT_RUN = "assessment:run"
+    ASSESSMENT_DECIDE = "assessment:decide"
 
 
 _READ = {
@@ -43,6 +47,7 @@ _CASE_WORK = {
     Permission.APPLICANT_WRITE,
     Permission.FINANCIAL_WRITE,
     Permission.DOCUMENT_WRITE,
+    Permission.ASSESSMENT_RUN,
 }
 
 # Capabilities only system actors (background workers) may hold.
@@ -60,12 +65,18 @@ ROLE_PERMISSIONS: dict[Role, frozenset[Permission]] = {
             Permission.MEMBER_MANAGE,
             Permission.FIRM_SETTINGS_MANAGE,
             Permission.PROFILE_APPROVE,
+            Permission.ASSESSMENT_DECIDE,
         }
     ),
     Role.ADVISER: frozenset(
         _READ
         | _CASE_WORK
-        | {Permission.CASE_CLOSE, Permission.CASE_ASSIGN_ADVISER, Permission.PROFILE_APPROVE}
+        | {
+            Permission.CASE_CLOSE,
+            Permission.CASE_ASSIGN_ADVISER,
+            Permission.PROFILE_APPROVE,
+            Permission.ASSESSMENT_DECIDE,
+        }
     ),
     Role.CASE_ADMINISTRATOR: frozenset(_READ | _CASE_WORK),
     Role.READ_ONLY: frozenset(_READ),

@@ -66,6 +66,20 @@ ALLOWED["profile"] = {
     "financial",
     "reconciliation",
 }
+# assessment (agentic assessment, 2026-11-23) reads the profile (and through it everything the
+# profile reads) and the checks; it writes only its own tables. Only the API imports it.
+ALLOWED["assessment"] = {
+    "core",
+    "assessment",
+    "applicants",
+    "cases",
+    "audit",
+    "tenancy",
+    "documents",
+    "financial",
+    "reconciliation",
+    "profile",
+}
 # retention (Phase 4): owner-run erasure, used only by the operator CLI.
 ALLOWED["retention"] = {"core", "retention", "audit", "tenancy", "documents"}
 HTTP_FRAMEWORKS = {"fastapi", "starlette"}

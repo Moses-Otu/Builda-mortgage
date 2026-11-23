@@ -66,6 +66,7 @@ Also get your OpenAI API key. Keep these out of chat, email and the repository.
    MEIP_EXTRACTION_PROVIDER=openai
    MEIP_OPENAI_API_KEY=<your OpenAI key>
    MEIP_OPENAI_MODEL=gpt-4.1
+   MEIP_AGENT_PLANNER=openai
    ```
    A multi-line PEM pastes as is. If it ends up on one line with `\n` in it, that works too.
 6. **Settings → Networking → Generate Domain.** Note the URL, for example

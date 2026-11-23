@@ -149,6 +149,17 @@ class Settings(BaseSettings):
     openai_base_url: str = "https://api.openai.com/v1"
     openai_timeout_seconds: float = Field(default=120.0, gt=0)
     openai_max_attempts: int = Field(default=3, ge=1, le=6)
+    agent_planner: str = Field(
+        default="rules",
+        pattern="^(rules|openai)$",
+        description="Assessment agent planner: 'openai' (the model chooses tools; needs "
+        "MEIP_OPENAI_API_KEY) or 'rules' (deterministic). 'openai' falls back to 'rules' when "
+        "the model is unavailable.",
+    )
+    agent_model: str | None = Field(
+        default=None, description="Model for the assessment agent (default: MEIP_OPENAI_MODEL)"
+    )
+    agent_max_steps: int = Field(default=30, ge=5, le=60)
     bank_statements_enabled: bool = Field(
         default=False,
         description=(

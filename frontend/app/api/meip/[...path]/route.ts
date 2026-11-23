@@ -41,7 +41,7 @@ async function forward(request: NextRequest, context: Context): Promise<Response
 
   const search = request.nextUrl.search;
   const target = `${apiBaseUrl()}/api/v1/${path.join("/")}${search}`;
-  const hasBody = request.method === "POST";
+  const hasBody = request.method === "POST" || request.method === "PATCH";
   const upstream = await fetch(target, {
     method: request.method,
     headers,
@@ -62,4 +62,7 @@ async function forward(request: NextRequest, context: Context): Promise<Response
 
 export const GET = forward;
 export const POST = forward;
+// PATCH: partial updates with If-Match (a member's access; a case's loan details). Without this
+// export Next.js answered 405 before the allowlist was consulted.
+export const PATCH = forward;
 export const dynamic = "force-dynamic";

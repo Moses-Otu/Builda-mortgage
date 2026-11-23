@@ -23,13 +23,14 @@ describe("forwarder allowlist", () => {
     ["POST", `cases/${CASE}/applicants`], // Phase 2.1 (U2): add applicant
     ["POST", `cases/${CASE}/transitions`], // Stage 3-B: case status control (decision V4)
     ["POST", "members"], // Phase 4: the team page invites by email
+    ["PATCH", `cases/${CASE}`], // agentic assessment: the loan details form (with If-Match)
   ])("allows %s %s", (method, path) => expect(isAllowed(method, split(path))).toBe(true));
 
   it.each([
     ["DELETE", `cases/${CASE}/documents/${DOC}`], // method not allowed
     ["DELETE", "members"],
-    // Phase 2.1 allows creating cases and applicants, and nothing next to them:
-    ["PATCH", `cases/${CASE}`],
+    // Creating cases and applicants, and editing a case's loan details, and nothing next to them:
+    ["PATCH", `cases/${CASE}/applicants`],
     ["POST", `cases/${CASE}`],
     ["POST", `cases/${CASE}/applicants/${DOC}`],
     ["POST", `cases/${CASE}/applicants/${DOC}/removal`],

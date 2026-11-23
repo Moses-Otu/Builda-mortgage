@@ -1,6 +1,12 @@
 """Import every ORM model so ``Base.metadata`` is complete (used by Alembic and tests)."""
 
 from meip.applicants.models import Applicant
+from meip.assessment.models import (
+    Assessment,
+    AssessmentDecision,
+    AssessmentStep,
+    EvidenceRequest,
+)
 from meip.audit.models import AuditEvent, AuditEventDetail
 from meip.auth.models import LocalAccount
 from meip.cases.models import Case
@@ -34,6 +40,9 @@ from meip.tenancy.models import Membership, Tenant, User
 
 __all__ = [
     "Applicant",
+    "Assessment",
+    "AssessmentDecision",
+    "AssessmentStep",
     "AuditEvent",
     "AuditEventDetail",
     "BankAccount",
@@ -46,6 +55,7 @@ __all__ = [
     "Document",
     "DocumentReview",
     "DocumentVersion",
+    "EvidenceRequest",
     "ExpenditureItem",
     "ExpenditureParty",
     "ExtractedField",

@@ -18,6 +18,9 @@ const ROUTES: Array<[method: string, pattern: string]> = [
   ["GET", "cases"],
   ["POST", "cases"], // new case (Phase 2.1, U2); the API requires case:create
   ["GET", `cases/${ID}`], // one case: its status and version, the ETag for status changes (3-B)
+  // Loan details for the assessment (property value, loan amount, term, use); case:update,
+  // with If-Match.
+  ["PATCH", `cases/${ID}`],
   ["GET", `cases/${ID}/applicants`],
   ["POST", `cases/${ID}/applicants`], // add applicant (Phase 2.1, U2); applicant:write
   ["GET", `cases/${ID}/financial/income-sources`],
@@ -33,6 +36,16 @@ const ROUTES: Array<[method: string, pattern: string]> = [
   ["GET", `cases/${ID}/profile/approvals/${ID}`],
   ["GET", `cases/${ID}/profile/approvals/${ID}/pack`], // evidence pack ZIP (Stage 3-C); document:read
   ["POST", `cases/${ID}/transitions`], // case status (Stage 3-B screens); case:transition
+  // Agentic assessment (2026-11-23): run the agent, read results, broker decisions, evidence
+  // requests and the scenario calculator. The API checks every permission.
+  ["GET", "assessment/policies"],
+  ["GET", `cases/${ID}/assessments`],
+  ["POST", `cases/${ID}/assessments`], // assessment:run
+  ["GET", `cases/${ID}/assessments/${ID}`],
+  ["POST", `cases/${ID}/assessments/${ID}/decisions`], // assessment:decide
+  ["GET", `cases/${ID}/evidence-requests`],
+  ["POST", `cases/${ID}/evidence-requests/${ID}/withdrawal`], // assessment:decide
+  ["POST", `cases/${ID}/affordability/scenarios`], // read-only calculation; document:read
   // Stage 2-B: bank accounts confirmed from statements, and adding a holder.
   ["GET", `cases/${ID}/bank-accounts`],
   ["POST", `cases/${ID}/bank-accounts/${ID}/holders`],

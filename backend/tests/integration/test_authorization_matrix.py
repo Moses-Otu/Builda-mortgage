@@ -345,6 +345,43 @@ PROBES: list[Probe] = [
         "/api/v1/cases/{case_id}/profile/approvals/{approval_id}/pack",
         EVERYONE,
     ),
+    # --- agentic assessment (2026-11-23) ------------------------------------------------------
+    Probe("list policies", "GET", "/api/v1/assessment/policies", EVERYONE),
+    Probe(
+        "start assessment",
+        "POST",
+        "/api/v1/cases/{case_id}/assessments",
+        CASE_WORKERS,
+        lambda s: {"json": {}},
+    ),
+    Probe("list assessments", "GET", "/api/v1/cases/{case_id}/assessments", EVERYONE),
+    Probe(
+        "get assessment",
+        "GET",
+        "/api/v1/cases/{case_id}/assessments/{assessment_id}",
+        EVERYONE,
+    ),
+    Probe(
+        "decide on assessment",
+        "POST",
+        "/api/v1/cases/{case_id}/assessments/{assessment_id}/decisions",
+        frozenset({ADMIN, ADVISER}),
+        lambda s: {"json": {"decision": "accept"}},
+    ),
+    Probe("list evidence requests", "GET", "/api/v1/cases/{case_id}/evidence-requests", EVERYONE),
+    Probe(
+        "withdraw evidence request",
+        "POST",
+        "/api/v1/cases/{case_id}/evidence-requests/{request_id}/withdrawal",
+        frozenset({ADMIN, ADVISER}),
+    ),
+    Probe(
+        "compare scenarios",
+        "POST",
+        "/api/v1/cases/{case_id}/affordability/scenarios",
+        EVERYONE,
+        lambda s: {"json": {}},
+    ),
 ]
 
 # Routes that do not act within a firm and so have no role-based permission.
@@ -433,6 +470,8 @@ async def _state(firm: Firm) -> State:
         "finding_key": "0" * 64,  # not a current finding: allowed roles get 409, not 403
         "account_id": "00000000-0000-7000-8000-00000000000a",  # none: allowed roles get 404
         "approval_id": "00000000-0000-7000-8000-00000000000b",  # none: allowed roles get 404
+        "assessment_id": "00000000-0000-7000-8000-00000000000c",  # none: allowed roles get 404
+        "request_id": "00000000-0000-7000-8000-00000000000d",  # none: allowed roles get 404
     }
 
 
@@ -489,7 +528,16 @@ async def test_a_verified_case_refuses_every_case_write(firm: Firm) -> None:
     admin = await firm.add_member(ADMIN)
     # Closing a verified case is allowed by design: it keeps the final approval and changes
     # no profile content (tested in test_profile_approval.py).
-    allowed_on_verified = {"close case"}
+    # Assessing a verified case is the point of the assessment (it builds on the approved
+    # profile); its writes touch only assessment records, never profile content. Comparing
+    # scenarios is read-only.
+    allowed_on_verified = {
+        "close case",
+        "start assessment",
+        "decide on assessment",
+        "withdraw evidence request",
+        "compare scenarios",
+    }
     writes = [
         p
         for p in PROBES
