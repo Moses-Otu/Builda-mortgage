@@ -11,8 +11,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Evidence review",
-  description: "Review extracted payslip figures (synthetic data only)",
+  title: "Builda+ Mortgage",
+  description: "Mortgage evidence, verified and assessed. The broker decides. (Pilot, synthetic data only.)",
   robots: { index: false, follow: false },
 };
 

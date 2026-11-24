@@ -5,8 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
+import { Landing } from "@/components/landing/Landing";
 import { NewCaseDialog } from "@/components/NewCaseDialog";
 import { Loading, PageContainer, RequireFirm } from "@/components/Page";
+import { useSession } from "@/components/session";
 import { Alert } from "@/components/ui/alert";
 import { Badge, type BadgeTone } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
@@ -24,6 +26,9 @@ const STATUS_TONE: Record<string, BadgeTone> = {
 };
 
 export default function Home() {
+  // Signed-out visitors get the public landing page; signed-in users go straight to their cases.
+  const { session } = useSession();
+  if (session.status === "signed-out") return <Landing />;
   return <RequireFirm>{(firm) => <CaseList firm={firm} />}</RequireFirm>;
 }
 

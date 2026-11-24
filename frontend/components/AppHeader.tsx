@@ -2,6 +2,7 @@
 
 import { Building2, Check, ChevronDown, FileCheck2, KeyRound, LogOut, UserRound, Users } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import { useSession } from "@/components/session";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +19,9 @@ import { roleLabel } from "@/lib/labels";
 
 export function AppHeader() {
   const { session, chooseFirm, signOut } = useSession();
+  const pathname = usePathname();
+  // The landing page at "/" has its own navigation; until the session is known, show neither.
+  if (pathname === "/" && session.status !== "ready") return null;
 
   return (
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
