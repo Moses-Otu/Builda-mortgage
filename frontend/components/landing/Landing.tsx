@@ -19,17 +19,17 @@ const atkinson = Atkinson_Hyperlegible({ subsets: ["latin"], weight: ["400", "70
 
 const CAPABILITIES = [
   { icon: FileSearch, title: "Reads the documents", body: "Payslips and bank statements, page by page, with each figure traced to where it was found." },
-  { icon: TriangleAlert, title: "Cross-checks them", body: "Month-to-month payslip totals, pay dates and salary credits against the bank." },
+  { icon: TriangleAlert, title: "Cross-checks them", body: "Month-to-month payslip totals, and each salary against the bank statements." },
   { icon: ShieldCheck, title: "Pre-qualifies", body: "Loan to value, loan to income, debt to income and age at end of term against the lending policy." },
   { icon: Wallet, title: "Tests affordability", body: "Stressed repayments after commitments and living costs, and the maximum it indicates." },
-  { icon: Scale, title: "Runs scenarios", body: "A rate rise, a longer term or a bigger deposit, side by side with the request." },
+  { icon: Scale, title: "Runs scenarios", body: "A longer term or a lower rate beside the request and, when the loan is too large, the maximum indicated or a bigger deposit." },
   { icon: Sparkles, title: "Explains itself", body: "Every step it took, what each finding rests on, and the evidence still to collect." },
 ];
 
 const PRINCIPLES = [
-  "The agent recommends. A broker records the decision, with their name and the time.",
+  "The agent recommends. A broker makes the decision, and the record keeps who made it and when.",
   "Overriding the outcome needs a reason, every time.",
-  "New evidence marks the assessment out of date, and the next version runs by itself.",
+  "Adding new evidence marks the assessment out of date. Approving the updated profile runs the next version.",
   "Every version is kept unchanged, so the file shows how each decision was reached.",
 ];
 
@@ -125,9 +125,9 @@ export function Landing() {
         <div className="mx-auto grid max-w-6xl gap-6 px-6 py-10 sm:grid-cols-2 lg:grid-cols-4">
           {[
             ["Six stages", "One clear next step at each"],
-            ["Every figure traced", "To the page and line it came from"],
+            ["Every figure traced", "To where it appears on the page"],
             ["Cross-document checks", "Payslips against each other and the bank"],
-            ["Every decision versioned", "Who, when and why, kept unchanged"],
+            ["Every assessment kept", "Each version stays unchanged in the history"],
           ].map(([a, b]) => (
             <div key={a}>
               <p className="text-xl font-bold text-[#0C2135]">{a}</p>
