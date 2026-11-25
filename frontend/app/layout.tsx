@@ -11,7 +11,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 
 export const metadata: Metadata = {
-  title: "Builda+ Mortgage",
+  title: "Ceda | Pre-qualification and affordability agent",
   description: "Mortgage evidence, verified and assessed. The broker decides. (Pilot, synthetic data only.)",
   robots: { index: false, follow: false },
 };

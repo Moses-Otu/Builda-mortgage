@@ -15,7 +15,7 @@ describe("landing page", () => {
       expect(existsSync(path.join(__dirname, "..", "public", s.image)), s.image).toBe(true);
       expect(s.alt.length).toBeGreaterThan(10);
     }
-    expect(existsSync(path.join(__dirname, "..", "public", "landing", "builda-plus-mortgage.mp4"))).toBe(true);
+    expect(existsSync(path.join(__dirname, "..", "public", "landing", "ceda-demo.mp4"))).toBe(true);
   });
 
   it("sends demo requests to the right address", () => {

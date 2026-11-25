@@ -1,9 +1,10 @@
 "use client";
 
-import { Building2, Check, ChevronDown, FileCheck2, KeyRound, LogOut, UserRound, Users } from "lucide-react";
+import { Building2, Check, ChevronDown, KeyRound, LogOut, UserRound, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { CedaLogo } from "@/components/CedaLogo";
 import { useSession } from "@/components/session";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -27,10 +28,7 @@ export function AppHeader() {
     <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-[1600px] items-center gap-4 px-6">
         <Link href="/" className="flex items-center gap-2 font-semibold text-slate-900">
-          <span className="grid size-7 place-items-center rounded-md bg-brand-600 text-white">
-            <FileCheck2 className="size-4" />
-          </span>
-          Evidence
+          <CedaLogo className="text-xl" />
         </Link>
         <Tooltip content="Only synthetic documents may be used until the retention decision (D10) is approved.">
           <Badge tone="synthetic" tabIndex={0}>

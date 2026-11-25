@@ -1,7 +1,7 @@
 // Content of the public landing page (components/landing/Landing.tsx), kept separate so it can be tested.
 
 export const DEMO_EMAIL = "azeez@jadasquad.com";
-export const DEMO_HREF = `mailto:${DEMO_EMAIL}?subject=${encodeURIComponent("Builda+ Mortgage demo")}`;
+export const DEMO_HREF = `mailto:${DEMO_EMAIL}?subject=${encodeURIComponent("Ceda demo")}`;
 
 export const STAGES = ["Applicant", "Payslips", "Bank statements", "Profile", "Assessment", "Decision"] as const;
 
@@ -46,7 +46,7 @@ export const STEPS: Step[] = [
     title: "It recommends. You decide.",
     body: "Accept, override with a reason, request information or escalate. The decision is recorded with your name, and every assessment version is kept.",
     image: "/landing/15-decision.webp",
-    alt: "Broker decision page with the agent's outcome, the decision form and the version history",
+    alt: "Broker decision page with the agent's outcome and the decision form",
   },
   {
     key: "checks",

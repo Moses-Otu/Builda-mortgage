@@ -1,6 +1,6 @@
 "use client";
 
-// The public front door for signed-out visitors: what Builda+ Mortgage does, shown with real
+// The public front door for signed-out visitors: what Ceda does, shown with real
 // screens from the product (synthetic data). Structure after the B2B "digital worker" pattern:
 // hero with the pipeline, what it takes off the desk, a step-through of a real case, the
 // agent's capabilities, the principle (the broker decides), the film, and one call to action.
@@ -12,6 +12,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState } from "react";
 
+import { CedaLogo } from "@/components/CedaLogo";
 import { DEMO_EMAIL, DEMO_HREF, STAGES, STEPS } from "@/lib/landing";
 
 const atkinson = Atkinson_Hyperlegible({ subsets: ["latin"], weight: ["400", "700"], display: "swap" });
@@ -31,27 +32,6 @@ const PRINCIPLES = [
   "New evidence marks the assessment out of date, and the next version runs by itself.",
   "Every version is kept unchanged, so the file shows how each decision was reached.",
 ];
-
-function Mark({ className = "size-9" }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 32 32" className={className} aria-hidden="true">
-      <rect width="32" height="32" rx="7" fill="#112B45" />
-      <rect x="14.5" y="7" width="3" height="18" rx="1" fill="#6FB497" />
-      <rect x="7" y="14.5" width="18" height="3" rx="1" fill="#6FB497" />
-    </svg>
-  );
-}
-
-function Wordmark({ light = false }: { light?: boolean }) {
-  return (
-    <span className={`flex items-center gap-2.5 text-lg font-bold tracking-tight ${light ? "text-[#E9EEF4]" : "text-[#0C2135]"}`}>
-      <Mark className="size-8" />
-      <span>
-        Builda<span className="text-[#6FB497]">+</span> Mortgage
-      </span>
-    </span>
-  );
-}
 
 function DemoButton({ children = "Book a demo", light = false }: { children?: string; light?: boolean }) {
   return (
@@ -88,7 +68,7 @@ export function Landing() {
       {/* Navigation */}
       <header className="sticky top-0 z-40 border-b border-white/10 bg-[#081726]/95 backdrop-blur">
         <nav className="mx-auto flex h-16 max-w-6xl items-center gap-6 px-6" aria-label="Main">
-          <Wordmark light />
+          <CedaLogo light className="text-2xl" />
           <div className="ml-auto hidden items-center gap-6 text-sm text-[#A9B8C8] md:flex">
             <a href="#how" className="hover:text-white">How it works</a>
             <a href="#agent" className="hover:text-white">The agent</a>
@@ -108,15 +88,15 @@ export function Landing() {
       <section className="relative overflow-hidden bg-[#081726] text-[#E9EEF4]">
         <div className="pointer-events-none absolute -top-40 right-[-10%] size-[720px] rounded-full bg-[#6FB497]/15 blur-[140px]" aria-hidden="true" />
         <div className="relative mx-auto max-w-6xl px-6 pt-20 pb-16 md:pt-28">
-          <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#6FB497]">For UK mortgage brokers</p>
+          <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#6FB497]">Meet Ceda · for UK mortgage brokers</p>
           <h1 className="mt-5 max-w-4xl text-5xl leading-[1.04] font-bold tracking-tight md:text-7xl">
-            Mortgage evidence.
+            The pre-qualification
             <br />
-            <em className="text-[#6FB497]">Verified and assessed.</em>
+            <em className="text-[#6FB497]">and affordability agent.</em>
           </h1>
           <p className="mt-7 max-w-2xl text-lg leading-relaxed text-[#A9B8C8] md:text-xl">
-            Builda+ reads payslips and bank statements, checks every figure against its source, and runs pre-qualification,
-            affordability and scenarios. The broker makes the call, and every decision is on record.
+            Ceda is the mortgage pre-qualification and affordability agent. It reads payslips and bank statements, checks every
+            figure against its source, then tests pre-qualification, affordability and scenarios. The broker makes the call.
           </p>
           <div className="mt-9 flex flex-wrap items-center gap-4">
             <DemoButton light />
@@ -241,9 +221,9 @@ export function Landing() {
 
       {/* The agent */}
       <section id="agent" className="mx-auto max-w-6xl scroll-mt-16 px-6 py-24">
-        <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#376D58]">The assessment agent</p>
+        <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#376D58]">The pre-qualification and affordability agent</p>
         <h2 className="mt-3 max-w-3xl text-4xl leading-tight font-bold tracking-tight text-[#0C2135] md:text-5xl">
-          One agent, one lending policy, every step on record.
+          One pre-qualification and affordability agent. Every step on record.
         </h2>
         <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
           {CAPABILITIES.map(({ icon: Icon, title, body }) => (
@@ -287,10 +267,10 @@ export function Landing() {
       {/* Film */}
       <section id="film" className="mx-auto max-w-5xl scroll-mt-16 px-6 py-24 text-center">
         <p className="text-sm font-bold uppercase tracking-[0.2em] text-[#376D58]">Watch</p>
-        <h2 className="mt-3 text-4xl font-bold tracking-tight text-[#0C2135] md:text-5xl">Builda+ Mortgage in 30 seconds.</h2>
+        <h2 className="mt-3 text-4xl font-bold tracking-tight text-[#0C2135] md:text-5xl">Ceda in 30 seconds.</h2>
         <div className="mt-10 overflow-hidden rounded-2xl shadow-[0_30px_80px_-20px_rgba(8,23,38,0.35)]">
           <video controls preload="none" poster="/landing/film-poster.webp" className="aspect-video w-full bg-[#081726]">
-            <source src="/landing/builda-plus-mortgage.mp4" type="video/mp4" />
+            <source src="/landing/ceda-demo.mp4" type="video/mp4" />
           </video>
         </div>
       </section>
@@ -314,7 +294,7 @@ export function Landing() {
 
       <footer className="border-t border-[#E1E5EA] bg-white">
         <div className="mx-auto flex max-w-6xl flex-col gap-6 px-6 py-10 md:flex-row md:items-center">
-          <Wordmark />
+          <CedaLogo className="text-2xl" />
           <p className="max-w-xl text-sm text-[#677587] md:ml-auto md:text-right">
             Pilot product, shown with synthetic data. Outcomes are indicative only: not a lending decision, a mortgage offer or
             advice.
